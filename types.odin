@@ -128,7 +128,7 @@ distribution_to_cstring :: proc(dist: RandomDistribution) -> cstring {
 }
 
 // Equilibration type for matrix scaling
-Equilibration :: enum {
+EquilibrationRequest :: enum {
 	None, // No equilibration applied
 	Row, // Row equilibration applied
 	Column, // Column equilibration applied
@@ -136,7 +136,7 @@ Equilibration :: enum {
 }
 
 // Convert LAPACK equilibration character to enum
-equilibration_from_char :: proc(c: byte) -> Equilibration {
+equilibration_request_from_char :: proc(c: byte) -> EquilibrationRequest {
 	switch c {
 	case 'N':
 		return .None
@@ -151,7 +151,7 @@ equilibration_from_char :: proc(c: byte) -> Equilibration {
 }
 
 // Convert enum to LAPACK equilibration character
-equilibration_to_cstring :: proc(e: Equilibration) -> cstring {
+equilibration_request_to_cstring :: proc(e: EquilibrationRequest) -> cstring {
 	switch e {
 	case .None:
 		return "N"
@@ -165,6 +165,22 @@ equilibration_to_cstring :: proc(e: Equilibration) -> cstring {
 	unreachable()
 }
 
+
+EquilibrationState :: enum {
+	None, // "N" - No equilibration
+	Applied, // "Y" - Equilibration was applied
+}
+
+// Convert equilibration state to LAPACK character
+_equilibration_state_to_char :: proc(equed: EquilibrationState) -> cstring {
+	switch equed {
+	case .None:
+		return "N"
+	case .Applied:
+		return "Y"
+	}
+	unreachable()
+}
 
 TransposeMode :: enum {
 	None, // No transpose
@@ -228,6 +244,26 @@ sort_direction_to_cstring :: proc(direction: SortDirection) -> cstring {
 		return "I"
 	case .Decreasing:
 		return "D"
+	}
+	unreachable()
+}
+
+// Factorization option
+FactorizationOption :: enum {
+	Equilibrate, // "E" - Equilibrate, then factor
+	NoFactorization, // "N" - Matrix already factored
+	Factor, // "F" - Factor the matrix
+}
+
+// Convert factorization option to LAPACK character
+_factorization_to_char :: proc(fact: FactorizationOption) -> cstring {
+	switch fact {
+	case .Equilibrate:
+		return "E"
+	case .NoFactorization:
+		return "N"
+	case .Factor:
+		return "F"
 	}
 	unreachable()
 }
@@ -376,6 +412,60 @@ norm_to_cstring :: proc(norm: MatrixNorm) -> cstring {
 	}
 	unreachable()
 }
+
+// Eigenvalue Params:
+
+// Vector computation option for reduction
+VectorOption :: enum {
+	NO_VECTORS, // 'N' - No vectors computed
+	FORM_VECTORS, // 'V' - Form transformation matrix
+}
+
+vector_option_to_cstring :: proc(opt: VectorOption) -> cstring {
+	switch opt {
+	case .NO_VECTORS:
+		return "N"
+	case .FORM_VECTORS:
+		return "V"
+	}
+	unreachable()
+}
+
+// Job option for eigenvalue computation
+EigenJobOption :: enum {
+	VALUES_ONLY, // 'N' - Compute eigenvalues only
+	VALUES_VECTORS, // 'V' - Compute eigenvalues and eigenvectors
+}
+
+eigen_job_to_cstring :: proc(job: EigenJobOption) -> cstring {
+	switch job {
+	case .VALUES_ONLY:
+		return "N"
+	case .VALUES_VECTORS:
+		return "V"
+	}
+	unreachable()
+}
+
+// Range option for eigenvalue selection
+EigenRangeOption :: enum {
+	ALL, // 'A' - All eigenvalues
+	VALUE, // 'V' - Eigenvalues in range [vl, vu]
+	INDEX, // 'I' - Eigenvalues with indices il to iu
+}
+
+eigen_range_to_cstring :: proc(range: EigenRangeOption) -> cstring {
+	switch range {
+	case .ALL:
+		return "A"
+	case .VALUE:
+		return "V"
+	case .INDEX:
+		return "I"
+	}
+	unreachable()
+}
+
 
 // ===================================================================================
 // MATRIX SCALING TYPE (for DLASCL/SLASCL/CLASCL/ZLASCL)

@@ -175,15 +175,15 @@ max_array :: proc(arr: []$T) -> f64 {
 	return max_val
 }
 
-abs :: proc(x: $T) -> f64 {
-	when T == complex64 {
-		r, i := real(x), imag(x)
-		return f64(math.sqrt(r * r + i * i))
-	} else when T == complex128 {
-		r, i := real(x), imag(x)
-		return math.sqrt(r * r + i * i)
-	} else {
-		val := f64(x)
-		return val >= 0 ? val : -val
-	}
-}
+// abs :: proc(x: $T) -> f64 {
+// 	when T == complex64 {
+// 		r, i := real(x), imag(x)
+// 		return f64(math.sqrt(r * r + i * i))
+// 	} else when T == complex128 {
+// 		r, i := real(x), imag(x)
+// 		return math.sqrt(r * r + i * i)
+// 	} else {
+// 		val := f64(x)
+// 		return val >= 0 ? val : -val
+// 	}
+// }

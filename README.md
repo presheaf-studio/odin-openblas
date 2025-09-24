@@ -13,7 +13,9 @@ Files at the top level build okay, but need the design changes noted below. File
 ## Dependancy
 
 Windows: Download the x64 library, link against the .lib file and include the dll alongside your main application
+
 Linux: `sudo apt install libopenblas64-dev`
+
 Darwin: may need to build openblas from source; could try `brew install openblas --with-ilp64` (unverified)
 
 ## Design
@@ -26,6 +28,7 @@ The library currently allocates internally in the wrapped calls, though its my g
 
 ```odin
 // Current Design (100% internal allocs)
+// LAPACK: sgesvd_ & cgesvd_
 m_svd_f32_c64 :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	compute_u: bool = true,
@@ -43,10 +46,13 @@ m_svd_f32_c64 :: proc(
 
 // Find the Optimal Workspace:
 bufReq := query_workspace_svd(&A, compute_u=true, compute_v=true) 
+
 buf:= make([]u8, bufReq) // user allocates
+defer delete(buf)
+
 U:Matrix(f64)
 VT:Matrix(f64)
 S:Vector(f64)
 // Make Compute Call:
-m_svd(&A,&U,&VT,&S,compute_u=true, compute_v=true,&buf)
+info, ok := m_svd(&A,&U,&VT,&S,compute_u=true, compute_v=true,&buf)
 ```

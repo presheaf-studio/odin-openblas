@@ -253,7 +253,7 @@ m_refine_solution_extended_real :: proc(
 	B: ^Matrix(T), // Right-hand side
 	X: ^Matrix(T), // Solution (input/output)
 	transpose: TransposeMode = .None,
-	equilibrated: Equilibration = .None,
+	equilibrated: EquilibrationRequest = .None,
 	n_err_bnds: Blas_Int = 3, // Number of error bounds to compute
 	allocator := context.allocator,
 ) -> (
@@ -375,7 +375,7 @@ m_refine_solution_extended_c64 :: proc(
 	B: ^Matrix(complex64),
 	X: ^Matrix(complex64),
 	transpose: TransposeMode = .None,
-	equilibrated: Equilibration = .None,
+	equilibrated: EquilibrationRequest = .None,
 	n_err_bnds: Blas_Int = 3,
 	allocator := context.allocator,
 ) -> (
@@ -393,7 +393,7 @@ m_refine_solution_extended_c64 :: proc(
 	ldx := X.ld
 
 	trans_c := transpose_to_cstring(transpose)
-	equed_c: cstring = equilibration_to_cstring(equilibrated)
+	equed_c: cstring = equilibration_request_to_cstring(equilibrated)
 
 	// Allocate error arrays
 	berr = make([]f32, nrhs)
@@ -465,7 +465,7 @@ m_refine_solution_extended_c128 :: proc(
 	B: ^Matrix(complex128),
 	X: ^Matrix(complex128),
 	transpose: TransposeMode = .None,
-	equilibrated: Equilibration = .None,
+	equilibrated: EquilibrationRequest = .None,
 	n_err_bnds: Blas_Int = 3,
 	allocator := context.allocator,
 ) -> (
@@ -483,7 +483,7 @@ m_refine_solution_extended_c128 :: proc(
 	ldx := X.ld
 
 	trans_c := transpose_to_cstring(transpose)
-	equed_c: cstring = equilibration_to_cstring(equilibrated)
+	equed_c: cstring = equilibration_request_to_cstring(equilibrated)
 
 	// Allocate error arrays
 	berr = make([]f64, nrhs)
@@ -697,7 +697,7 @@ m_solve_expert_real :: proc(
 	rcond: T,
 	ferr: []T,
 	berr: []T,
-	equed: Equilibration,
+	equed: EquilibrationRequest,
 	info: Info, // Solution matrix// LU factorization of equilibrated A// Pivot indices// Row scale factors// Column scale factors// Reciprocal condition number// Forward error bounds for each lapack.solution// Backward error bounds for each solution// Equilibration applied
 ) where is_float(T) {
 	n := A.rows
@@ -811,7 +811,7 @@ m_solve_expert_c64 :: proc(
 	rcond: f32,
 	ferr: []f32,
 	berr: []f32,
-	equed: Equilibration,
+	equed: EquilibrationRequest,
 	info: Info,
 ) {
 	n := A.rows
@@ -873,7 +873,7 @@ m_solve_expert_c64 :: proc(
 	)
 
 	// Convert equilibration flag to enum
-	equed = equilibration_from_char(equed_c[0])
+	equed = equilibration_request_from_char(equed_c[0])
 
 	return X, AF, ipiv, R, C, rcond, ferr, berr, equed, info
 }
@@ -894,7 +894,7 @@ m_solve_expert_c128 :: proc(
 	rcond: f64,
 	ferr: []f64,
 	berr: []f64,
-	equed: Equilibration,
+	equed: EquilibrationRequest,
 	info: Info,
 ) {
 	n := A.rows
@@ -956,7 +956,7 @@ m_solve_expert_c128 :: proc(
 	)
 
 	// Convert equilibration flag to enum
-	equed = equilibration_from_char(equed_c[0])
+	equed = equilibration_request_from_char(equed_c[0])
 
 	return X, AF, ipiv, R, C, rcond, ferr, berr, equed, info
 }
@@ -985,7 +985,7 @@ m_solve_expert_extra_real :: proc(
 	berr: []T,
 	err_bnds_norm: Matrix(T),
 	err_bnds_comp: Matrix(T),
-	equed: Equilibration,
+	equed: EquilibrationRequest,
 	info: Info, // Solution matrix// LU factorization// Pivot indices// Row scale factors// Column scale factors// Reciprocal condition number// Reciprocal pivot growth factor// Componentwise backward error// Error bounds for normwise lapack.error// Error bounds for componentwise error// Equilibration applied
 ) where is_float(T) {
 	n := A.rows
@@ -1118,7 +1118,7 @@ m_solve_expert_extra_c64 :: proc(
 	berr: []f32,
 	err_bnds_norm: Matrix(f32),
 	err_bnds_comp: Matrix(f32),
-	equed: Equilibration,
+	equed: EquilibrationRequest,
 	info: Info,
 ) {
 	n := A.rows
@@ -1192,7 +1192,7 @@ m_solve_expert_extra_c64 :: proc(
 	)
 
 	// Convert equilibration flag to enum
-	equed = equilibration_from_char(equed_c[0])
+	equed = equilibration_request_from_char(equed_c[0])
 
 	return X, AF, ipiv, R, C, rcond, rpvgrw, berr, err_bnds_norm, err_bnds_comp, equed, info
 }
@@ -1215,7 +1215,7 @@ m_solve_expert_extra_c128 :: proc(
 	berr: []f64,
 	err_bnds_norm: Matrix(f64),
 	err_bnds_comp: Matrix(f64),
-	equed: Equilibration,
+	equed: EquilibrationRequest,
 	info: Info,
 ) {
 	n := A.rows
@@ -1289,7 +1289,7 @@ m_solve_expert_extra_c128 :: proc(
 	)
 
 	// Convert equilibration flag to enum
-	equed = equilibration_from_char(equed_c[0])
+	equed = equilibration_request_from_char(equed_c[0])
 
 	return X, AF, ipiv, R, C, rcond, rpvgrw, berr, err_bnds_norm, err_bnds_comp, equed, info
 }

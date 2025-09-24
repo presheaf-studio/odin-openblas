@@ -12,10 +12,9 @@ import "core:slice"
 // Solves the generalized eigenvalue problem A*x = λ*B*x where A and B are
 // symmetric banded matrices and B is positive definite
 
-// Vector computation option for reduction
-VectorOption :: enum {
-	NO_VECTORS, // 'N' - No vectors computed
-	FORM_VECTORS, // 'V' - Form transformation matrix
+m_reduce_generalized_banded :: proc {
+	m_reduce_generalized_banded_f32_c64,
+	m_reduce_generalized_banded_f64_c128,
 }
 
 // ============================================================================
@@ -24,151 +23,224 @@ VectorOption :: enum {
 // Reduces a real symmetric-definite banded generalized eigenproblem
 // A*x = λ*B*x to standard form C*y = λ*y
 
-// Double precision banded generalized reduction
-dsbgst :: proc(
+// Reduce generalized banded eigenvalue problem to standard form (f32/complex64)
+// For real symmetric matrices (f32) and complex Hermitian matrices (complex64)
+m_reduce_generalized_banded_f32_c64 :: proc(
 	vect: VectorOption,
-	uplo: UpLoFlag,
-	n: int,
-	ka: int, // Number of superdiagonals of A
-	kb: int, // Number of superdiagonals of B
-	ab: Matrix(f64), // Band matrix A (modified on output)
-	bb: Matrix(f64), // Band matrix B (must contain Cholesky factor)
-	x: Matrix(f64) = {}, // Transformation matrix (if vect == FORM_VECTORS)
-	work: []f64 = nil, // Workspace (size 2*n)
+	uplo: MatrixRegion,
+	n: Blas_Int,
+	ka: Blas_Int, // Number of superdiagonals of A
+	kb: Blas_Int, // Number of superdiagonals of B
+	ab: ^Matrix($T), // Band matrix A (modified on output)
+	bb: ^Matrix(T), // Band matrix B (must contain Cholesky factor)
+	x: ^Matrix(T) = nil, // Transformation matrix (if vect == FORM_VECTORS)
+	work: []T = nil, // Workspace (size 2*n for real, n for complex)
+	rwork: []f32 = nil, // Real workspace for complex64 only
 	allocator := context.allocator,
 ) -> (
 	info: Info,
-) {
+	ok: bool,
+) where T == f32 || T == complex64 {
 	assert(n >= 0, "Matrix dimension must be non-negative")
 	assert(ka >= 0 && kb >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	vect_char: u8 = vect == .FORM_VECTORS ? 'V' : 'N'
-	vect_cstring := cstring(&vect_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	vect_cstring := vector_option_to_cstring(vect)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
-	n_int := Blas_Int(n)
-	ka_int := Blas_Int(ka)
-	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
+	n := n
+	ka := ka
+	kb := kb
+	ldab := ab.ld
+	ldbb := bb.ld
 	info_int: Info
 
 	// Handle transformation matrix
-	ldx := Blas_Int(1)
-	x_ptr: ^f64 = nil
-	if vect == .FORM_VECTORS {
+	ldx: Blas_Int = 1
+	x_ptr: ^T = nil
+	if vect == .FORM_VECTORS && x != nil {
 		assert(x.rows >= n && x.cols >= n, "Transformation matrix too small")
-		ldx = Blas_Int(x.stride)
-		x_ptr = x.data
+		ldx = x.ld
+		x_ptr = raw_data(x.data)
 	}
 
 	// Allocate workspace if not provided
-	work_size := 2 * n
 	allocated_work := work == nil
-	if allocated_work {
-		work = make([]f64, work_size, allocator)
+	allocated_rwork := false
+
+	when T == f32 {
+		work_size := 2 * n
+		if allocated_work {
+			work = make([]T, work_size, allocator)
+		}
+	} else when T == complex64 {
+		work_size := n
+		if allocated_work {
+			work = make([]T, work_size, allocator)
+		}
+		allocated_rwork = rwork == nil
+		if allocated_rwork {
+			rwork = make([]f32, n, allocator)
+		}
 	}
-	defer if allocated_work do delete(work)
+
+	defer {
+		if allocated_work do delete(work)
+		if allocated_rwork do delete(rwork)
+	}
 
 	// Call LAPACK
-	lapack.dsbgst_(
-		vect_cstring,
-		uplo_cstring,
-		&n_int,
-		&ka_int,
-		&kb_int,
-		ab.data,
-		&ldab,
-		bb.data,
-		&ldbb,
-		x_ptr,
-		&ldx,
-		raw_data(work),
-		&info_int,
-		1,
-		1,
-	)
+	when T == f32 {
+		lapack.ssbgst_(
+			vect_cstring,
+			uplo_cstring,
+			&n,
+			&ka,
+			&kb,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			x_ptr,
+			&ldx,
+			raw_data(work),
+			&info_int,
+			1,
+			1,
+		)
+	} else when T == complex64 {
+		lapack.chbgst_(
+			vect_cstring,
+			uplo_cstring,
+			&n,
+			&ka,
+			&kb,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			x_ptr,
+			&ldx,
+			raw_data(work),
+			raw_data(rwork),
+			&info_int,
+			1,
+			1,
+		)
+	}
 
-	return Info(info_int)
+	return info_int, info_int == 0
 }
 
-// Single precision banded generalized reduction
-ssbgst :: proc(
+// Reduce generalized banded eigenvalue problem to standard form (f64/complex128)
+// For real symmetric matrices (f64) and complex Hermitian matrices (complex128)
+m_reduce_generalized_banded_f64_c128 :: proc(
 	vect: VectorOption,
-	uplo: UpLoFlag,
-	n: int,
-	ka: int,
-	kb: int,
-	ab: Matrix(f32),
-	bb: Matrix(f32),
-	x: Matrix(f32) = {},
-	work: []f32 = nil,
+	uplo: MatrixRegion,
+	n: Blas_Int,
+	ka: Blas_Int, // Number of superdiagonals of A
+	kb: Blas_Int, // Number of superdiagonals of B
+	ab: ^Matrix($T), // Band matrix A (modified on output)
+	bb: ^Matrix(T), // Band matrix B (must contain Cholesky factor)
+	x: ^Matrix(T) = nil, // Transformation matrix (if vect == FORM_VECTORS)
+	work: []T = nil, // Workspace (size 2*n for real, n for complex)
+	rwork: []f64 = nil, // Real workspace for complex128 only
 	allocator := context.allocator,
 ) -> (
 	info: Info,
-) {
+	ok: bool,
+) where T == f64 || T == complex128 {
 	assert(n >= 0, "Matrix dimension must be non-negative")
 	assert(ka >= 0 && kb >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	vect_char: u8 = vect == .FORM_VECTORS ? 'V' : 'N'
-	vect_cstring := cstring(&vect_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	vect_cstring := vector_option_to_cstring(vect)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
-	n_int := Blas_Int(n)
-	ka_int := Blas_Int(ka)
-	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
+	n := n
+	ka := ka
+	kb := kb
+	ldab := ab.ld
+	ldbb := bb.ld
 	info_int: Info
 
 	// Handle transformation matrix
-	ldx := Blas_Int(1)
-	x_ptr: ^f32 = nil
-	if vect == .FORM_VECTORS {
+	ldx: Blas_Int = 1
+	x_ptr: ^T = nil
+	if vect == .FORM_VECTORS && x != nil {
 		assert(x.rows >= n && x.cols >= n, "Transformation matrix too small")
-		ldx = Blas_Int(x.stride)
-		x_ptr = x.data
+		ldx = x.ld
+		x_ptr = raw_data(x.data)
 	}
 
 	// Allocate workspace if not provided
-	work_size := 2 * n
 	allocated_work := work == nil
-	if allocated_work {
-		work = make([]f32, work_size, allocator)
+	allocated_rwork := false
+
+	when T == f64 {
+		work_size := 2 * n
+		if allocated_work {
+			work = make([]T, work_size, allocator)
+		}
+	} else when T == complex128 {
+		work_size := n
+		if allocated_work {
+			work = make([]T, work_size, allocator)
+		}
+		allocated_rwork = rwork == nil
+		if allocated_rwork {
+			rwork = make([]f64, n, allocator)
+		}
 	}
-	defer if allocated_work do delete(work)
+
+	defer {
+		if allocated_work do delete(work)
+		if allocated_rwork do delete(rwork)
+	}
 
 	// Call LAPACK
-	lapack.ssbgst_(
-		vect_cstring,
-		uplo_cstring,
-		&n_int,
-		&ka_int,
-		&kb_int,
-		ab.data,
-		&ldab,
-		bb.data,
-		&ldbb,
-		x_ptr,
-		&ldx,
-		raw_data(work),
-		&info_int,
-		1,
-		1,
-	)
+	when T == f64 {
+		lapack.dsbgst_(
+			vect_cstring,
+			uplo_cstring,
+			&n,
+			&ka,
+			&kb,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			x_ptr,
+			&ldx,
+			raw_data(work),
+			&info_int,
+			1,
+			1,
+		)
+	} else when T == complex128 {
+		lapack.zhbgst_(
+			vect_cstring,
+			uplo_cstring,
+			&n,
+			&ka,
+			&kb,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			x_ptr,
+			&ldx,
+			raw_data(work),
+			raw_data(rwork),
+			&info_int,
+			1,
+			1,
+		)
+	}
 
-	return Info(info_int)
-}
-
-sbgst :: proc {
-	dsbgst,
-	ssbgst,
+	return info_int, info_int == 0
 }
 
 // ============================================================================
@@ -186,139 +258,251 @@ GeneralizedBandedEigenResult :: struct($T: typeid) {
 	condition_number:       f64, // max|λ|/min|λ|
 }
 
-// Double precision banded generalized eigenvalue
-dsbgv :: proc(
+// Solve generalized banded eigenvalue problem
+m_solve_generalized_banded :: proc(
 	jobz: EigenJobOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	ka: int, // Number of superdiagonals of A
 	kb: int, // Number of superdiagonals of B
-	ab: Matrix(f64), // Band matrix A (modified on output)
-	bb: Matrix(f64), // Band matrix B (modified to Cholesky factor)
-	w: []f64 = nil, // Eigenvalues (size n)
-	z: Matrix(f64) = {}, // Eigenvectors (n x n if jobz == VALUES_VECTORS)
-	work: []f64 = nil, // Workspace (size 3*n)
+	ab: ^Matrix($T), // Band matrix A (modified on output)
+	bb: ^Matrix(T), // Band matrix B (modified to Cholesky factor)
+	w: []T = nil, // Eigenvalues (size n)
+	z: ^Matrix(T) = nil, // Eigenvectors (n x n if jobz == VALUES_VECTORS)
+	work: []T = nil, // Workspace (size 3*n)
 	allocator := context.allocator,
 ) -> (
-	result: GeneralizedBandedEigenResult(f64),
+	result: GeneralizedBandedEigenResult(T),
 	info: Info,
-) {
+	ok: bool,
+) where T == f32 || T == f64 {
 	assert(n >= 0, "Matrix dimension must be non-negative")
 	assert(ka >= 0 && kb >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	jobz_char: u8 = jobz == .VALUES_VECTORS ? 'V' : 'N'
-	jobz_cstring := cstring(&jobz_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	jobz_cstring := eigen_job_to_cstring(jobz)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
-	n_int := Blas_Int(n)
-	ka_int := Blas_Int(ka)
-	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
+	n_int: Blas_Int = n
+	ka_int: Blas_Int = ka
+	kb_int: Blas_Int = kb
+	ldab := ab.ld
+	ldbb := bb.ld
 	info_int: Info
 
 	// Allocate eigenvalues if not provided
 	allocated_w := w == nil
 	if allocated_w {
-		w = make([]f64, n, allocator)
+		w = make([]T, n, allocator)
 	}
 	result.eigenvalues = w
 
 	// Handle eigenvectors
-	ldz := Blas_Int(1)
-	z_ptr: ^f64 = nil
-	if jobz == .VALUES_VECTORS {
+	ldz: Blas_Int = 1
+	z_ptr: ^T = nil
+	if jobz == .VALUES_VECTORS && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(z.stride)
-		z_ptr = z.data
-		result.eigenvectors = z
+		ldz = z.ld
+		z_ptr = raw_data(z.data)
+		result.eigenvectors = z^
 	}
 
 	// Allocate workspace if not provided
 	work_size := 3 * n
 	allocated_work := work == nil
 	if allocated_work {
-		work = make([]f64, work_size, allocator)
+		work = make([]T, work_size, allocator)
 	}
 	defer if allocated_work do delete(work)
 
 	// Call LAPACK
-	lapack.dsbgv_(
-		jobz_cstring,
-		uplo_cstring,
-		&n_int,
-		&ka_int,
-		&kb_int,
-		ab.data,
-		&ldab,
-		bb.data,
-		&ldbb,
-		raw_data(w),
-		z_ptr,
-		&ldz,
-		raw_data(work),
-		&info_int,
-		1,
-		1,
-	)
+	when T == f32 {
+		lapack.ssbgv_(
+			jobz_cstring,
+			uplo_cstring,
+			&n_int,
+			&ka_int,
+			&kb_int,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			raw_data(w),
+			z_ptr,
+			&ldz,
+			raw_data(work),
+			&info_int,
+			1,
+			1,
+		)
+	} else when T == f64 {
+		lapack.dsbgv_(
+			jobz_cstring,
+			uplo_cstring,
+			&n_int,
+			&ka_int,
+			&kb_int,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			raw_data(w),
+			z_ptr,
+			&ldz,
+			raw_data(work),
+			&info_int,
+			1,
+			1,
+		)
+	}
 
-	info = Info(info_int)
+	info = info_int
+	ok = info == 0 || info > n
 
 	// Check if B was positive definite
-	result.b_is_positive_definite = info == .OK || info > Info(n)
+	result.b_is_positive_definite = ok
 
 	// Analyze eigenvalues
-	if (info == .OK || info > Info(n)) && n > 0 {
-		result.min_eigenvalue = w[0]
-		result.max_eigenvalue = w[n - 1]
+	if ok && n > 0 {
+		result.min_eigenvalue = f64(w[0])
+		result.max_eigenvalue = f64(w[n - 1])
 		result.all_positive = w[0] > 0
 
-		if abs(result.min_eigenvalue) > machine_epsilon(f64) {
-			result.condition_number = abs(result.max_eigenvalue / result.min_eigenvalue)
+		when T == f32 {
+			if abs(w[0]) > machine_parameter(f32, .Epsilon) {
+				result.condition_number = f64(abs(w[n - 1] / w[0]))
+			} else {
+				result.condition_number = math.INF_F64
+			}
 		} else {
-			result.condition_number = math.INF_F64
+			if abs(result.min_eigenvalue) > machine_parameter(f64, .Epsilon) {
+				result.condition_number = abs(result.max_eigenvalue / result.min_eigenvalue)
+			} else {
+				result.condition_number = math.INF_F64
+			}
 		}
 	}
 
-	return
+	return result, info, ok
 }
 
-// Single precision banded generalized eigenvalue
-ssbgv :: proc(
+// ============================================================================
+// DIVIDE-AND-CONQUER GENERALIZED EIGENVALUE
+// ============================================================================
+
+// Solve generalized banded eigenvalue problem using divide-and-conquer (f32/complex64)
+m_solve_generalized_banded_dc_f32_c64 :: proc(
 	jobz: EigenJobOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	ka: int,
 	kb: int,
-	ab: Matrix(f32),
-	bb: Matrix(f32),
+	ab: ^Matrix($T),
+	bb: ^Matrix(T),
 	w: []f32 = nil,
-	z: Matrix(f32) = {},
-	work: []f32 = nil,
+	z: ^Matrix(T) = nil,
+	work: []T = nil,
+	lwork: int = -1,
+	rwork: []f32 = nil,
+	lrwork: int = -1,
+	iwork: []Blas_Int = nil,
+	liwork: int = -1,
 	allocator := context.allocator,
 ) -> (
 	result: GeneralizedBandedEigenResult(f32),
 	info: Info,
-) {
+	work_size: int,
+	rwork_size: int,
+	iwork_size: int,
+) where T == f32 || T == complex64 {
 	assert(n >= 0, "Matrix dimension must be non-negative")
 	assert(ka >= 0 && kb >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	jobz_char: u8 = jobz == .VALUES_VECTORS ? 'V' : 'N'
-	jobz_cstring := cstring(&jobz_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	jobz_cstring := eigen_job_to_cstring(jobz)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
 	n_int := Blas_Int(n)
 	ka_int := Blas_Int(ka)
 	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
+	ldab := Blas_Int(ab.ld)
+	ldbb := Blas_Int(bb.ld)
+	lwork_int := Blas_Int(lwork)
+	lrwork_int := Blas_Int(lrwork)
+	liwork_int := Blas_Int(liwork)
 	info_int: Info
+
+	// Workspace query
+	if lwork == -1 || liwork == -1 || (T == complex64 && lrwork == -1) {
+		ldz := Blas_Int(1)
+
+		when T == f32 {
+			work_query: f32
+			iwork_query: Blas_Int
+
+			lapack.ssbgvd_(
+				jobz_cstring,
+				uplo_cstring,
+				&n_int,
+				&ka_int,
+				&kb_int,
+				raw_data(ab.data),
+				&ldab,
+				raw_data(bb.data),
+				&ldbb,
+				nil,
+				nil,
+				&ldz,
+				&work_query,
+				&lwork_int,
+				&iwork_query,
+				&liwork_int,
+				&info_int,
+				1,
+				1,
+			)
+
+			work_size = int(work_query)
+			iwork_size = int(iwork_query)
+			rwork_size = 0
+		} else when T == complex64 {
+			work_query: complex64
+			rwork_query: f32
+			iwork_query: Blas_Int
+
+			lapack.chbgvd_(
+				jobz_cstring,
+				uplo_cstring,
+				&n_int,
+				&ka_int,
+				&kb_int,
+				raw_data(ab.data),
+				&ldab,
+				raw_data(bb.data),
+				&ldbb,
+				nil,
+				nil,
+				&ldz,
+				&work_query,
+				&lwork_int,
+				&rwork_query,
+				&lrwork_int,
+				&iwork_query,
+				&liwork_int,
+				&info_int,
+				1,
+				1,
+			)
+
+			work_size = int(real(work_query))
+			rwork_size = int(rwork_query)
+			iwork_size = int(iwork_query)
+		}
+
+		return result, Info(info_int), work_size, rwork_size, iwork_size
+	}
 
 	// Allocate eigenvalues if not provided
 	allocated_w := w == nil
@@ -329,215 +513,121 @@ ssbgv :: proc(
 
 	// Handle eigenvectors
 	ldz := Blas_Int(1)
-	z_ptr: ^f32 = nil
-	if jobz == .VALUES_VECTORS {
+	z_ptr: ^T = nil
+	if jobz == .VALUES_VECTORS && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(z.stride)
-		z_ptr = z.data
-		result.eigenvectors = z
-	}
-
-	// Allocate workspace if not provided
-	work_size := 3 * n
-	allocated_work := work == nil
-	if allocated_work {
-		work = make([]f32, work_size, allocator)
-	}
-	defer if allocated_work do delete(work)
-
-	// Call LAPACK
-	lapack.ssbgv_(
-		jobz_cstring,
-		uplo_cstring,
-		&n_int,
-		&ka_int,
-		&kb_int,
-		ab.data,
-		&ldab,
-		bb.data,
-		&ldbb,
-		raw_data(w),
-		z_ptr,
-		&ldz,
-		raw_data(work),
-		&info_int,
-		1,
-		1,
-	)
-
-	info = Info(info_int)
-
-	// Check if B was positive definite
-	result.b_is_positive_definite = info == .OK || info > Info(n)
-
-	// Analyze eigenvalues
-	if (info == .OK || info > Info(n)) && n > 0 {
-		result.min_eigenvalue = f64(w[0])
-		result.max_eigenvalue = f64(w[n - 1])
-		result.all_positive = w[0] > 0
-
-		if abs(w[0]) > machine_epsilon(f32) {
-			result.condition_number = f64(abs(w[n - 1] / w[0]))
-		} else {
-			result.condition_number = math.INF_F64
-		}
-	}
-
-	return
-}
-
-sbgv :: proc {
-	dsbgv,
-	ssbgv,
-}
-
-// ============================================================================
-// DIVIDE-AND-CONQUER GENERALIZED EIGENVALUE
-// ============================================================================
-
-// Double precision divide-and-conquer generalized eigenvalue
-dsbgvd :: proc(
-	jobz: EigenJobOption,
-	uplo: UpLoFlag,
-	n: int,
-	ka: int,
-	kb: int,
-	ab: Matrix(f64),
-	bb: Matrix(f64),
-	w: []f64 = nil,
-	z: Matrix(f64) = {},
-	work: []f64 = nil,
-	lwork: int = -1,
-	iwork: []Blas_Int = nil,
-	liwork: int = -1,
-	allocator := context.allocator,
-) -> (
-	result: GeneralizedBandedEigenResult(f64),
-	info: Info,
-	work_size: int,
-	iwork_size: int,
-) {
-	assert(n >= 0, "Matrix dimension must be non-negative")
-	assert(ka >= 0 && kb >= 0, "Number of diagonals must be non-negative")
-	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
-	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
-
-	jobz_char: u8 = jobz == .VALUES_VECTORS ? 'V' : 'N'
-	jobz_cstring := cstring(&jobz_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
-
-	n_int := Blas_Int(n)
-	ka_int := Blas_Int(ka)
-	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
-	lwork_int := Blas_Int(lwork)
-	liwork_int := Blas_Int(liwork)
-	info_int: Info
-
-	// Workspace query
-	if lwork == -1 || liwork == -1 {
-		work_query: f64
-		iwork_query: Blas_Int
-		ldz := Blas_Int(1)
-
-		lapack.dsbgvd_(
-			jobz_cstring,
-			uplo_cstring,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			ab.data,
-			&ldab,
-			bb.data,
-			&ldbb,
-			nil,
-			nil,
-			&ldz,
-			&work_query,
-			&lwork_int,
-			&iwork_query,
-			&liwork_int,
-			&info_int,
-			1,
-			1,
-		)
-
-		work_size = int(work_query)
-		iwork_size = int(iwork_query)
-		return result, Info(info_int), work_size, iwork_size
-	}
-
-	// Allocate eigenvalues if not provided
-	allocated_w := w == nil
-	if allocated_w {
-		w = make([]f64, n, allocator)
-	}
-	result.eigenvalues = w
-
-	// Handle eigenvectors
-	ldz := Blas_Int(1)
-	z_ptr: ^f64 = nil
-	if jobz == .VALUES_VECTORS {
-		assert(z.rows >= n && z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(z.stride)
-		z_ptr = z.data
-		result.eigenvectors = z
+		ldz = Blas_Int(z.ld)
+		z_ptr = raw_data(z.data)
+		result.eigenvectors = z^
 	}
 
 	// Allocate workspace if not provided
 	allocated_work := work == nil
+	allocated_rwork := false
 	allocated_iwork := iwork == nil
 
-	if allocated_work || allocated_iwork {
+	when T == complex64 {
+		allocated_rwork = rwork == nil
+	}
+
+	if allocated_work || allocated_rwork || allocated_iwork {
 		// Query for optimal workspace
-		work_query: f64
-		iwork_query: Blas_Int
 		lwork_query := Blas_Int(-1)
+		lrwork_query := Blas_Int(-1)
 		liwork_query := Blas_Int(-1)
 
-		lapack.dsbgvd_(
-			jobz_cstring,
-			uplo_cstring,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			ab.data,
-			&ldab,
-			bb.data,
-			&ldbb,
-			raw_data(w),
-			z_ptr,
-			&ldz,
-			&work_query,
-			&lwork_query,
-			&iwork_query,
-			&liwork_query,
-			&info_int,
-			1,
-			1,
-		)
+		when T == f32 {
+			work_query: f32
+			iwork_query: Blas_Int
 
-		if allocated_work {
-			lwork = int(work_query)
-			work = make([]f64, lwork, allocator)
-		}
-		if allocated_iwork {
-			liwork = int(iwork_query)
-			iwork = make([]Blas_Int, liwork, allocator)
+			lapack.ssbgvd_(
+				jobz_cstring,
+				uplo_cstring,
+				&n_int,
+				&ka_int,
+				&kb_int,
+				raw_data(ab.data),
+				&ldab,
+				raw_data(bb.data),
+				&ldbb,
+				raw_data(w),
+				z_ptr,
+				&ldz,
+				&work_query,
+				&lwork_query,
+				&iwork_query,
+				&liwork_query,
+				&info_int,
+				1,
+				1,
+			)
+
+			if allocated_work {
+				lwork = int(work_query)
+				work = make([]T, lwork, allocator)
+			}
+			if allocated_iwork {
+				liwork = int(iwork_query)
+				iwork = make([]Blas_Int, liwork, allocator)
+			}
+		} else when T == complex64 {
+			work_query: complex64
+			rwork_query: f32
+			iwork_query: Blas_Int
+
+			lapack.chbgvd_(
+				jobz_cstring,
+				uplo_cstring,
+				&n_int,
+				&ka_int,
+				&kb_int,
+				raw_data(ab.data),
+				&ldab,
+				raw_data(bb.data),
+				&ldbb,
+				raw_data(w),
+				z_ptr,
+				&ldz,
+				&work_query,
+				&lwork_query,
+				&rwork_query,
+				&lrwork_query,
+				&iwork_query,
+				&liwork_query,
+				&info_int,
+				1,
+				1,
+			)
+
+			if allocated_work {
+				lwork = int(real(work_query))
+				work = make([]T, lwork, allocator)
+			}
+			if allocated_rwork {
+				lrwork = int(rwork_query)
+				rwork = make([]f32, lrwork, allocator)
+			}
+			if allocated_iwork {
+				liwork = int(iwork_query)
+				iwork = make([]Blas_Int, liwork, allocator)
+			}
 		}
 	}
 	defer {
 		if allocated_work do delete(work)
+		if allocated_rwork do delete(rwork)
 		if allocated_iwork do delete(iwork)
 	}
 
 	lwork_int = Blas_Int(len(work))
 	liwork_int = Blas_Int(len(iwork))
+	when T == complex64 {
+		lrwork_int = Blas_Int(len(rwork))
+	}
 
 	// Call LAPACK
-	lapack.dsbgvd_(
+	when T == f32 {
+		lapack.ssbgvd_(
 		jobz_cstring,
 		uplo_cstring,
 		&n_int,
@@ -555,105 +645,174 @@ dsbgvd :: proc(
 		raw_data(iwork),
 		&liwork_int,
 		&info_int,
-		1,
-		1,
-	)
+			1,
+			1,
+		)
+	} else when T == complex64 {
+		lapack.chbgvd_(
+			jobz_cstring,
+			uplo_cstring,
+			&n_int,
+			&ka_int,
+			&kb_int,
+			raw_data(ab.data),
+			&ldab,
+			raw_data(bb.data),
+			&ldbb,
+			raw_data(w),
+			z_ptr,
+			&ldz,
+			raw_data(work),
+			&lwork_int,
+			raw_data(rwork),
+			&lrwork_int,
+			raw_data(iwork),
+			&liwork_int,
+			&info_int,
+			1,
+			1,
+		)
+	}
 
-	info = Info(info_int)
+	info = info_int
 
 	// Check if B was positive definite
-	result.b_is_positive_definite = info == .OK || info > Info(n)
+	result.b_is_positive_definite = info == 0 || info > Blas_Int(n)
 
 	// Analyze eigenvalues
-	if (info == .OK || info > Info(n)) && n > 0 {
-		result.min_eigenvalue = w[0]
-		result.max_eigenvalue = w[n - 1]
+	if (info == 0 || info > Blas_Int(n)) && n > 0 {
+		result.min_eigenvalue = f64(w[0])
+		result.max_eigenvalue = f64(w[n - 1])
 		result.all_positive = w[0] > 0
 
-		if abs(result.min_eigenvalue) > machine_epsilon(f64) {
-			result.condition_number = abs(result.max_eigenvalue / result.min_eigenvalue)
+		if abs(w[0]) > machine_parameter(f32, .Epsilon) {
+			result.condition_number = f64(abs(w[n - 1] / w[0]))
 		} else {
 			result.condition_number = math.INF_F64
 		}
 	}
 
 	work_size = len(work)
+	when T == complex64 {
+		rwork_size = len(rwork)
+	} else {
+		rwork_size = 0
+	}
 	iwork_size = len(iwork)
 	return
 }
 
-// Single precision divide-and-conquer generalized eigenvalue
-ssbgvd :: proc(
+// Solve generalized banded eigenvalue problem using divide-and-conquer (f64/complex128)
+m_solve_generalized_banded_dc_f64_c128 :: proc(
 	jobz: EigenJobOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	ka: int,
 	kb: int,
-	ab: Matrix(f32),
-	bb: Matrix(f32),
-	w: []f32 = nil,
-	z: Matrix(f32) = {},
-	work: []f32 = nil,
+	ab: ^Matrix($T),
+	bb: ^Matrix(T),
+	w: []f64 = nil,
+	z: ^Matrix(T) = nil,
+	work: []T = nil,
 	lwork: int = -1,
+	rwork: []f64 = nil,
+	lrwork: int = -1,
 	iwork: []Blas_Int = nil,
 	liwork: int = -1,
 	allocator := context.allocator,
 ) -> (
-	result: GeneralizedBandedEigenResult(f32),
+	result: GeneralizedBandedEigenResult(f64),
 	info: Info,
 	work_size: int,
+	rwork_size: int,
 	iwork_size: int,
-) {
+) where T == f64 || T == complex128 {
 	assert(n >= 0, "Matrix dimension must be non-negative")
 	assert(ka >= 0 && kb >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	jobz_char: u8 = jobz == .VALUES_VECTORS ? 'V' : 'N'
-	jobz_cstring := cstring(&jobz_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	jobz_cstring := eigen_job_to_cstring(jobz)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
 	n_int := Blas_Int(n)
 	ka_int := Blas_Int(ka)
 	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
+	ldab := Blas_Int(ab.ld)
+	ldbb := Blas_Int(bb.ld)
 	lwork_int := Blas_Int(lwork)
+	lrwork_int := Blas_Int(lrwork)
 	liwork_int := Blas_Int(liwork)
 	info_int: Info
 
 	// Workspace query
-	if lwork == -1 || liwork == -1 {
-		work_query: f32
-		iwork_query: Blas_Int
+	if lwork == -1 || liwork == -1 || (T == complex128 && lrwork == -1) {
 		ldz := Blas_Int(1)
 
-		lapack.ssbgvd_(
-			jobz_cstring,
-			uplo_cstring,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			ab.data,
-			&ldab,
-			bb.data,
-			&ldbb,
-			nil,
-			nil,
-			&ldz,
-			&work_query,
-			&lwork_int,
-			&iwork_query,
-			&liwork_int,
-			&info_int,
-			1,
-			1,
-		)
+		when T == f64 {
+			work_query: f64
+			iwork_query: Blas_Int
 
-		work_size = int(work_query)
-		iwork_size = int(iwork_query)
-		return result, Info(info_int), work_size, iwork_size
+			lapack.dsbgvd_(
+				jobz_cstring,
+				uplo_cstring,
+				&n_int,
+				&ka_int,
+				&kb_int,
+				raw_data(ab.data),
+				&ldab,
+				raw_data(bb.data),
+				&ldbb,
+				nil,
+				nil,
+				&ldz,
+				&work_query,
+				&lwork_int,
+				&iwork_query,
+				&liwork_int,
+				&info_int,
+				1,
+				1,
+			)
+
+			work_size = int(work_query)
+			iwork_size = int(iwork_query)
+			rwork_size = 0
+		} else when T == complex128 {
+			work_query: complex128
+			rwork_query: f64
+			iwork_query: Blas_Int
+
+			lapack.zhbgvd_(
+				jobz_cstring,
+				uplo_cstring,
+				&n_int,
+				&ka_int,
+				&kb_int,
+				raw_data(ab.data),
+				&ldab,
+				raw_data(bb.data),
+				&ldbb,
+				nil,
+				nil,
+				&ldz,
+				&work_query,
+				&lwork_int,
+				&rwork_query,
+				&lrwork_int,
+				&iwork_query,
+				&liwork_int,
+				&info_int,
+				1,
+				1,
+			)
+
+			work_size = int(real(work_query))
+			rwork_size = int(rwork_query)
+			iwork_size = int(iwork_query)
+		}
+
+		return result, Info(info_int), work_size, rwork_size, iwork_size
 	}
 
 	// Allocate eigenvalues if not provided
@@ -757,7 +916,7 @@ ssbgvd :: proc(
 		result.max_eigenvalue = f64(w[n - 1])
 		result.all_positive = w[0] > 0
 
-		if abs(w[0]) > machine_epsilon(f32) {
+		if abs(w[0]) > machine_parameter(f32, .Epsilon) {
 			result.condition_number = f64(abs(w[n - 1] / w[0]))
 		} else {
 			result.condition_number = math.INF_F64
@@ -791,7 +950,7 @@ SelectiveGeneralizedResult :: struct($T: typeid) {
 dsbgvx :: proc(
 	jobz: EigenJobOption,
 	range: EigenRangeOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	ka: int,
 	kb: int,
@@ -817,32 +976,21 @@ dsbgvx :: proc(
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	jobz_char: u8 = jobz == .VALUES_VECTORS ? 'V' : 'N'
-	jobz_cstring := cstring(&jobz_char)
-	range_char: u8
-	switch range {
-	case .ALL:
-		range_char = 'A'
-	case .VALUE:
-		range_char = 'V'
-	case .INDEX:
-		range_char = 'I'
-	}
-	range_cstring := cstring(&range_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	jobz_cstring := eigen_job_to_cstring(jobz)
+	range_cstring := eigen_range_to_cstring(range)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
 	n_int := Blas_Int(n)
 	ka_int := Blas_Int(ka)
 	kb_int := Blas_Int(kb)
-	ldab := Blas_Int(ab.stride)
-	ldbb := Blas_Int(bb.stride)
+	ldab := Blas_Int(ab.ld)
+	ldbb := Blas_Int(bb.ld)
 	ldq := Blas_Int(max(1, n))
-	q_ptr: ^f64 = nil
-	if q.data != nil {
+	q_ptr: ^T = nil
+	if q != nil && q.data != nil {
 		assert(q.rows >= n && q.cols >= n, "Q matrix too small")
-		ldq = Blas_Int(q.stride)
-		q_ptr = q.data
+		ldq = Blas_Int(q.ld)
+		q_ptr = raw_data(q.data)
 	}
 
 	vl_val := vl
@@ -941,7 +1089,7 @@ dsbgvx :: proc(
 ssbgvx :: proc(
 	jobz: EigenJobOption,
 	range: EigenRangeOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	ka: int,
 	kb: int,
@@ -967,20 +1115,9 @@ ssbgvx :: proc(
 	assert(ab.rows >= ka + 1 && ab.cols >= n, "A band matrix storage too small")
 	assert(bb.rows >= kb + 1 && bb.cols >= n, "B band matrix storage too small")
 
-	jobz_char: u8 = jobz == .VALUES_VECTORS ? 'V' : 'N'
-	jobz_cstring := cstring(&jobz_char)
-	range_char: u8
-	switch range {
-	case .ALL:
-		range_char = 'A'
-	case .VALUE:
-		range_char = 'V'
-	case .INDEX:
-		range_char = 'I'
-	}
-	range_cstring := cstring(&range_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	jobz_cstring := eigen_job_to_cstring(jobz)
+	range_cstring := eigen_range_to_cstring(range)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
 	n_int := Blas_Int(n)
 	ka_int := Blas_Int(ka)
@@ -1106,7 +1243,7 @@ TridiagonalReductionResult :: struct($T: typeid) {
 // Double precision band to tridiagonal reduction
 dsbtrd :: proc(
 	vect: VectorOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	kd: int, // Number of superdiagonals/subdiagonals
 	ab: Matrix(f64), // Band matrix (modified on output)
@@ -1123,10 +1260,8 @@ dsbtrd :: proc(
 	assert(kd >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= kd + 1 && ab.cols >= n, "Band matrix storage too small")
 
-	vect_char: u8 = vect == .FORM_VECTORS ? 'V' : 'N'
-	vect_cstring := cstring(&vect_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	vect_cstring := vector_option_to_cstring(vect)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
@@ -1189,7 +1324,7 @@ dsbtrd :: proc(
 // Single precision band to tridiagonal reduction
 ssbtrd :: proc(
 	vect: VectorOption,
-	uplo: UpLoFlag,
+	uplo: MatrixRegion,
 	n: int,
 	kd: int,
 	ab: Matrix(f32),
@@ -1206,10 +1341,8 @@ ssbtrd :: proc(
 	assert(kd >= 0, "Number of diagonals must be non-negative")
 	assert(ab.rows >= kd + 1 && ab.cols >= n, "Band matrix storage too small")
 
-	vect_char: u8 = vect == .FORM_VECTORS ? 'V' : 'N'
-	vect_cstring := cstring(&vect_char)
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	vect_cstring := vector_option_to_cstring(vect)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
@@ -1285,11 +1418,23 @@ RFPTranspose :: enum {
 	CONJUGATE, // 'C' - Conjugate transpose (complex only)
 }
 
+rfp_transpose_to_cstring :: proc(trans: RFPTranspose) -> cstring {
+	switch trans {
+	case .NORMAL:
+		return "N"
+	case .TRANSPOSE:
+		return "T"
+	case .CONJUGATE:
+		return "C"
+	}
+	unreachable()
+}
+
 // Double precision symmetric rank-k update in RFP format
 dsfrk :: proc(
 	transr: RFPTranspose,
-	uplo: UpLoFlag,
-	trans: TransposeFlag,
+	uplo: MatrixRegion,
+	trans: TransposeMode,
 	n: int,
 	k: int,
 	alpha: f64,
@@ -1299,30 +1444,11 @@ dsfrk :: proc(
 ) {
 	assert(n >= 0 && k >= 0, "Dimensions must be non-negative")
 
-	transr_char: u8
-	switch transr {
-	case .NORMAL:
-		transr_char = 'N'
-	case .TRANSPOSE:
-		transr_char = 'T'
-	case .CONJUGATE:
-		transr_char = 'C'
-	}
-	transr_cstring := cstring(&transr_char)
+	transr_cstring := rfp_transpose_to_cstring(transr)
 
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
-	trans_char: u8
-	switch trans {
-	case .NoTrans:
-		trans_char = 'N'
-	case .Trans:
-		trans_char = 'T'
-	case .ConjTrans:
-		trans_char = 'C'
-	}
-	trans_cstring := cstring(&trans_char)
+	trans_cstring := transpose_to_cstring(trans)
 
 	n_int := Blas_Int(n)
 	k_int := Blas_Int(k)
@@ -1351,8 +1477,8 @@ dsfrk :: proc(
 // Single precision symmetric rank-k update in RFP format
 ssfrk :: proc(
 	transr: RFPTranspose,
-	uplo: UpLoFlag,
-	trans: TransposeFlag,
+	uplo: MatrixRegion,
+	trans: TransposeMode,
 	n: int,
 	k: int,
 	alpha: f32,
@@ -1362,30 +1488,11 @@ ssfrk :: proc(
 ) {
 	assert(n >= 0 && k >= 0, "Dimensions must be non-negative")
 
-	transr_char: u8
-	switch transr {
-	case .NORMAL:
-		transr_char = 'N'
-	case .TRANSPOSE:
-		transr_char = 'T'
-	case .CONJUGATE:
-		transr_char = 'C'
-	}
-	transr_cstring := cstring(&transr_char)
+	transr_cstring := rfp_transpose_to_cstring(transr)
 
-	uplo_char: u8 = uplo == .Upper ? 'U' : 'L'
-	uplo_cstring := cstring(&uplo_char)
+	uplo_cstring := matrix_region_to_cstring(uplo)
 
-	trans_char: u8
-	switch trans {
-	case .NoTrans:
-		trans_char = 'N'
-	case .Trans:
-		trans_char = 'T'
-	case .ConjTrans:
-		trans_char = 'C'
-	}
-	trans_cstring := cstring(&trans_char)
+	trans_cstring := transpose_to_cstring(trans)
 
 	n_int := Blas_Int(n)
 	k_int := Blas_Int(k)
