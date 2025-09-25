@@ -487,10 +487,11 @@ EigenRangeOption :: enum {
 	VALUE, // 'V' - Eigenvalues/singular values in range [vl, vu]
 	INDEX, // 'I' - Eigenvalues/singular values with indices il to iu
 }
-
 // Alias for SVD functions (same selection mechanism)
 SVDRangeOption :: EigenRangeOption
 
+// Alias for SVD (same conversion)
+svd_range_to_cstring :: eigen_range_to_cstring
 eigen_range_to_cstring :: proc(range: EigenRangeOption) -> cstring {
 	switch range {
 	case .ALL:
@@ -502,10 +503,6 @@ eigen_range_to_cstring :: proc(range: EigenRangeOption) -> cstring {
 	}
 	unreachable()
 }
-
-// Alias for SVD (same conversion)
-svd_range_to_cstring :: eigen_range_to_cstring
-
 
 // ===================================================================================
 // MATRIX SCALING TYPE (for DLASCL/SLASCL/CLASCL/ZLASCL)

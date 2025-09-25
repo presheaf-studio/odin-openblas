@@ -36,22 +36,6 @@ cs_decomp :: proc {
 	cs_decomp_c64_c128,
 }
 
-// Jacobi SVD computation options
-JacobiSVDMode :: struct {
-	// Job options
-	compute_u:      bool, // Compute left singular vectors
-	compute_v:      bool, // Compute right singular vectors
-
-	// Algorithm options
-	preprocess:     bool, // Apply preprocessing
-	transpose_hint: bool, // Hint that A^T may be more efficient
-	perturb:        bool, // Apply controlled perturbation for rank detection
-
-	// Accuracy options
-	high_accuracy:  bool, // Request highest accuracy mode
-	restrict_range: bool, // Restrict range of matrix for conditioning
-}
-
 // Compute SVD using Jacobi method (highest accuracy)
 // Especially good for small matrices and when high accuracy is needed
 svd_jacobi :: proc {
