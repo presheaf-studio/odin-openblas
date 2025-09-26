@@ -437,11 +437,7 @@ stebz :: proc {
 // Computes all eigenvalues and optionally eigenvectors using divide-and-conquer
 
 // Eigenvector computation option
-CompzOption :: enum {
-	NO_VECTORS, // 'N' - No eigenvectors
-	TRIDIAGONAL, // 'I' - Eigenvectors of tridiagonal matrix
-	ORIGINAL, // 'V' - Eigenvectors of original matrix (update Z)
-}
+
 
 // Divide-and-conquer result for tridiagonal eigenvalues
 DivideConquerResult :: struct($T: typeid) {

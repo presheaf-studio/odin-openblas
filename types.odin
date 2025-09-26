@@ -476,7 +476,7 @@ vector_option_to_cstring :: proc(opt: VectorOption) -> cstring {
 	unreachable()
 }
 
-// Job option for eigenvalue computation
+// Jobz
 EigenJobOption :: enum {
 	VALUES_ONLY, // 'N' - Compute eigenvalues only
 	VALUES_VECTORS, // 'V' - Compute eigenvalues and eigenvectors
@@ -487,6 +487,25 @@ eigen_job_to_cstring :: proc(job: EigenJobOption) -> cstring {
 	case .VALUES_ONLY:
 		return "N"
 	case .VALUES_VECTORS:
+		return "V"
+	}
+	unreachable()
+}
+// Compz
+CompzOption :: enum {
+	None, // "N" - Eigenvalues only
+	Identity, // "I" - Eigenvectors of tridiagonal, Z initialized to identity
+	Vectors, // "V" - Eigenvectors and update Z matrix
+}
+
+// Convert eigenvector mode to LAPACK character
+compz_to_char :: proc(mode: CompzOption) -> cstring {
+	switch mode {
+	case .None:
+		return "N"
+	case .Identity:
+		return "I"
+	case .Vectors:
 		return "V"
 	}
 	unreachable()
