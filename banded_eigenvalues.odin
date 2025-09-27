@@ -58,39 +58,68 @@ query_result_sizes_eigen_banded_hermitian :: proc(
 }
 
 // Query workspace for hermitian banded eigenvalue computation
-query_workspace_eigen_banded_hermitian :: proc(
-	$T: typeid,
-	n: int,
-	compute_vectors: bool,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-) where T == complex64 ||
-	T == complex128 {
+query_workspace_eigen_banded_hermitian :: proc($T: typeid, n: int, compute_vectors: bool) -> (work: Blas_Int, rwork: Blas_Int) where T == complex64 || T == complex128 {
 	// Standard algorithm workspace
 	return Blas_Int(n), Blas_Int(max(1, 3 * n - 2))
 }
 
 // Query workspace for hermitian banded eigenvalue computation (2-stage)
-query_workspace_eigen_banded_hermitian_2stage :: proc(
-	$T: typeid,
-	n: int,
-	kd: int,
-	compute_vectors: bool,
-) -> (
-	lwork: Blas_Int,
-	rwork: Blas_Int,
-) where T == complex64 ||
-	T == complex128 {
-	// 2-stage algorithm requires more workspace
-	// These are conservative estimates; actual requirements depend on block size
-	if compute_vectors {
-		lwork = Blas_Int(n * n)
-	} else {
-		lwork = Blas_Int(n * (kd + 1))
+query_workspace_eigen_banded_hermitian_2stage :: proc($T: typeid, n: int, kd: int, jobz: VectorOption, uplo := MatrixRegion.Upper) -> (lwork: int, rwork: int) where T == complex64 || T == complex128 {
+	// Query LAPACK for optimal workspace
+	jobz_c := vector_option_to_cstring(jobz)
+	uplo_c := matrix_region_to_cstring(uplo)
+	n_int := Blas_Int(n)
+	kd_int := Blas_Int(kd)
+	ldab := Blas_Int(kd + 1)
+	ldz := Blas_Int(1)
+	lwork_query := QUERY_WORKSPACE
+	info: Info
+
+	when T == complex64 {
+		work_query: complex64
+		lapack.chbev_2stage_(
+			jobz_c,
+			uplo_c,
+			&n_int,
+			&kd_int,
+			nil, // ab
+			&ldab,
+			nil, // w
+			nil, // z
+			&ldz,
+			&work_query,
+			&lwork_query,
+			nil, // rwork
+			&info,
+			len(jobz_c),
+			len(uplo_c),
+		)
+		lwork = int(real(work_query))
+	} else when T == complex128 {
+		work_query: complex128
+		lapack.zhbev_2stage_(
+			jobz_c,
+			uplo_c,
+			&n_int,
+			&kd_int,
+			nil, // ab
+			&ldab,
+			nil, // w
+			nil, // z
+			&ldz,
+			&work_query,
+			&lwork_query,
+			nil, // rwork
+			&info,
+			len(jobz_c),
+			len(uplo_c),
+		)
+		lwork = int(real(work_query))
 	}
-	rwork = Blas_Int(max(1, 3 * n - 2))
-	return
+
+	// rwork is always max(1, 3*n-2) for CHBEV_2STAGE/ZHBEV_2STAGE
+	rwork = max(1, 3 * n - 2)
+	return lwork, rwork
 }
 
 // Compute eigenvalues/eigenvectors of hermitian banded matrix (complex64)
@@ -125,22 +154,7 @@ eigen_banded_hermitian_c64 :: proc(
 	ldab := AB.ld
 	ldz := Z.ld if Z != nil else Blas_Int(1)
 
-	lapack.chbev_(
-		jobz_c,
-		uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		raw_data(rwork),
-		&info,
-		len(jobz_c),
-		len(uplo_c),
-	)
+	lapack.chbev_(jobz_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), raw_data(rwork), &info, len(jobz_c), len(uplo_c))
 
 	return info, info == 0
 }
@@ -177,22 +191,7 @@ eigen_banded_hermitian_c128 :: proc(
 	ldab := AB.ld
 	ldz := Z.ld if Z != nil else Blas_Int(1)
 
-	lapack.zhbev_(
-		jobz_c,
-		uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		raw_data(rwork),
-		&info,
-		len(jobz_c),
-		len(uplo_c),
-	)
+	lapack.zhbev_(jobz_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), raw_data(rwork), &info, len(jobz_c), len(uplo_c))
 
 	return info, info == 0
 }
@@ -231,23 +230,7 @@ eigen_banded_hermitian_2stage_c64 :: proc(
 	ldz := Z.ld if Z != nil else Blas_Int(1)
 	lwork_val := lwork
 
-	lapack.chbev_2stage_(
-		jobz_c,
-		uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		&lwork_val,
-		raw_data(rwork),
-		&info,
-		len(jobz_c),
-		len(uplo_c),
-	)
+	lapack.chbev_2stage_(jobz_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), &lwork_val, raw_data(rwork), &info, len(jobz_c), len(uplo_c))
 
 	return info, info == 0
 }
@@ -286,23 +269,7 @@ eigen_banded_hermitian_2stage_c128 :: proc(
 	ldz := Z.ld if Z != nil else Blas_Int(1)
 	lwork_val := lwork
 
-	lapack.zhbev_2stage_(
-		jobz_c,
-		uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		&lwork_val,
-		raw_data(rwork),
-		&info,
-		len(jobz_c),
-		len(uplo_c),
-	)
+	lapack.zhbev_2stage_(jobz_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), &lwork_val, raw_data(rwork), &info, len(jobz_c), len(uplo_c))
 
 	return info, info == 0
 }
@@ -311,28 +278,88 @@ eigen_banded_hermitian_2stage_c128 :: proc(
 query_workspace_eigen_banded_hermitian_dc :: proc(
 	$T: typeid,
 	n: int,
-	compute_vectors: bool,
+	kd: int,
+	jobz: VectorOption,
+	uplo := MatrixRegion.Upper,
 ) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
+	work_size: int,
+	rwork_size: int,
+	iwork_size: int,
 ) where T == complex64 ||
 	T == complex128 {
-	// Divide-and-conquer algorithm workspace
-	if compute_vectors {
-		when T == complex64 {
-			work = Blas_Int(n * n)
-			rwork = Blas_Int(1 + 5 * n + 2 * n * n)
-		} else when T == complex128 {
-			work = Blas_Int(n * n)
-			rwork = Blas_Int(1 + 5 * n + 2 * n * n)
-		}
-	} else {
-		work = Blas_Int(n)
-		rwork = Blas_Int(n)
+	// Query LAPACK for optimal workspace
+	jobz_c := vector_option_to_cstring(jobz)
+	uplo_c := matrix_region_to_cstring(uplo)
+	n_int := Blas_Int(n)
+	kd_int := Blas_Int(kd)
+	ldab := Blas_Int(kd + 1)
+	ldz := Blas_Int(1)
+	lwork := QUERY_WORKSPACE
+	lrwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
+	info: Info
+
+	when T == complex64 {
+		work_query: complex64
+		rwork_query: f32
+		iwork_query: Blas_Int
+
+		lapack.chbevd_(
+			jobz_c,
+			uplo_c,
+			&n_int,
+			&kd_int,
+			nil, // ab
+			&ldab,
+			nil, // w
+			nil, // z
+			&ldz,
+			&work_query,
+			&lwork,
+			&rwork_query,
+			&lrwork,
+			&iwork_query,
+			&liwork,
+			&info,
+			len(jobz_c),
+			len(uplo_c),
+		)
+
+		work_size = int(real(work_query))
+		rwork_size = int(rwork_query)
+		iwork_size = int(iwork_query)
+	} else when T == complex128 {
+		work_query: complex128
+		rwork_query: f64
+		iwork_query: Blas_Int
+
+		lapack.zhbevd_(
+			jobz_c,
+			uplo_c,
+			&n_int,
+			&kd_int,
+			nil, // ab
+			&ldab,
+			nil, // w
+			nil, // z
+			&ldz,
+			&work_query,
+			&lwork,
+			&rwork_query,
+			&lrwork,
+			&iwork_query,
+			&liwork,
+			&info,
+			len(jobz_c),
+			len(uplo_c),
+		)
+
+		work_size = int(real(work_query))
+		rwork_size = int(rwork_query)
+		iwork_size = int(iwork_query)
 	}
-	iwork = Blas_Int(3 + 5 * n)
-	return
+
+	return work_size, rwork_size, iwork_size
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer (complex64)
@@ -460,6 +487,94 @@ eigen_banded_hermitian_dc_c128 :: proc(
 	)
 
 	return info, info == 0
+}
+
+// Query workspace for hermitian banded eigenvalue divide-and-conquer 2-stage
+query_workspace_eigen_banded_hermitian_dc_2stage :: proc(
+	$T: typeid,
+	n: int,
+	kd: int,
+	jobz: VectorOption,
+	uplo := MatrixRegion.Upper,
+) -> (
+	work_size: int,
+	rwork_size: int,
+	iwork_size: int,
+) where T == complex64 ||
+	T == complex128 {
+	// Query LAPACK for optimal workspace
+	jobz_c := vector_option_to_cstring(jobz)
+	uplo_c := matrix_region_to_cstring(uplo)
+	n_int := Blas_Int(n)
+	kd_int := Blas_Int(kd)
+	ldab := Blas_Int(kd + 1)
+	ldz := Blas_Int(1)
+	lwork := QUERY_WORKSPACE
+	lrwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
+	info: Info
+
+	when T == complex64 {
+		work_query: complex64
+		rwork_query: f32
+		iwork_query: Blas_Int
+
+		lapack.chbevd_2stage_(
+			jobz_c,
+			uplo_c,
+			&n_int,
+			&kd_int,
+			nil, // ab
+			&ldab,
+			nil, // w
+			nil, // z
+			&ldz,
+			&work_query,
+			&lwork,
+			&rwork_query,
+			&lrwork,
+			&iwork_query,
+			&liwork,
+			&info,
+			len(jobz_c),
+			len(uplo_c),
+		)
+
+		work_size = int(real(work_query))
+		rwork_size = int(rwork_query)
+		iwork_size = int(iwork_query)
+	} else when T == complex128 {
+		work_query: complex128
+		rwork_query: f64
+		iwork_query: Blas_Int
+
+		lapack.zhbevd_2stage_(
+			jobz_c,
+			uplo_c,
+			&n_int,
+			&kd_int,
+			nil, // ab
+			&ldab,
+			nil, // w
+			nil, // z
+			&ldz,
+			&work_query,
+			&lwork,
+			&rwork_query,
+			&lrwork,
+			&iwork_query,
+			&liwork,
+			&info,
+			len(jobz_c),
+			len(uplo_c),
+		)
+
+		work_size = int(real(work_query))
+		rwork_size = int(rwork_query)
+		iwork_size = int(iwork_query)
+	}
+
+	return work_size, rwork_size, iwork_size
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer 2-stage (complex64)
@@ -954,13 +1069,7 @@ query_result_sizes_tridiagonalize_banded_hermitian :: proc(
 }
 
 // Query workspace for tridiagonalization of hermitian/symmetric banded matrix
-query_workspace_tridiagonalize_banded_hermitian :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_tridiagonalize_banded_hermitian :: proc($T: typeid, n: int) -> (work: Blas_Int) where is_float(T) || is_complex(T) {
 	return Blas_Int(n)
 }
 
@@ -1000,39 +1109,9 @@ tridiagonalize_banded_hermitian_real :: proc(
 	}
 
 	when T == f32 {
-		lapack.ssbtrd_(
-			vect_c,
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(d),
-			raw_data(e),
-			q_ptr,
-			&ldq,
-			raw_data(work),
-			&info,
-			len(vect_c),
-			len(uplo_c),
-		)
+		lapack.ssbtrd_(vect_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info, len(vect_c), len(uplo_c))
 	} else when T == f64 {
-		lapack.dsbtrd_(
-			vect_c,
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(d),
-			raw_data(e),
-			q_ptr,
-			&ldq,
-			raw_data(work),
-			&info,
-			len(vect_c),
-			len(uplo_c),
-		)
+		lapack.dsbtrd_(vect_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info, len(vect_c), len(uplo_c))
 	}
 
 	return info, info == 0
@@ -1073,22 +1152,7 @@ tridiagonalize_banded_hermitian_c64 :: proc(
 		q_ptr = raw_data(Q.data)
 	}
 
-	lapack.chbtrd_(
-		vect_c,
-		uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(d),
-		raw_data(e),
-		q_ptr,
-		&ldq,
-		raw_data(work),
-		&info,
-		len(vect_c),
-		len(uplo_c),
-	)
+	lapack.chbtrd_(vect_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info, len(vect_c), len(uplo_c))
 
 	return info, info == 0
 }
@@ -1128,22 +1192,7 @@ tridiagonalize_banded_hermitian_c128 :: proc(
 		q_ptr = raw_data(Q.data)
 	}
 
-	lapack.zhbtrd_(
-		vect_c,
-		uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(d),
-		raw_data(e),
-		q_ptr,
-		&ldq,
-		raw_data(work),
-		&info,
-		len(vect_c),
-		len(uplo_c),
-	)
+	lapack.zhbtrd_(vect_c, uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info, len(vect_c), len(uplo_c))
 
 	return info, info == 0
 }

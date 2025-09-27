@@ -53,19 +53,7 @@ svd_jacobi_variant :: proc {
 // ===================================================================================
 
 // Query result sizes for SVD
-query_result_sizes_svd :: proc(
-	m: int,
-	n: int,
-	compute_u: bool = true,
-	compute_vt: bool = true,
-	full_matrices: bool = false,
-) -> (
-	S_size: int,
-	U_rows: int,
-	U_cols: int,
-	VT_rows: int,
-	VT_cols: int,
-) {
+query_result_sizes_svd :: proc(m: int, n: int, compute_u: bool = true, compute_vt: bool = true, full_matrices: bool = false) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
 	min_mn := min(m, n)
 
 	S_size = min_mn
@@ -85,17 +73,7 @@ query_result_sizes_svd :: proc(
 
 // Query workspace size for SVD (both real and complex)
 // For real types, rwork_size will be 0
-query_workspace_svd :: proc(
-	A: ^Matrix($T),
-	compute_u: bool = true,
-	compute_vt: bool = true,
-	full_matrices: bool = false,
-) -> (
-	work_size: int,
-	rwork_size: int,
-	info: Info,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_svd :: proc(A: ^Matrix($T), compute_u: bool = true, compute_vt: bool = true, full_matrices: bool = false) -> (work_size: int, rwork_size: int, info: Info) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -130,96 +108,26 @@ query_workspace_svd :: proc(
 
 	when T == f32 {
 		work_query: f32
-		lapack.sgesvd_(
-			jobu_c,
-			jobvt_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldvt,
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.sgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info, 1, 1)
 		work_size = int(work_query)
 		rwork_size = 0 // Not used for real types
 	} else when T == f64 {
 		work_query: f64
-		lapack.dgesvd_(
-			jobu_c,
-			jobvt_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldvt,
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.dgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info, 1, 1)
 		work_size = int(work_query)
 		rwork_size = 0 // Not used for real types
 	} else when T == complex64 {
 		work_query: complex64
 		dummy_rwork := [1]f32{}
 
-		lapack.cgesvd_(
-			jobu_c,
-			jobvt_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldvt,
-			&work_query,
-			&lwork,
-			&dummy_rwork[0],
-			&info,
-			1,
-			1,
-		)
+		lapack.cgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info, 1, 1)
 		work_size = int(real(work_query))
 		rwork_size = 5 * int(min_mn) // Complex types need real workspace
 	} else when T == complex128 {
 		work_query: complex128
 		dummy_rwork := [1]f64{}
 
-		lapack.zgesvd_(
-			jobu_c,
-			jobvt_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldvt,
-			&work_query,
-			&lwork,
-			&dummy_rwork[0],
-			&info,
-			1,
-			1,
-		)
+		lapack.zgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info, 1, 1)
 		work_size = int(real(work_query))
 		rwork_size = 5 * int(min_mn) // Complex types need real workspace
 	}
@@ -461,19 +369,7 @@ svd_f64_c128 :: proc(
 // ===================================================================================
 
 // Query result sizes for QR-based SVD
-query_result_sizes_svd_qr :: proc(
-	m: int,
-	n: int,
-	compute_u: bool = true,
-	compute_v: bool = true,
-) -> (
-	S_size: int,
-	U_rows: int,
-	U_cols: int,
-	V_rows: int,
-	V_cols: int,
-	iwork_size: int,
-) {
+query_result_sizes_svd_qr :: proc(m: int, n: int, compute_u: bool = true, compute_v: bool = true) -> (S_size: int, U_rows: int, U_cols: int, V_rows: int, V_cols: int, iwork_size: int) {
 	min_mn := min(m, n)
 
 	S_size = min_mn
@@ -1290,10 +1186,7 @@ svd_select_f32_c64 :: proc(
 
 	// Verify workspace sizes
 	assert(len(iwork) >= int(12 * min_mn), "iwork array too small (need at least 12*min(m,n))")
-	assert(
-		len(work) > 0,
-		"work array must be provided (use query_workspace_svd_select to get size)",
-	)
+	assert(len(work) > 0, "work array must be provided (use query_workspace_svd_select to get size)")
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1436,10 +1329,7 @@ svd_select_f64_c128 :: proc(
 
 	// Verify workspace sizes
 	assert(len(iwork) >= int(12 * min_mn), "iwork array too small (need at least 12*min(m,n))")
-	assert(
-		len(work) > 0,
-		"work array must be provided (use query_workspace_svd_select to get size)",
-	)
+	assert(len(work) > 0, "work array must be provided (use query_workspace_svd_select to get size)")
 	lwork := Blas_Int(len(work))
 
 	when T == f64 {
@@ -1517,19 +1407,7 @@ svd_select_f64_c128 :: proc(
 
 // Query result sizes for divide-and-conquer SVD
 // Same as regular SVD result sizes
-query_result_sizes_svd_divide :: proc(
-	m: int,
-	n: int,
-	compute_u: bool = true,
-	compute_vt: bool = true,
-	full_matrices: bool = false,
-) -> (
-	S_size: int,
-	U_rows: int,
-	U_cols: int,
-	VT_rows: int,
-	VT_cols: int,
-) {
+query_result_sizes_svd_divide :: proc(m: int, n: int, compute_u: bool = true, compute_vt: bool = true, full_matrices: bool = false) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
 	min_mn := min(m, n)
 
 	S_size = min_mn
@@ -1760,10 +1638,7 @@ svd_divide_f32_c64 :: proc(
 
 	// Verify workspace sizes
 	assert(len(iwork) >= int(8 * min_mn), "iwork array too small (need at least 8*min(m,n))")
-	assert(
-		len(work) > 0,
-		"work array must be provided (use query_workspace_svd_divide to get size)",
-	)
+	assert(len(work) > 0, "work array must be provided (use query_workspace_svd_divide to get size)")
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1792,10 +1667,7 @@ svd_divide_f32_c64 :: proc(
 		if full_matrices {
 			rwork_size = max(rwork_size, 5 * min_mn * min_mn + 5 * min_mn)
 		}
-		assert(
-			len(rwork) >= int(rwork_size),
-			"rwork array too small for complex divide-and-conquer SVD",
-		)
+		assert(len(rwork) >= int(rwork_size), "rwork array too small for complex divide-and-conquer SVD")
 
 		// Compute SVD
 		lapack.cgesdd_(
@@ -1874,10 +1746,7 @@ svd_divide_f64_c128 :: proc(
 
 	// Verify workspace sizes
 	assert(len(iwork) >= int(8 * min_mn), "iwork array too small (need at least 8*min(m,n))")
-	assert(
-		len(work) > 0,
-		"work array must be provided (use query_workspace_svd_divide to get size)",
-	)
+	assert(len(work) > 0, "work array must be provided (use query_workspace_svd_divide to get size)")
 	lwork := Blas_Int(len(work))
 
 	when T == f64 {
@@ -1906,10 +1775,7 @@ svd_divide_f64_c128 :: proc(
 		if full_matrices {
 			rwork_size = max(rwork_size, 5 * min_mn * min_mn + 5 * min_mn)
 		}
-		assert(
-			len(rwork) >= int(rwork_size),
-			"rwork array too small for complex divide-and-conquer SVD",
-		)
+		assert(len(rwork) >= int(rwork_size), "rwork array too small for complex divide-and-conquer SVD")
 
 		// Compute SVD
 		lapack.zgesdd_(
@@ -1994,19 +1860,7 @@ cs_decomp_prepare :: proc(
 }
 
 // Helper to allocate bidiagonal arrays for real types
-make_bidiag_real_arrays :: proc(
-	$T: typeid,
-	r: Blas_Int,
-) -> (
-	b11d: []T,
-	b11e: []T,
-	b12d: []T,
-	b12e: []T,
-	b21d: []T,
-	b21e: []T,
-	b22d: []T,
-	b22e: []T,
-) {
+make_bidiag_real_arrays :: proc($T: typeid, r: Blas_Int) -> (b11d: []T, b11e: []T, b12d: []T, b12e: []T, b21d: []T, b21e: []T, b22d: []T, b22e: []T) {
 	b11d = make([]T, r)
 	b11e = make([]T, r - 1)
 	b12d = make([]T, r)
@@ -2019,16 +1873,7 @@ make_bidiag_real_arrays :: proc(
 }
 
 // Helper to delete bidiagonal arrays
-delete_bidiag_real_arrays :: proc(
-	b11d: $T,
-	b11e: T,
-	b12d: T,
-	b12e: T,
-	b21d: T,
-	b21e: T,
-	b22d: T,
-	b22e: T,
-) {
+delete_bidiag_real_arrays :: proc(b11d: $T, b11e: T, b12d: T, b12e: T, b21d: T, b21e: T, b22d: T, b22e: T) {
 	delete(b11d)
 	delete(b11e)
 	delete(b12d)
@@ -2079,18 +1924,7 @@ query_workspace_cs_decomp :: proc(
 	V1T_shape := [2]Blas_Int{V1T.rows, V1T.cols}
 	V2T_shape := [2]Blas_Int{V2T.rows, V2T.cols}
 
-	m, p, q, r, ldu1, ldu2, ldv1t, ldv2t, jobu1_c, jobu2_c, jobv1t_c, jobv2t_c, trans_c :=
-		cs_decomp_prepare(
-			U1_shape,
-			U2_shape,
-			V1T_shape,
-			V2T_shape,
-			compute_u1,
-			compute_u2,
-			compute_v1t,
-			compute_v2t,
-			trans,
-		)
+	m, p, q, r, ldu1, ldu2, ldv1t, ldv2t, jobu1_c, jobu2_c, jobv1t_c, jobv2t_c, trans_c := cs_decomp_prepare(U1_shape, U2_shape, V1T_shape, V2T_shape, compute_u1, compute_u2, compute_v1t, compute_v2t, trans)
 
 	// Create dummy arrays - use f64 for all, transmute for f32
 	dummy_theta := [1]f64{}
@@ -2315,26 +2149,12 @@ cs_decomp_f32_f64 :: proc(
 	U2_shape := [2]Blas_Int{U2.rows, U2.cols}
 	V1T_shape := [2]Blas_Int{V1T.rows, V1T.cols}
 	V2T_shape := [2]Blas_Int{V2T.rows, V2T.cols}
-	m, p, q, r, ldu1, ldu2, ldv1t, ldv2t, jobu1_c, jobu2_c, jobv1t_c, jobv2t_c, trans_c :=
-		cs_decomp_prepare(
-			U1_shape,
-			U2_shape,
-			V1T_shape,
-			V2T_shape,
-			compute_u1,
-			compute_u2,
-			compute_v1t,
-			compute_v2t,
-			trans,
-		)
+	m, p, q, r, ldu1, ldu2, ldv1t, ldv2t, jobu1_c, jobu2_c, jobv1t_c, jobv2t_c, trans_c := cs_decomp_prepare(U1_shape, U2_shape, V1T_shape, V2T_shape, compute_u1, compute_u2, compute_v1t, compute_v2t, trans)
 
 	// Verify array sizes
 	assert(len(theta) >= int(r), "theta array too small (need at least r)")
 	assert(len(phi) >= int(max(0, r - 1)), "phi array too small (need at least r-1)")
-	assert(
-		len(work) > 0,
-		"work array must be provided (use query_workspace_cs_decomp to get size)",
-	)
+	assert(len(work) > 0, "work array must be provided (use query_workspace_cs_decomp to get size)")
 
 	// Verify bidiagonal workspace arrays
 	assert(len(b11d) >= int(r), "b11d array too small (need at least r)")
@@ -2462,26 +2282,12 @@ cs_decomp_c64_c128 :: proc(
 	U2_shape := [2]Blas_Int{U2.rows, U2.cols}
 	V1T_shape := [2]Blas_Int{V1T.rows, V1T.cols}
 	V2T_shape := [2]Blas_Int{V2T.rows, V2T.cols}
-	m, p, q, r, ldu1, ldu2, ldv1t, ldv2t, jobu1_c, jobu2_c, jobv1t_c, jobv2t_c, trans_c :=
-		cs_decomp_prepare(
-			U1_shape,
-			U2_shape,
-			V1T_shape,
-			V2T_shape,
-			compute_u1,
-			compute_u2,
-			compute_v1t,
-			compute_v2t,
-			trans,
-		)
+	m, p, q, r, ldu1, ldu2, ldv1t, ldv2t, jobu1_c, jobu2_c, jobv1t_c, jobv2t_c, trans_c := cs_decomp_prepare(U1_shape, U2_shape, V1T_shape, V2T_shape, compute_u1, compute_u2, compute_v1t, compute_v2t, trans)
 
 	// Verify array sizes
 	assert(len(theta) >= int(r), "theta array too small (need at least r)")
 	assert(len(phi) >= int(max(0, r - 1)), "phi array too small (need at least r-1)")
-	assert(
-		len(work) > 0,
-		"work array must be provided (use query_workspace_cs_decomp to get size)",
-	)
+	assert(len(work) > 0, "work array must be provided (use query_workspace_cs_decomp to get size)")
 
 	// Verify real workspace
 	lrwork := Blas_Int((8 * r) if trans else (7 * r))
@@ -3212,18 +3018,7 @@ query_workspace_svd_jacobi_variant :: proc(
 }
 
 // Query result sizes for Jacobi SVD variant
-query_result_sizes_svd_jacobi_variant :: proc(
-	A: ^Matrix($T),
-	compute_u: bool = true,
-	compute_v: bool = true,
-) -> (
-	s_size: int,
-	u_rows: int,
-	u_cols: int,
-	v_rows: int,
-	v_cols: int,
-) where is_float(T) ||
-	is_complex(T) {
+query_result_sizes_svd_jacobi_variant :: proc(A: ^Matrix($T), compute_u: bool = true, compute_v: bool = true) -> (s_size: int, u_rows: int, u_cols: int, v_rows: int, v_cols: int) where is_float(T) || is_complex(T) {
 	m := int(A.rows)
 	n := int(A.cols)
 
@@ -3302,52 +3097,14 @@ svd_jacobi_variant_f32_c64 :: proc(
 
 	when T == f32 {
 		// Perform SVD
-		lapack.sgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(S),
-			&mv,
-			(compute_v && V != nil) ? raw_data(V.data) : nil,
-			&ldv,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-			1,
-		)
+		lapack.sgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, &info, 1, 1, 1)
 	} else when T == complex64 {
 		// Complex version requires rwork
 		assert(len(rwork) > 0, "rwork array must be provided for complex types")
 		lrwork := Blas_Int(len(rwork))
 
 		// Perform SVD
-		lapack.cgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(S),
-			&mv,
-			(compute_v && V != nil) ? raw_data(V.data) : nil,
-			&ldv,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&lrwork,
-			&info,
-			1,
-			1,
-			1,
-		)
+		lapack.cgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info, 1, 1, 1)
 	}
 
 	// Extract U from modified A if requested
@@ -3408,52 +3165,14 @@ svd_jacobi_variant_f64_c128 :: proc(
 
 	when T == f64 {
 		// Perform SVD
-		lapack.dgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(S),
-			&mv,
-			(compute_v && V != nil) ? raw_data(V.data) : nil,
-			&ldv,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-			1,
-		)
+		lapack.dgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, &info, 1, 1, 1)
 	} else when T == complex128 {
 		// Complex version requires rwork
 		assert(len(rwork) > 0, "rwork array must be provided for complex types")
 		lrwork := Blas_Int(len(rwork))
 
 		// Perform SVD
-		lapack.zgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(S),
-			&mv,
-			(compute_v && V != nil) ? raw_data(V.data) : nil,
-			&ldv,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&lrwork,
-			&info,
-			1,
-			1,
-			1,
-		)
+		lapack.zgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info, 1, 1, 1)
 	}
 
 	// Extract U from modified A if requested

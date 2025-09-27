@@ -80,19 +80,9 @@ data_ptr :: proc {
 // ===================================================================================
 
 // Create a new vector with uninitialized data
-make_vector :: proc(
-	$T: typeid,
-	size: int,
-	incr: int = 1,
-	allocator := context.allocator,
-) -> Vector(T) {
+make_vector :: proc($T: typeid, size: int, incr: int = 1, allocator := context.allocator) -> Vector(T) {
 	actual_size := size * (incr if incr >= 0 else -incr) // Account for stride
-	return Vector(T) {
-		data = builtin.make([]T, actual_size, allocator),
-		size = Blas_Int(size),
-		incr = Blas_Int(incr),
-		offset = 0,
-	}
+	return Vector(T){data = builtin.make([]T, actual_size, allocator), size = Blas_Int(size), incr = Blas_Int(incr), offset = 0}
 }
 
 // Create a vector filled with zeros
@@ -112,12 +102,7 @@ vector_ones :: proc($T: typeid, size: int, allocator := context.allocator) -> Ve
 }
 
 // Create a vector from a slice
-vector_from_slice :: proc(
-	$T: typeid,
-	slice: []T,
-	incr: int = 1,
-	allocator := context.allocator,
-) -> Vector(T) {
+vector_from_slice :: proc($T: typeid, slice: []T, incr: int = 1, allocator := context.allocator) -> Vector(T) {
 	v := make_vector(T, len(slice), incr, allocator)
 	if incr == 1 {
 		copy(v.data, slice)
@@ -146,12 +131,7 @@ vector_data_ptr :: proc(v: ^Vector($T)) -> ^T {
 
 // Create a subvector (view into existing vector)
 vector_subvector :: proc(v: ^Vector($T), start, length: int) -> Vector(T) {
-	return Vector(T) {
-		data = v.data,
-		size = Blas_Int(length),
-		incr = v.incr,
-		offset = v.offset + Blas_Int(start) * v.incr,
-	}
+	return Vector(T){data = v.data, size = Blas_Int(length), incr = v.incr, offset = v.offset + Blas_Int(start) * v.incr}
 }
 
 // Delete vector
@@ -164,12 +144,7 @@ delete_vector :: proc(v: ^Vector($T)) {
 // ===================================================================================
 
 // Create a new matrix with uninitialized data
-make_matrix :: proc(
-	$T: typeid,
-	rows, cols: int,
-	format := MatrixFormat.General,
-	allocator := context.allocator,
-) -> Matrix(T) {
+make_matrix :: proc($T: typeid, rows, cols: int, format := MatrixFormat.General, allocator := context.allocator) -> Matrix(T) {
 	size := rows * cols
 	return Matrix(T) {
 		data   = builtin.make([]T, size, allocator),
@@ -289,25 +264,14 @@ matrix_submatrix :: proc(m: ^Matrix($T), row_start, col_start, rows, cols: int) 
 
 
 // Create a symmetric matrix
-make_symmetric_matrix :: proc(
-	$T: typeid,
-	n: int,
-	uplo: cstring = "U",
-	allocator := context.allocator,
-) -> Matrix(T) {
+make_symmetric_matrix :: proc($T: typeid, n: int, uplo: cstring = "U", allocator := context.allocator) -> Matrix(T) {
 	m := make_matrix(T, n, n, MatrixFormat.Symmetric, allocator)
 	m.storage.symmetric.uplo = uplo
 	return m
 }
 
 // Create a triangular matrix
-make_triangular_matrix :: proc(
-	$T: typeid,
-	n: int,
-	uplo: cstring = "U",
-	diag: cstring = "N",
-	allocator := context.allocator,
-) -> Matrix(T) {
+make_triangular_matrix :: proc($T: typeid, n: int, uplo: cstring = "U", diag: cstring = "N", allocator := context.allocator) -> Matrix(T) {
 	m := make_matrix(T, n, n, MatrixFormat.Triangular, allocator)
 	m.storage.triangular.uplo = uplo
 	m.storage.triangular.diag = diag
@@ -325,23 +289,11 @@ make_banded_matrix :: proc(
 	// Band storage requires (kl + ku + 1) rows for column-major format
 	ldab := kl + ku + 1
 	size := ldab * cols
-	return Matrix(T) {
-		data = builtin.make([]T, size, allocator),
-		rows = rows,
-		cols = cols,
-		ld = rows,
-		format = MatrixFormat.Banded,
-		storage = {banded = {kl = kl, ku = ku, ldab = ldab}},
-	}
+	return Matrix(T){data = builtin.make([]T, size, allocator), rows = rows, cols = cols, ld = rows, format = MatrixFormat.Banded, storage = {banded = {kl = kl, ku = ku, ldab = ldab}}}
 }
 
 // Create a packed triangular matrix (compact storage)
-make_packed_matrix :: proc(
-	$T: typeid,
-	n: int,
-	uplo: cstring = "U",
-	allocator := context.allocator,
-) -> Matrix(T) {
+make_packed_matrix :: proc($T: typeid, n: int, uplo: cstring = "U", allocator := context.allocator) -> Matrix(T) {
 	// Packed storage uses n*(n+1)/2 elements
 	size := n * (n + 1) / 2
 	return Matrix(T) {

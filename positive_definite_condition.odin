@@ -17,14 +17,7 @@ m_condition_positive_definite :: proc {
 // ===================================================================================
 
 // Query workspace for condition number estimation
-query_workspace_condition_positive_definite :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work_size: int,
-	iwork_size: int,
-	rwork_size: int,
-) {
+query_workspace_condition_positive_definite :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) {
 	when is_float(T) {
 		return 3 * n, n, 0 // Real types need work and iwork
 	} else when T == complex64 || T == complex128 {
@@ -48,7 +41,7 @@ m_condition_positive_definite_f32_c64 :: proc(
 ) -> (
 	rcond: f32,
 	info: Info,
-	ok: bool,// Reciprocal condition number
+	ok: bool, // Reciprocal condition number
 ) where T == f32 || T == complex64 {
 	// Validate inputs
 	assert(A.rows == A.cols, "Matrix must be square")
@@ -61,33 +54,11 @@ m_condition_positive_definite_f32_c64 :: proc(
 	when T == f32 {
 		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
-		lapack.spocon_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&anorm,
-			&rcond,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.spocon_(uplo_c, &n, raw_data(A.data), &lda, &anorm, &rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
 	} else when T == complex64 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.cpocon_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&anorm,
-			&rcond,
-			raw_data(work),
-			raw_data(rwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.cpocon_(uplo_c, &n, raw_data(A.data), &lda, &anorm, &rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
 	}
 
 	return rcond, info, info == 0
@@ -105,7 +76,7 @@ m_condition_positive_definite_f64_c128 :: proc(
 ) -> (
 	rcond: f64,
 	info: Info,
-	ok: bool,// Reciprocal condition number
+	ok: bool, // Reciprocal condition number
 ) where T == f64 || T == complex128 {
 	// Validate inputs
 	assert(A.rows == A.cols, "Matrix must be square")
@@ -118,33 +89,11 @@ m_condition_positive_definite_f64_c128 :: proc(
 	when T == f64 {
 		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
-		lapack.dpocon_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&anorm,
-			&rcond,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.dpocon_(uplo_c, &n, raw_data(A.data), &lda, &anorm, &rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
 	} else when T == complex128 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.zpocon_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&anorm,
-			&rcond,
-			raw_data(work),
-			raw_data(rwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.zpocon_(uplo_c, &n, raw_data(A.data), &lda, &anorm, &rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
 	}
 
 	return rcond, info, info == 0
@@ -227,11 +176,7 @@ estimate_relative_error_bound :: proc(condition_number: $T) -> T where is_float(
 }
 
 // Check if iterative refinement is recommended
-needs_iterative_refinement :: proc(
-	rcond: $T,
-	required_accuracy: T,
-) -> bool where T == f32 ||
-	T == f64 {
+needs_iterative_refinement :: proc(rcond: $T, required_accuracy: T) -> bool where T == f32 || T == f64 {
 	condition_number := rcond_to_condition_number(rcond)
 	expected_error := estimate_relative_error_bound(condition_number)
 	return expected_error > required_accuracy

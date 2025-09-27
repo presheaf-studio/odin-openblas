@@ -268,31 +268,9 @@ m_cholesky_solve_banded_f32_c64 :: proc(
 	ldb := Blas_Int(B.stride)
 
 	when T == f32 {
-		lapack.spbtrs_(
-			uplo_c,
-			&n,
-			&kd_val,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.spbtrs_(uplo_c, &n, &kd_val, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpbtrs_(
-			uplo_c,
-			&n,
-			&kd_val,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.cpbtrs_(uplo_c, &n, &kd_val, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -323,31 +301,9 @@ m_cholesky_solve_banded_f64_c128 :: proc(
 	ldb := Blas_Int(B.stride)
 
 	when T == f64 {
-		lapack.dpbtrs_(
-			uplo_c,
-			&n,
-			&kd_val,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.dpbtrs_(uplo_c, &n, &kd_val, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpbtrs_(
-			uplo_c,
-			&n,
-			&kd_val,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.zpbtrs_(uplo_c, &n, &kd_val, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -360,9 +316,9 @@ m_cholesky_solve_banded_f64_c128 :: proc(
 // Query workspace for banded condition number estimation
 query_workspace_cholesky_condition_banded :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) {
 	when T == f32 || T == f64 {
-		return 3*n, n, 0  // Real types need work and iwork
+		return 3 * n, n, 0 // Real types need work and iwork
 	} else when T == complex64 || T == complex128 {
-		return 2*n, 0, n  // Complex types need work and rwork, no iwork
+		return 2 * n, 0, n // Complex types need work and rwork, no iwork
 	}
 }
 
@@ -390,15 +346,13 @@ m_cholesky_condition_banded_f32_c64 :: proc(
 	ldab := Blas_Int(AB.stride)
 
 	when T == f32 {
-		assert(len(work) >= 3*int(n), "Insufficient work space")
+		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
-		lapack.spbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond,
-			raw_data(work), raw_data(iwork), &info, len(uplo_c))
+		lapack.spbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
 	} else when T == complex64 {
-		assert(len(work) >= 2*int(n), "Insufficient work space")
+		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.cpbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond,
-			raw_data(work), raw_data(rwork), &info, len(uplo_c))
+		lapack.cpbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
 	}
 
 	return rcond, info, info == 0
@@ -428,15 +382,13 @@ m_cholesky_condition_banded_f64_c128 :: proc(
 	ldab := Blas_Int(AB.stride)
 
 	when T == f64 {
-		assert(len(work) >= 3*int(n), "Insufficient work space")
+		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
-		lapack.dpbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond,
-			raw_data(work), raw_data(iwork), &info, len(uplo_c))
+		lapack.dpbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
 	} else when T == complex128 {
-		assert(len(work) >= 2*int(n), "Insufficient work space")
+		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.zpbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond,
-			raw_data(work), raw_data(rwork), &info, len(uplo_c))
+		lapack.zpbcon_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, &anorm, &rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
 	}
 
 	return rcond, info, info == 0
@@ -453,10 +405,10 @@ m_cholesky_equilibrate_banded_f32_c64 :: proc(
 	S: []f32, // Scaling factors (pre-allocated, size n)
 	uplo := MatrixRegion.Upper,
 ) -> (
-	scond: f32, // Ratio of smallest to largest scaling factor
-	amax: f32, // Absolute value of largest matrix element
+	scond: f32,
+	amax: f32,
 	info: Info,
-	ok: bool,
+	ok: bool, // Ratio of smallest to largest scaling factor// Absolute value of largest matrix element
 ) where T == f32 || T == complex64 {
 	assert(len(AB.data) > 0, "Matrix cannot be empty")
 	assert(AB.rows == AB.cols, "Matrix must be square")
@@ -469,11 +421,9 @@ m_cholesky_equilibrate_banded_f32_c64 :: proc(
 	ldab := Blas_Int(AB.stride)
 
 	when T == f32 {
-		lapack.spbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab,
-			raw_data(S), &scond, &amax, &info, len(uplo_c))
+		lapack.spbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, raw_data(S), &scond, &amax, &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab,
-			raw_data(S), &scond, &amax, &info, len(uplo_c))
+		lapack.cpbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, raw_data(S), &scond, &amax, &info, len(uplo_c))
 	}
 
 	return scond, amax, info, info == 0
@@ -486,10 +436,10 @@ m_cholesky_equilibrate_banded_f64_c128 :: proc(
 	S: []f64, // Scaling factors (pre-allocated, size n)
 	uplo := MatrixRegion.Upper,
 ) -> (
-	scond: f64, // Ratio of smallest to largest scaling factor
-	amax: f64, // Absolute value of largest matrix element
+	scond: f64,
+	amax: f64,
 	info: Info,
-	ok: bool,
+	ok: bool, // Ratio of smallest to largest scaling factor// Absolute value of largest matrix element
 ) where T == f64 || T == complex128 {
 	assert(len(AB.data) > 0, "Matrix cannot be empty")
 	assert(AB.rows == AB.cols, "Matrix must be square")
@@ -502,11 +452,9 @@ m_cholesky_equilibrate_banded_f64_c128 :: proc(
 	ldab := Blas_Int(AB.stride)
 
 	when T == f64 {
-		lapack.dpbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab,
-			raw_data(S), &scond, &amax, &info, len(uplo_c))
+		lapack.dpbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, raw_data(S), &scond, &amax, &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab,
-			raw_data(S), &scond, &amax, &info, len(uplo_c))
+		lapack.zpbequ_(uplo_c, &n, &kd_val, raw_data(AB.data), &ldab, raw_data(S), &scond, &amax, &info, len(uplo_c))
 	}
 
 	return scond, amax, info, info == 0
@@ -519,9 +467,9 @@ m_cholesky_equilibrate_banded_f64_c128 :: proc(
 // Query workspace for banded iterative refinement
 query_workspace_cholesky_refine_banded :: proc($T: typeid, n: int, nrhs: int) -> (work_size: int, iwork_size: int, rwork_size: int) {
 	when T == f32 || T == f64 {
-		return 3*n, n, 0  // Real types need work and iwork
+		return 3 * n, n, 0 // Real types need work and iwork
 	} else when T == complex64 || T == complex128 {
-		return 2*n, 0, n  // Complex types need work and rwork
+		return 2 * n, 0, n // Complex types need work and rwork
 	}
 }
 
@@ -558,21 +506,51 @@ m_cholesky_refine_banded_f32_c64 :: proc(
 	ldx := Blas_Int(X.stride)
 
 	when T == f32 {
-		assert(len(work) >= 3*int(n), "Insufficient work space")
+		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
-		lapack.spbrfs_(uplo_c, &n, &kd_val, &nrhs,
-			raw_data(AB.data), &ldab, raw_data(AFB.data), &ldafb,
-			raw_data(B.data), &ldb, raw_data(X.data), &ldx,
-			raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork),
-			&info, len(uplo_c))
+		lapack.spbrfs_(
+			uplo_c,
+			&n,
+			&kd_val,
+			&nrhs,
+			raw_data(AB.data),
+			&ldab,
+			raw_data(AFB.data),
+			&ldafb,
+			raw_data(B.data),
+			&ldb,
+			raw_data(X.data),
+			&ldx,
+			raw_data(ferr),
+			raw_data(berr),
+			raw_data(work),
+			raw_data(iwork),
+			&info,
+			len(uplo_c),
+		)
 	} else when T == complex64 {
-		assert(len(work) >= 2*int(n), "Insufficient work space")
+		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.cpbrfs_(uplo_c, &n, &kd_val, &nrhs,
-			raw_data(AB.data), &ldab, raw_data(AFB.data), &ldafb,
-			raw_data(B.data), &ldb, raw_data(X.data), &ldx,
-			raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork),
-			&info, len(uplo_c))
+		lapack.cpbrfs_(
+			uplo_c,
+			&n,
+			&kd_val,
+			&nrhs,
+			raw_data(AB.data),
+			&ldab,
+			raw_data(AFB.data),
+			&ldafb,
+			raw_data(B.data),
+			&ldb,
+			raw_data(X.data),
+			&ldx,
+			raw_data(ferr),
+			raw_data(berr),
+			raw_data(work),
+			raw_data(rwork),
+			&info,
+			len(uplo_c),
+		)
 	}
 
 	return info, info == 0
@@ -611,21 +589,51 @@ m_cholesky_refine_banded_f64_c128 :: proc(
 	ldx := Blas_Int(X.stride)
 
 	when T == f64 {
-		assert(len(work) >= 3*int(n), "Insufficient work space")
+		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
-		lapack.dpbrfs_(uplo_c, &n, &kd_val, &nrhs,
-			raw_data(AB.data), &ldab, raw_data(AFB.data), &ldafb,
-			raw_data(B.data), &ldb, raw_data(X.data), &ldx,
-			raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork),
-			&info, len(uplo_c))
+		lapack.dpbrfs_(
+			uplo_c,
+			&n,
+			&kd_val,
+			&nrhs,
+			raw_data(AB.data),
+			&ldab,
+			raw_data(AFB.data),
+			&ldafb,
+			raw_data(B.data),
+			&ldb,
+			raw_data(X.data),
+			&ldx,
+			raw_data(ferr),
+			raw_data(berr),
+			raw_data(work),
+			raw_data(iwork),
+			&info,
+			len(uplo_c),
+		)
 	} else when T == complex128 {
-		assert(len(work) >= 2*int(n), "Insufficient work space")
+		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.zpbrfs_(uplo_c, &n, &kd_val, &nrhs,
-			raw_data(AB.data), &ldab, raw_data(AFB.data), &ldafb,
-			raw_data(B.data), &ldb, raw_data(X.data), &ldx,
-			raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork),
-			&info, len(uplo_c))
+		lapack.zpbrfs_(
+			uplo_c,
+			&n,
+			&kd_val,
+			&nrhs,
+			raw_data(AB.data),
+			&ldab,
+			raw_data(AFB.data),
+			&ldafb,
+			raw_data(B.data),
+			&ldb,
+			raw_data(X.data),
+			&ldx,
+			raw_data(ferr),
+			raw_data(berr),
+			raw_data(work),
+			raw_data(rwork),
+			&info,
+			len(uplo_c),
+		)
 	}
 
 	return info, info == 0
@@ -636,11 +644,7 @@ m_cholesky_refine_banded_f64_c128 :: proc(
 // ===================================================================================
 
 // Perform Cholesky factorization with automatic algorithm selection
-cholesky_factor :: proc(
-	A: ^Matrix($T),
-	uplo := MatrixRegion.Upper,
-	use_recursive := false,
-) -> CholeskyFactorization(T) {
+cholesky_factor :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper, use_recursive := false) -> CholeskyFactorization(T) {
 	result: CholeskyFactorization(T)
 	result.uplo = uplo
 
@@ -719,14 +723,7 @@ cholesky_log_determinant :: proc(factor: ^CholeskyFactorization($T)) -> (log_det
 }
 
 // Solve system using Cholesky factorization
-solve_with_cholesky :: proc(
-	factor: ^CholeskyFactorization($T),
-	B: ^Matrix(T),
-	allocator := context.allocator,
-) -> (
-	X: Matrix(T),
-	success: bool,
-) {
+solve_with_cholesky :: proc(factor: ^CholeskyFactorization($T), B: ^Matrix(T), allocator := context.allocator) -> (X: Matrix(T), success: bool) {
 	if !factor.is_positive_definite {
 		return Matrix(T){}, false
 	}
@@ -750,13 +747,7 @@ solve_with_cholesky :: proc(
 }
 
 // Compute matrix inverse using Cholesky factorization
-inverse_with_cholesky :: proc(
-	A: ^Matrix($T),
-	allocator := context.allocator,
-) -> (
-	A_inv: Matrix(T),
-	success: bool,
-) {
+inverse_with_cholesky :: proc(A: ^Matrix($T), allocator := context.allocator) -> (A_inv: Matrix(T), success: bool) {
 	// Factor the matrix
 	factor := cholesky_factor(A, .Upper, false)
 	defer matrix_delete(&factor.L)
@@ -773,10 +764,7 @@ inverse_with_cholesky :: proc(
 }
 
 // Compare standard vs recursive Cholesky performance
-compare_cholesky_algorithms :: proc(
-	A: ^Matrix($T),
-	allocator := context.allocator,
-) -> CholeskyComparison {
+compare_cholesky_algorithms :: proc(A: ^Matrix($T), allocator := context.allocator) -> CholeskyComparison {
 	comparison: CholeskyComparison
 
 	// Test standard algorithm
@@ -836,11 +824,7 @@ CholeskyAlgorithm :: enum {
 
 // Update Cholesky factorization after rank-1 update
 // Updates factorization of A + alpha*x*x^T
-cholesky_rank1_update :: proc(
-	factor: ^CholeskyFactorization($T),
-	x: ^Vector(T),
-	alpha: T,
-) -> bool {
+cholesky_rank1_update :: proc(factor: ^CholeskyFactorization($T), x: ^Vector(T), alpha: T) -> bool {
 	if !factor.is_positive_definite {
 		return false
 	}
@@ -881,10 +865,7 @@ cholesky_condition_estimate :: proc(factor: ^CholeskyFactorization($T)) -> f64 {
 }
 
 // Extract triangular factor from Cholesky factorization
-extract_cholesky_factor :: proc(
-	factor: ^CholeskyFactorization($T),
-	allocator := context.allocator,
-) -> Matrix(T) {
+extract_cholesky_factor :: proc(factor: ^CholeskyFactorization($T), allocator := context.allocator) -> Matrix(T) {
 	L := matrix_clone(&factor.L, allocator)
 
 	// Already has correct triangle zeroed
@@ -892,14 +873,7 @@ extract_cholesky_factor :: proc(
 }
 
 // Verify Cholesky factorization accuracy
-verify_cholesky :: proc(
-	A_original: ^Matrix($T),
-	factor: ^CholeskyFactorization(T),
-	allocator := context.allocator,
-) -> (
-	residual_norm: f64,
-	relative_error: f64,
-) {
+verify_cholesky :: proc(A_original: ^Matrix($T), factor: ^CholeskyFactorization(T), allocator := context.allocator) -> (residual_norm: f64, relative_error: f64) {
 	if !factor.is_positive_definite {
 		return math.INF_F64, math.INF_F64
 	}
@@ -979,11 +953,7 @@ matrices_are_equal :: proc(A, B: ^Matrix($T), tol: f64) -> bool {
 	return true
 }
 
-matrix_multiply_transpose :: proc(
-	A, B: ^Matrix($T),
-	a_trans, b_trans: bool,
-	allocator: mem.Allocator,
-) -> Matrix(T) {
+matrix_multiply_transpose :: proc(A, B: ^Matrix($T), a_trans, b_trans: bool, allocator: mem.Allocator) -> Matrix(T) {
 	// Placeholder for matrix multiplication with optional transpose
 	rows := A.rows if !a_trans else A.cols
 	cols := B.cols if !b_trans else B.rows
@@ -1008,11 +978,11 @@ matrix_subtract :: proc(A, B: ^Matrix($T), allocator: mem.Allocator) -> Matrix(T
 
 // Banded Cholesky factorization result
 BandedCholeskyFactorization :: struct($T: typeid) {
-	factor:     Matrix(T), // L or U factor
-	uplo:       MatrixRegion, // Upper or Lower triangular
-	kd:         int, // Bandwidth
-	success:    bool,
-	info:       Blas_Int,
+	factor:  Matrix(T), // L or U factor
+	uplo:    MatrixRegion, // Upper or Lower triangular
+	kd:      int, // Bandwidth
+	success: bool,
+	info:    Blas_Int,
 }
 
 // Complete banded Cholesky factorization workflow
@@ -1029,36 +999,17 @@ cholesky_factorize_banded :: proc(
 	// Perform factorization
 	when T == f32 || T == complex64 {
 		info, success := m_cholesky_factor_banded_f32_c64(&AB, kd, uplo)
-		return BandedCholeskyFactorization(T) {
-			factor = AB,
-			uplo = uplo,
-			kd = kd,
-			success = success,
-			info = info,
-		}
+		return BandedCholeskyFactorization(T){factor = AB, uplo = uplo, kd = kd, success = success, info = info}
 	} else when T == f64 || T == complex128 {
 		info, success := m_cholesky_factor_banded_f64_c128(&AB, kd, uplo)
-		return BandedCholeskyFactorization(T) {
-			factor = AB,
-			uplo = uplo,
-			kd = kd,
-			success = success,
-			info = info,
-		}
+		return BandedCholeskyFactorization(T){factor = AB, uplo = uplo, kd = kd, success = success, info = info}
 	} else {
 		panic("Unsupported type for banded Cholesky factorization")
 	}
 }
 
 // Solve using pre-computed banded Cholesky factorization
-cholesky_solve_with_banded_factor :: proc(
-	chol: ^BandedCholeskyFactorization($T),
-	b: []T,
-	allocator := context.allocator,
-) -> (
-	x: []T,
-	success: bool,
-) {
+cholesky_solve_with_banded_factor :: proc(chol: ^BandedCholeskyFactorization($T), b: []T, allocator := context.allocator) -> (x: []T, success: bool) {
 	if !chol.success {
 		return nil, false
 	}
@@ -1071,19 +1022,9 @@ cholesky_solve_with_banded_factor :: proc(
 
 	// Solve using factorization
 	when T == f32 || T == complex64 {
-		_, success := m_cholesky_solve_banded_f32_c64(
-			&chol.factor,
-			&B,
-			chol.kd,
-			chol.uplo,
-		)
+		_, success := m_cholesky_solve_banded_f32_c64(&chol.factor, &B, chol.kd, chol.uplo)
 	} else when T == f64 || T == complex128 {
-		_, success := m_cholesky_solve_banded_f64_c128(
-			&chol.factor,
-			&B,
-			chol.kd,
-			chol.uplo,
-		)
+		_, success := m_cholesky_solve_banded_f64_c128(&chol.factor, &B, chol.kd, chol.uplo)
 	} else {
 		panic("Unsupported type for banded Cholesky solve")
 	}
@@ -1131,10 +1072,7 @@ is_positive_definite_banded :: proc(chol: BandedCholeskyFactorization($T)) -> bo
 }
 
 // Extract diagonal from banded Cholesky factor
-extract_banded_cholesky_diagonal :: proc(
-	chol: ^BandedCholeskyFactorization($T),
-	allocator := context.allocator,
-) -> []T {
+extract_banded_cholesky_diagonal :: proc(chol: ^BandedCholeskyFactorization($T), allocator := context.allocator) -> []T {
 	if !chol.success {
 		return nil
 	}

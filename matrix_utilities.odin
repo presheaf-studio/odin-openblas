@@ -52,13 +52,7 @@ m_initialize_matrix :: proc(
 // ===================================================================================
 // VECTOR SORTING
 // ===================================================================================
-v_sort :: proc(
-	D: Vector($T),
-	direction := SortDirection.Increasing,
-) -> (
-	success: bool,
-	info: Info,
-) where is_float(T) {
+v_sort :: proc(D: Vector($T), direction := SortDirection.Increasing) -> (success: bool, info: Info) where is_float(T) {
 	// Validate input
 	if len(D.data) == 0 {return true, 0}
 

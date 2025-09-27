@@ -54,15 +54,7 @@ query_result_sizes_banded_to_bidiag :: proc(
 }
 
 // Query workspace for banded to bidiagonal reduction
-query_workspace_banded_to_bidiag :: proc(
-	$T: typeid,
-	m: int,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_banded_to_bidiag :: proc($T: typeid, m: int, n: int) -> (work: Blas_Int, rwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(2 * max(m, n)), 0
 	} else when is_complex(T) {
@@ -127,49 +119,9 @@ banded_to_bidiag_real :: proc(
 	}
 
 	when T == f32 {
-		lapack.sgbbrd_(
-			vect,
-			&m,
-			&n,
-			&ncc,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(D),
-			raw_data(E),
-			q_ptr,
-			&ldq,
-			pt_ptr,
-			&ldpt,
-			c_ptr,
-			&ldc,
-			raw_data(work),
-			&info,
-			1,
-		)
+		lapack.sgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), &info, 1)
 	} else when T == f64 {
-		lapack.dgbbrd_(
-			vect,
-			&m,
-			&n,
-			&ncc,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(D),
-			raw_data(E),
-			q_ptr,
-			&ldq,
-			pt_ptr,
-			&ldpt,
-			c_ptr,
-			&ldc,
-			raw_data(work),
-			&info,
-			1,
-		)
+		lapack.dgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), &info, 1)
 	}
 
 	return info, info == 0
@@ -233,28 +185,7 @@ banded_to_bidiag_c64 :: proc(
 		c_ptr = raw_data(C.data)
 	}
 
-	lapack.cgbbrd_(
-		vect,
-		&m,
-		&n,
-		&ncc,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(D),
-		raw_data(E),
-		q_ptr,
-		&ldq,
-		pt_ptr,
-		&ldpt,
-		c_ptr,
-		&ldc,
-		raw_data(work),
-		raw_data(rwork),
-		&info,
-		1,
-	)
+	lapack.cgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), raw_data(rwork), &info, 1)
 
 	return info, info == 0
 }
@@ -317,28 +248,7 @@ banded_to_bidiag_c128 :: proc(
 		c_ptr = raw_data(C.data)
 	}
 
-	lapack.zgbbrd_(
-		vect,
-		&m,
-		&n,
-		&ncc,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(D),
-		raw_data(E),
-		q_ptr,
-		&ldq,
-		pt_ptr,
-		&ldpt,
-		c_ptr,
-		&ldc,
-		raw_data(work),
-		raw_data(rwork),
-		&info,
-		1,
-	)
+	lapack.zgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), raw_data(rwork), &info, 1)
 
 	return info, info == 0
 }

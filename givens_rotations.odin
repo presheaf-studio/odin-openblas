@@ -67,61 +67,13 @@ m_scale :: proc(
 	cfrom_val, cto_val := cfrom, cto
 
 	when T == f32 {
-		lapack.slascl_(
-			type_c,
-			&kl_val,
-			&ku_val,
-			&cfrom_val,
-			&cto_val,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&info,
-			len(type_c),
-		)
+		lapack.slascl_(type_c, &kl_val, &ku_val, &cfrom_val, &cto_val, &m, &n, raw_data(A.data), &lda, &info, len(type_c))
 	} else when T == f64 {
-		lapack.dlascl_(
-			type_c,
-			&kl_val,
-			&ku_val,
-			&cfrom_val,
-			&cto_val,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&info,
-			len(type_c),
-		)
+		lapack.dlascl_(type_c, &kl_val, &ku_val, &cfrom_val, &cto_val, &m, &n, raw_data(A.data), &lda, &info, len(type_c))
 	} else when T == complex64 {
-		lapack.clascl_(
-			type_c,
-			&kl_val,
-			&ku_val,
-			&cfrom_val,
-			&cto_val,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&info,
-			len(type_c),
-		)
+		lapack.clascl_(type_c, &kl_val, &ku_val, &cfrom_val, &cto_val, &m, &n, raw_data(A.data), &lda, &info, len(type_c))
 	} else when T == complex128 {
-		lapack.zlascl_(
-			type_c,
-			&kl_val,
-			&ku_val,
-			&cfrom_val,
-			&cto_val,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&info,
-			len(type_c),
-		)
+		lapack.zlascl_(type_c, &kl_val, &ku_val, &cfrom_val, &cto_val, &m, &n, raw_data(A.data), &lda, &info, len(type_c))
 	}
 
 	return info == 0, info
@@ -207,76 +159,19 @@ m_apply_givens_sequence :: proc(
 	direct_c := direction_to_cstring(direction)
 
 	when T == f32 {
-		lapack.slasr_(
-			side_c,
-			pivot_c,
-			direct_c,
-			&m,
-			&n,
-			raw_data(c),
-			raw_data(s),
-			raw_data(A.data),
-			&lda,
-			len(side_c),
-			len(pivot_c),
-			len(direct_c),
-		)
+		lapack.slasr_(side_c, pivot_c, direct_c, &m, &n, raw_data(c), raw_data(s), raw_data(A.data), &lda, len(side_c), len(pivot_c), len(direct_c))
 	} else when T == f64 {
-		lapack.dlasr_(
-			side_c,
-			pivot_c,
-			direct_c,
-			&m,
-			&n,
-			raw_data(c),
-			raw_data(s),
-			raw_data(A.data),
-			&lda,
-			len(side_c),
-			len(pivot_c),
-			len(direct_c),
-		)
+		lapack.dlasr_(side_c, pivot_c, direct_c, &m, &n, raw_data(c), raw_data(s), raw_data(A.data), &lda, len(side_c), len(pivot_c), len(direct_c))
 	} else when T == complex64 {
-		lapack.clasr_(
-			side_c,
-			pivot_c,
-			direct_c,
-			&m,
-			&n,
-			raw_data(c),
-			raw_data(s),
-			raw_data(A.data),
-			&lda,
-			len(side_c),
-			len(pivot_c),
-			len(direct_c),
-		)
+		lapack.clasr_(side_c, pivot_c, direct_c, &m, &n, raw_data(c), raw_data(s), raw_data(A.data), &lda, len(side_c), len(pivot_c), len(direct_c))
 	} else when T == complex128 {
-		lapack.zlasr_(
-			side_c,
-			pivot_c,
-			direct_c,
-			&m,
-			&n,
-			raw_data(c),
-			raw_data(s),
-			raw_data(A.data),
-			&lda,
-			len(side_c),
-			len(pivot_c),
-			len(direct_c),
-		)
+		lapack.zlasr_(side_c, pivot_c, direct_c, &m, &n, raw_data(c), raw_data(s), raw_data(A.data), &lda, len(side_c), len(pivot_c), len(direct_c))
 	}
 }
 
 // Apply sequence of Givens rotations to matrix (convenience wrapper)
 // Applies rotations to consecutive rows/columns
-apply_givens_sequence :: proc(
-	A: ^Matrix($T),
-	rotations: []GivensRotation(T),
-	apply_to_rows: bool = true,
-	allocator := context.allocator,
-) where is_float(T) {
+apply_givens_sequence :: proc(A: ^Matrix($T), rotations: []GivensRotation(T), apply_to_rows: bool = true, allocator := context.allocator) where is_float(T) {
 	if len(rotations) == 0 do return
 
 	// Extract c and s arrays from rotations
@@ -301,17 +196,7 @@ apply_givens_sequence :: proc(
 
 // Scale matrix to avoid over/underflow
 // Automatically determines appropriate scaling factors
-m_scale_safe :: proc(
-	A: ^Matrix($T),
-	scaling_type := MatrixScalingType.General,
-	kl := 0,
-	ku := 0,
-	allocator := context.allocator,
-) -> (
-	success: bool,
-	scale_factor: T,
-) where is_float(T) ||
-	is_complex(T) {
+m_scale_safe :: proc(A: ^Matrix($T), scaling_type := MatrixScalingType.General, kl := 0, ku := 0, allocator := context.allocator) -> (success: bool, scale_factor: T) where is_float(T) || is_complex(T) {
 	// Find maximum absolute value in matrix
 	max_val := T(0)
 	when T == complex64 || T == complex128 {
@@ -374,17 +259,7 @@ m_scale_safe :: proc(
 }
 
 // Scale matrix by constant factor
-m_scale_by_factor :: proc(
-	A: ^Matrix($T),
-	factor: T,
-	scaling_type := MatrixScalingType.General,
-	kl := 0,
-	ku := 0,
-	allocator := context.allocator,
-) -> (
-	success: bool,
-) where is_float(T) ||
-	is_complex(T) {
+m_scale_by_factor :: proc(A: ^Matrix($T), factor: T, scaling_type := MatrixScalingType.General, kl := 0, ku := 0, allocator := context.allocator) -> (success: bool) where is_float(T) || is_complex(T) {
 	cfrom := T(1)
 	cto := factor
 
@@ -404,17 +279,7 @@ m_scale_by_factor :: proc(
 }
 
 // Normalize matrix to unit scale
-m_normalize :: proc(
-	A: ^Matrix($T),
-	scaling_type := MatrixScalingType.General,
-	kl := 0,
-	ku := 0,
-	allocator := context.allocator,
-) -> (
-	success: bool,
-	norm: T,
-) where is_float(T) ||
-	is_complex(T) {
+m_normalize :: proc(A: ^Matrix($T), scaling_type := MatrixScalingType.General, kl := 0, ku := 0, allocator := context.allocator) -> (success: bool, norm: T) where is_float(T) || is_complex(T) {
 	// Calculate Frobenius norm using LAPACK
 	when T == f32 || T == complex64 {
 		norm = T(m_norm_general(A, .FrobeniusNorm, allocator))

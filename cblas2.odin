@@ -14,15 +14,7 @@ import "base:intrinsics"
 // A can optionally be transposed or conjugate-transposed.
 // Result is stored in y, which is scaled by beta before adding the product.
 // Supported types: f32, f64, complex64, complex128
-mv_mul :: proc(
-	A: ^Matrix($T),
-	x: ^Vector(T),
-	y: ^Vector(T),
-	alpha: T,
-	beta: T,
-	trans: blas.CBLAS_TRANSPOSE,
-) where is_float(T) ||
-	is_complex(T) {
+mv_mul :: proc(A: ^Matrix($T), x: ^Vector(T), y: ^Vector(T), alpha: T, beta: T, trans: blas.CBLAS_TRANSPOSE) where is_float(T) || is_complex(T) {
 	m, n := i64(A.rows), i64(A.cols)
 
 	// Adjust dimensions based on transpose
@@ -39,69 +31,17 @@ mv_mul :: proc(
 	incy := i64(y.incr)
 
 	when T == f32 {
-		blas.cblas_sgemv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_sgemv(blas.CBLAS_ORDER.ColMajor, trans, m, n, alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == f64 {
-		blas.cblas_dgemv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_dgemv(blas.CBLAS_ORDER.ColMajor, trans, m, n, alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == complex64 {
 		alpha := alpha
 		beta := beta
-		blas.cblas_cgemv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_cgemv(blas.CBLAS_ORDER.ColMajor, trans, m, n, &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	} else when T == complex128 {
 		alpha := alpha
 		beta := beta
-		blas.cblas_zgemv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_zgemv(blas.CBLAS_ORDER.ColMajor, trans, m, n, &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -115,13 +55,7 @@ mv_mul :: proc(
 // For complex types, this is the unconjugated version (use mv_gerc for conjugated).
 // The matrix A is modified in-place.
 // Supported types: f32, f64, complex64, complex128
-mv_ger :: proc(
-	x: ^Vector($T),
-	y: ^Vector(T),
-	A: ^Matrix(T),
-	alpha: T,
-) where is_float(T) ||
-	is_complex(T) {
+mv_ger :: proc(x: ^Vector($T), y: ^Vector(T), A: ^Matrix(T), alpha: T) where is_float(T) || is_complex(T) {
 	assert(x.size == A.rows, "x length must match matrix rows")
 	assert(y.size == A.cols, "y length must match matrix columns")
 
@@ -133,59 +67,15 @@ mv_ger :: proc(
 	alpha := alpha
 
 	when T == f32 {
-		blas.cblas_sger(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_sger(blas.CBLAS_ORDER.ColMajor, m, n, alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == f64 {
-		blas.cblas_dger(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_dger(blas.CBLAS_ORDER.ColMajor, m, n, alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == complex64 {
 		alpha := alpha
-		blas.cblas_cgeru(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_cgeru(blas.CBLAS_ORDER.ColMajor, m, n, &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == complex128 {
 		alpha := alpha
-		blas.cblas_zgeru(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_zgeru(blas.CBLAS_ORDER.ColMajor, m, n, &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	}
 }
 
@@ -198,13 +88,7 @@ mv_geru :: mv_ger
 // For real types, behaves identically to mv_ger (conjugation is identity).
 // The matrix A is modified in-place.
 // Supported types: f32, f64, complex64, complex128
-mv_ger_conj :: proc(
-	x: ^Vector($T),
-	y: ^Vector(T),
-	A: ^Matrix(T),
-	alpha: T,
-) where is_float(T) ||
-	is_complex(T) {
+mv_ger_conj :: proc(x: ^Vector($T), y: ^Vector(T), A: ^Matrix(T), alpha: T) where is_float(T) || is_complex(T) {
 	assert(x.size == A.rows, "x length must match matrix rows")
 	assert(y.size == A.cols, "y length must match matrix columns")
 
@@ -217,60 +101,16 @@ mv_ger_conj :: proc(
 
 	when T == f32 {
 		// For real types, conjugate is identity, so same as ger
-		blas.cblas_sger(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_sger(blas.CBLAS_ORDER.ColMajor, m, n, alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == f64 {
 		// For real types, conjugate is identity, so same as ger
-		blas.cblas_dger(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_dger(blas.CBLAS_ORDER.ColMajor, m, n, alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == complex64 {
 		alpha := alpha
-		blas.cblas_cgerc(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_cgerc(blas.CBLAS_ORDER.ColMajor, m, n, &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == complex128 {
 		alpha := alpha
-		blas.cblas_zgerc(
-			blas.CBLAS_ORDER.ColMajor,
-			m,
-			n,
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_zgerc(blas.CBLAS_ORDER.ColMajor, m, n, &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	}
 }
 
@@ -282,14 +122,7 @@ mv_ger_conj :: proc(
 // Solves a system of linear equations where A is triangular.
 // The vector x is modified in-place with the solution.
 // Supported types: f32, f64, complex64, complex128
-mv_trsv :: proc(
-	A: ^Matrix($T),
-	x: ^Vector(T),
-	uplo: blas.CBLAS_UPLO = .Upper,
-	trans: blas.CBLAS_TRANSPOSE = .NoTrans,
-	diag: blas.CBLAS_DIAG = .NonUnit,
-) where is_float(T) ||
-	is_complex(T) {
+mv_trsv :: proc(A: ^Matrix($T), x: ^Vector(T), uplo: blas.CBLAS_UPLO = .Upper, trans: blas.CBLAS_TRANSPOSE = .NoTrans, diag: blas.CBLAS_DIAG = .NonUnit) where is_float(T) || is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "Vector length must match matrix dimension")
 
@@ -298,53 +131,13 @@ mv_trsv :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_strsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_strsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == f64 {
-		blas.cblas_dtrsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_dtrsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex64 {
-		blas.cblas_ctrsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ctrsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex128 {
-		blas.cblas_ztrsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ztrsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	}
 }
 
@@ -352,14 +145,7 @@ mv_trsv :: proc(
 // Multiplies a triangular matrix by a vector.
 // The vector x is modified in-place with the result.
 // Supported types: f32, f64, complex64, complex128
-mv_trmv :: proc(
-	A: ^Matrix($T),
-	x: ^Vector(T),
-	uplo: blas.CBLAS_UPLO = .Upper,
-	trans: blas.CBLAS_TRANSPOSE = .NoTrans,
-	diag: blas.CBLAS_DIAG = .NonUnit,
-) where is_float(T) ||
-	is_complex(T) {
+mv_trmv :: proc(A: ^Matrix($T), x: ^Vector(T), uplo: blas.CBLAS_UPLO = .Upper, trans: blas.CBLAS_TRANSPOSE = .NoTrans, diag: blas.CBLAS_DIAG = .NonUnit) where is_float(T) || is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "Vector length must match matrix dimension")
 
@@ -368,53 +154,13 @@ mv_trmv :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_strmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_strmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == f64 {
-		blas.cblas_dtrmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_dtrmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex64 {
-		blas.cblas_ctrmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ctrmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex128 {
-		blas.cblas_ztrmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ztrmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, raw_data(A.data), lda, vector_data_ptr(x), incx)
 	}
 }
 
@@ -427,12 +173,7 @@ mv_trmv :: proc(
 // Only the upper or lower triangle of A is referenced and modified.
 // For real types only (use mv_her for complex Hermitian update).
 // Supported types: f32, f64
-mv_syr :: proc(
-	x: ^Vector($T),
-	A: ^Matrix(T),
-	alpha: T,
-	uplo: blas.CBLAS_UPLO = .Upper,
-) where is_float(T) {
+mv_syr :: proc(x: ^Vector($T), A: ^Matrix(T), alpha: T, uplo: blas.CBLAS_UPLO = .Upper) where is_float(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "Vector length must match matrix dimension")
 
@@ -441,27 +182,9 @@ mv_syr :: proc(
 	lda := i64(A.ld)
 
 	when T == f32 {
-		blas.cblas_ssyr(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_ssyr(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, vector_data_ptr(x), incx, raw_data(A.data), lda)
 	} else when T == f64 {
-		blas.cblas_dsyr(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_dsyr(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, vector_data_ptr(x), incx, raw_data(A.data), lda)
 	}
 }
 
@@ -471,12 +194,7 @@ mv_syr :: proc(
 // Alpha must be real for the result to remain Hermitian.
 // For complex types only (use mv_syr for real symmetric update).
 // Supported types: complex64 (alpha is f32), complex128 (alpha is f64)
-mv_her :: proc(
-	x: ^Vector($T),
-	A: ^Matrix(T),
-	alpha: $R,
-	uplo: blas.CBLAS_UPLO = .Upper,
-) where is_complex(T) {
+mv_her :: proc(x: ^Vector($T), A: ^Matrix(T), alpha: $R, uplo: blas.CBLAS_UPLO = .Upper) where is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "Vector length must match matrix dimension")
 
@@ -486,28 +204,10 @@ mv_her :: proc(
 
 	when T == complex64 {
 		static_assert(R == f32, "Alpha must be f32 for complex64")
-		blas.cblas_cher(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_cher(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, vector_data_ptr(x), incx, raw_data(A.data), lda)
 	} else when T == complex128 {
 		static_assert(R == f64, "Alpha must be f64 for complex128")
-		blas.cblas_zher(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_zher(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, vector_data_ptr(x), incx, raw_data(A.data), lda)
 	}
 }
 
@@ -516,13 +216,7 @@ mv_her :: proc(
 // Only the upper or lower triangle of A is referenced and modified.
 // For real types only (use mv_her2 for complex Hermitian update).
 // Supported types: f32, f64
-mv_syr2 :: proc(
-	x: ^Vector($T),
-	y: ^Vector(T),
-	A: ^Matrix(T),
-	alpha: T,
-	uplo: blas.CBLAS_UPLO = .Upper,
-) where is_float(T) {
+mv_syr2 :: proc(x: ^Vector($T), y: ^Vector(T), A: ^Matrix(T), alpha: T, uplo: blas.CBLAS_UPLO = .Upper) where is_float(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "x length must match matrix dimension")
 	assert(y.size == A.rows, "y length must match matrix dimension")
@@ -533,31 +227,9 @@ mv_syr2 :: proc(
 	lda := i64(A.ld)
 
 	when T == f32 {
-		blas.cblas_ssyr2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_ssyr2(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == f64 {
-		blas.cblas_dsyr2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_dsyr2(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	}
 }
 
@@ -566,13 +238,7 @@ mv_syr2 :: proc(
 // Only the upper or lower triangle of A is referenced and modified.
 // For complex types only (use mv_syr2 for real symmetric update).
 // Supported types: complex64, complex128
-mv_her2 :: proc(
-	x: ^Vector($T),
-	y: ^Vector(T),
-	A: ^Matrix(T),
-	alpha: T,
-	uplo: blas.CBLAS_UPLO = .Upper,
-) where is_complex(T) {
+mv_her2 :: proc(x: ^Vector($T), y: ^Vector(T), A: ^Matrix(T), alpha: T, uplo: blas.CBLAS_UPLO = .Upper) where is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "x length must match matrix dimension")
 	assert(y.size == A.rows, "y length must match matrix dimension")
@@ -584,31 +250,9 @@ mv_her2 :: proc(
 	alpha := alpha
 
 	when T == complex64 {
-		blas.cblas_cher2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_cher2(blas.CBLAS_ORDER.ColMajor, uplo, n, &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	} else when T == complex128 {
-		blas.cblas_zher2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(A.data),
-			lda,
-		)
+		blas.cblas_zher2(blas.CBLAS_ORDER.ColMajor, uplo, n, &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(A.data), lda)
 	}
 }
 
@@ -646,75 +290,15 @@ mv_gbmv :: proc(
 	incy := i64(y.incr)
 
 	when T == f32 {
-		blas.cblas_sgbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			i64(kl),
-			i64(ku),
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_sgbmv(blas.CBLAS_ORDER.ColMajor, trans, m, n, i64(kl), i64(ku), alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == f64 {
-		blas.cblas_dgbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			i64(kl),
-			i64(ku),
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_dgbmv(blas.CBLAS_ORDER.ColMajor, trans, m, n, i64(kl), i64(ku), alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
-		blas.cblas_cgbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			i64(kl),
-			i64(ku),
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_cgbmv(blas.CBLAS_ORDER.ColMajor, trans, m, n, i64(kl), i64(ku), &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
-		blas.cblas_zgbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			m,
-			n,
-			i64(kl),
-			i64(ku),
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_zgbmv(blas.CBLAS_ORDER.ColMajor, trans, m, n, i64(kl), i64(ku), &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -742,35 +326,9 @@ mv_sbmv :: proc(
 	incy := i64(y.incr)
 
 	when T == f32 {
-		blas.cblas_ssbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			i64(k),
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_ssbmv(blas.CBLAS_ORDER.ColMajor, uplo, n, i64(k), alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == f64 {
-		blas.cblas_dsbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			i64(k),
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_dsbmv(blas.CBLAS_ORDER.ColMajor, uplo, n, i64(k), alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -794,57 +352,13 @@ mv_tbmv :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_stbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_stbmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == f64 {
-		blas.cblas_dtbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_dtbmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex64 {
-		blas.cblas_ctbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ctbmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex128 {
-		blas.cblas_ztbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ztbmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	}
 }
 
@@ -868,57 +382,13 @@ mv_tbsv :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_stbsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_stbsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == f64 {
-		blas.cblas_dtbsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_dtbsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex64 {
-		blas.cblas_ctbsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ctbsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	} else when T == complex128 {
-		blas.cblas_ztbsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			n,
-			i64(k),
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ztbsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, n, i64(k), raw_data(A.data), lda, vector_data_ptr(x), incx)
 	}
 }
 
@@ -944,49 +414,13 @@ mv_tpmv :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_stpmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_stpmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	} else when T == f64 {
-		blas.cblas_dtpmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_dtpmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	} else when T == complex64 {
-		blas.cblas_ctpmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ctpmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	} else when T == complex128 {
-		blas.cblas_ztpmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ztpmv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	}
 }
 
@@ -1008,49 +442,13 @@ mv_tpsv :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_stpsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_stpsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	} else when T == f64 {
-		blas.cblas_dtpsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_dtpsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	} else when T == complex64 {
-		blas.cblas_ctpsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ctpsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	} else when T == complex128 {
-		blas.cblas_ztpsv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			diag,
-			i64(n),
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-		)
+		blas.cblas_ztpsv(blas.CBLAS_ORDER.ColMajor, uplo, trans, diag, i64(n), raw_data(Ap), vector_data_ptr(x), incx)
 	}
 }
 
@@ -1058,14 +456,7 @@ mv_tpsv :: proc(
 // A is a symmetric matrix, only upper or lower triangle is referenced.
 // For real types only (use mv_hemv for complex Hermitian).
 // Supported types: f32, f64
-mv_symv :: proc(
-	A: ^Matrix($T),
-	x: ^Vector(T),
-	y: ^Vector(T),
-	alpha: T,
-	beta: T,
-	uplo: blas.CBLAS_UPLO = .Upper,
-) where is_float(T) {
+mv_symv :: proc(A: ^Matrix($T), x: ^Vector(T), y: ^Vector(T), alpha: T, beta: T, uplo: blas.CBLAS_UPLO = .Upper) where is_float(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "Input vector dimension must match matrix")
 	assert(y.size == A.rows, "Output vector dimension must match matrix")
@@ -1076,33 +467,9 @@ mv_symv :: proc(
 	incy := i64(y.incr)
 
 	when T == f32 {
-		blas.cblas_ssymv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_ssymv(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == f64 {
-		blas.cblas_dsymv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_dsymv(blas.CBLAS_ORDER.ColMajor, uplo, n, alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -1110,14 +477,7 @@ mv_symv :: proc(
 // A is a Hermitian matrix, only upper or lower triangle is referenced.
 // For complex types only (use mv_symv for real symmetric).
 // Supported types: complex64, complex128
-mv_hemv :: proc(
-	A: ^Matrix($T),
-	x: ^Vector(T),
-	y: ^Vector(T),
-	alpha: T,
-	beta: T,
-	uplo: blas.CBLAS_UPLO = .Upper,
-) where is_complex(T) {
+mv_hemv :: proc(A: ^Matrix($T), x: ^Vector(T), y: ^Vector(T), alpha: T, beta: T, uplo: blas.CBLAS_UPLO = .Upper) where is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(x.size == A.rows, "Input vector dimension must match matrix")
 	assert(y.size == A.rows, "Output vector dimension must match matrix")
@@ -1129,33 +489,9 @@ mv_hemv :: proc(
 	alpha, beta := alpha, beta
 
 	when T == complex64 {
-		blas.cblas_chemv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_chemv(blas.CBLAS_ORDER.ColMajor, uplo, n, &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	} else when T == complex128 {
-		blas.cblas_zhemv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_zhemv(blas.CBLAS_ORDER.ColMajor, uplo, n, &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -1180,31 +516,9 @@ mv_spmv :: proc(
 	incy := i64(y.incr)
 
 	when T == f32 {
-		blas.cblas_sspmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_sspmv(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, raw_data(Ap), vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	} else when T == f64 {
-		blas.cblas_dspmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-			beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_dspmv(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, raw_data(Ap), vector_data_ptr(x), incx, beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -1230,25 +544,9 @@ mv_spr :: proc(
 	incx := i64(x.incr)
 
 	when T == f32 {
-		blas.cblas_sspr(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(Ap),
-		)
+		blas.cblas_sspr(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, vector_data_ptr(x), incx, raw_data(Ap))
 	} else when T == f64 {
-		blas.cblas_dspr(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(Ap),
-		)
+		blas.cblas_dspr(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, vector_data_ptr(x), incx, raw_data(Ap))
 	}
 }
 
@@ -1272,26 +570,10 @@ mv_hpr :: proc(
 
 	when T == complex64 {
 		static_assert(R == f32, "Alpha must be f32 for complex64")
-		blas.cblas_chpr(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(Ap),
-		)
+		blas.cblas_chpr(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, vector_data_ptr(x), incx, raw_data(Ap))
 	} else when T == complex128 {
 		static_assert(R == f64, "Alpha must be f64 for complex128")
-		blas.cblas_zhpr(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			raw_data(Ap),
-		)
+		blas.cblas_zhpr(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, vector_data_ptr(x), incx, raw_data(Ap))
 	}
 }
 
@@ -1316,29 +598,9 @@ mv_spr2 :: proc(
 	incy := i64(y.incr)
 
 	when T == f32 {
-		blas.cblas_sspr2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(Ap),
-		)
+		blas.cblas_sspr2(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(Ap))
 	} else when T == f64 {
-		blas.cblas_dspr2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(Ap),
-		)
+		blas.cblas_dspr2(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(Ap))
 	}
 }
 
@@ -1364,29 +626,9 @@ mv_hpr2 :: proc(
 	alpha := alpha
 
 	when T == complex64 {
-		blas.cblas_chpr2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(Ap),
-		)
+		blas.cblas_chpr2(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(Ap))
 	} else when T == complex128 {
-		blas.cblas_zhpr2(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			&alpha,
-			vector_data_ptr(x),
-			incx,
-			vector_data_ptr(y),
-			incy,
-			raw_data(Ap),
-		)
+		blas.cblas_zhpr2(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), &alpha, vector_data_ptr(x), incx, vector_data_ptr(y), incy, raw_data(Ap))
 	}
 }
 
@@ -1419,35 +661,9 @@ mv_hbmv :: proc(
 	alpha, beta := alpha, beta
 
 	when T == complex64 {
-		blas.cblas_chbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			i64(k),
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_chbmv(blas.CBLAS_ORDER.ColMajor, uplo, n, i64(k), &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	} else when T == complex128 {
-		blas.cblas_zhbmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			n,
-			i64(k),
-			&alpha,
-			raw_data(A.data),
-			lda,
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_zhbmv(blas.CBLAS_ORDER.ColMajor, uplo, n, i64(k), &alpha, raw_data(A.data), lda, vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	}
 }
 
@@ -1473,30 +689,8 @@ mv_hpmv :: proc(
 	alpha, beta := alpha, beta
 
 	when T == complex64 {
-		blas.cblas_chpmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			&alpha,
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_chpmv(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), &alpha, raw_data(Ap), vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	} else when T == complex128 {
-		blas.cblas_zhpmv(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			i64(n),
-			&alpha,
-			raw_data(Ap),
-			vector_data_ptr(x),
-			incx,
-			&beta,
-			vector_data_ptr(y),
-			incy,
-		)
+		blas.cblas_zhpmv(blas.CBLAS_ORDER.ColMajor, uplo, i64(n), &alpha, raw_data(Ap), vector_data_ptr(x), incx, &beta, vector_data_ptr(y), incy)
 	}
 }

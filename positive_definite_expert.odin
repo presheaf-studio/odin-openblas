@@ -24,14 +24,7 @@ m_solve_positive_definite_expert :: proc {
 // ===================================================================================
 
 // Query workspace for mixed-precision solver
-query_workspace_mixed_precision :: proc(
-	n: int,
-	nrhs: int,
-) -> (
-	work_size: int,
-	swork_size: int,
-	rwork_size: int,
-) {
+query_workspace_mixed_precision :: proc(n: int, nrhs: int) -> (work_size: int, swork_size: int, rwork_size: int) {
 	// Both dsposv and zcposv require:
 	// work: n*(n+nrhs) for high precision type
 	// swork: n*(n+nrhs) for low precision type
@@ -40,17 +33,7 @@ query_workspace_mixed_precision :: proc(
 }
 
 // Query workspace for expert solver
-query_workspace_expert_positive_definite :: proc(
-	n: int,
-	nrhs: int,
-) -> (
-	work_size: int,
-	iwork_size: int,
-	rwork_size: int,
-	ferr_size: int,
-	berr_size: int,
-	S_size: int,
-) {
+query_workspace_expert_positive_definite :: proc(n: int, nrhs: int) -> (work_size: int, iwork_size: int, rwork_size: int, ferr_size: int, berr_size: int, S_size: int) {
 	// sposvx/dposvx require: work=3*n, iwork=n
 	// cposvx/zposvx require: work=2*n, rwork=n (no iwork)
 	// ferr and berr are size nrhs
@@ -98,41 +81,10 @@ m_solve_positive_definite_mixed_f64_c128 :: proc(
 	iter: Blas_Int
 
 	when T == f64 {
-		lapack.dsposv_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(work),
-			raw_data(swork),
-			&iter,
-			&info,
-			len(uplo_c),
-		)
+		lapack.dsposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(work), raw_data(swork), &iter, &info, len(uplo_c))
 	} else when T == complex128 {
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
-		lapack.zcposv_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(work),
-			raw_data(swork),
-			raw_data(rwork),
-			&iter,
-			&info,
-			len(uplo_c),
-		)
+		lapack.zcposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(work), raw_data(swork), raw_data(rwork), &iter, &info, len(uplo_c))
 	}
 
 	// Return results

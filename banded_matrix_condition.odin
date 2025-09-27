@@ -42,15 +42,7 @@ query_result_sizes_condition_banded_pd :: proc(
 }
 
 // Query workspace for condition number estimation
-query_workspace_condition_banded_pd :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_condition_banded_pd :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when T == f32 || T == f64 {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -91,33 +83,9 @@ solve_estimate_condition_banded_pd_f32_c64 :: proc(
 	anorm_val := anorm
 
 	when T == f32 {
-		lapack.spbcon_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			&anorm_val,
-			rcond,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.spbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpbcon_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			&anorm_val,
-			rcond,
-			raw_data(work),
-			raw_data(rwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.cpbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -156,33 +124,9 @@ solve_estimate_condition_banded_pd_f64_c128 :: proc(
 	anorm_val := anorm
 
 	when T == f64 {
-		lapack.dpbcon_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			&anorm_val,
-			rcond,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.dpbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpbcon_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			&anorm_val,
-			rcond,
-			raw_data(work),
-			raw_data(rwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.zpbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -227,31 +171,9 @@ solve_equilibration_banded_pd_f32_c64 :: proc(
 	ldab := AB.ld
 
 	when T == f32 {
-		lapack.spbequ_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(S),
-			scond,
-			amax,
-			&info,
-			len(uplo_c),
-		)
+		lapack.spbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpbequ_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(S),
-			scond,
-			amax,
-			&info,
-			len(uplo_c),
-		)
+		lapack.cpbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -280,31 +202,9 @@ solve_equilibration_banded_pd_f64_c128 :: proc(
 	ldab := AB.ld
 
 	when T == f64 {
-		lapack.dpbequ_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(S),
-			scond,
-			amax,
-			&info,
-			len(uplo_c),
-		)
+		lapack.dpbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpbequ_(
-			uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(S),
-			scond,
-			amax,
-			&info,
-			len(uplo_c),
-		)
+		lapack.zpbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -315,15 +215,7 @@ solve_equilibration_banded_pd_f64_c128 :: proc(
 // BANDED MATRIX CONDITION NUMBER ESTIMATION
 // ===================================================================================
 // Query workspace for banded condition estimation
-query_workspace_banded_cond :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_banded_cond :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when is_complex(T) {
@@ -361,37 +253,9 @@ banded_cond_real :: proc(
 	norm_str := norm_to_cstring(norm)
 
 	when T == f32 {
-		lapack.sgbcon_(
-			norm_str,
-			&n,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(ipiv),
-			&anorm_val,
-			rcond,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			1,
-		)
+		lapack.sgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, 1)
 	} else when T == f64 {
-		lapack.dgbcon_(
-			norm_str,
-			&n,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(ipiv),
-			&anorm_val,
-			rcond,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			1,
-		)
+		lapack.dgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, 1)
 	}
 
 	return info, info == 0
@@ -426,21 +290,7 @@ banded_cond_c64 :: proc(
 	anorm_val := anorm
 	norm_str := norm_to_cstring(norm)
 
-	lapack.cgbcon_(
-		norm_str,
-		&n,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(ipiv),
-		&anorm_val,
-		rcond,
-		raw_data(work),
-		raw_data(rwork),
-		&info,
-		1,
-	)
+	lapack.cgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, 1)
 
 	return info, info == 0
 }
@@ -474,21 +324,7 @@ banded_cond_c128 :: proc(
 	anorm_val := anorm
 	norm_str := norm_to_cstring(norm)
 
-	lapack.zgbcon_(
-		norm_str,
-		&n,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(ipiv),
-		&anorm_val,
-		rcond,
-		raw_data(work),
-		raw_data(rwork),
-		&info,
-		1,
-	)
+	lapack.zgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, 1)
 
 	return info, info == 0
 }
@@ -537,35 +373,9 @@ banded_equilibrate_real :: proc(
 	assert(len(C) >= int(n), "Column scale array too small")
 
 	when T == f32 {
-		lapack.sgbequ_(
-			&m,
-			&n,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(R),
-			raw_data(C),
-			rowcnd,
-			colcnd,
-			amax,
-			&info,
-		)
+		lapack.sgbequ_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 	} else when T == f64 {
-		lapack.dgbequ_(
-			&m,
-			&n,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(R),
-			raw_data(C),
-			rowcnd,
-			colcnd,
-			amax,
-			&info,
-		)
+		lapack.dgbequ_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 	}
 
 	return info, info == 0
@@ -595,20 +405,7 @@ banded_equilibrate_c64 :: proc(
 	assert(len(R) >= int(m), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 
-	lapack.cgbequ_(
-		&m,
-		&n,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(R),
-		raw_data(C),
-		rowcnd,
-		colcnd,
-		amax,
-		&info,
-	)
+	lapack.cgbequ_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 
 	return info, info == 0
 }
@@ -637,20 +434,7 @@ banded_equilibrate_c128 :: proc(
 	assert(len(R) >= int(m), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 
-	lapack.zgbequ_(
-		&m,
-		&n,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(R),
-		raw_data(C),
-		rowcnd,
-		colcnd,
-		amax,
-		&info,
-	)
+	lapack.zgbequ_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 
 	return info, info == 0
 }
@@ -680,35 +464,9 @@ banded_equilibrate_improved_real :: proc(
 	assert(len(C) >= int(n), "Column scale array too small")
 
 	when T == f32 {
-		lapack.sgbequb_(
-			&m,
-			&n,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(R),
-			raw_data(C),
-			rowcnd,
-			colcnd,
-			amax,
-			&info,
-		)
+		lapack.sgbequb_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 	} else when T == f64 {
-		lapack.dgbequb_(
-			&m,
-			&n,
-			&kl,
-			&ku,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(R),
-			raw_data(C),
-			rowcnd,
-			colcnd,
-			amax,
-			&info,
-		)
+		lapack.dgbequb_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 	}
 
 	return info, info == 0
@@ -738,20 +496,7 @@ banded_equilibrate_improved_c64 :: proc(
 	assert(len(R) >= int(m), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 
-	lapack.cgbequb_(
-		&m,
-		&n,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(R),
-		raw_data(C),
-		rowcnd,
-		colcnd,
-		amax,
-		&info,
-	)
+	lapack.cgbequb_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 
 	return info, info == 0
 }
@@ -780,20 +525,7 @@ banded_equilibrate_improved_c128 :: proc(
 	assert(len(R) >= int(m), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 
-	lapack.zgbequb_(
-		&m,
-		&n,
-		&kl,
-		&ku,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(R),
-		raw_data(C),
-		rowcnd,
-		colcnd,
-		amax,
-		&info,
-	)
+	lapack.zgbequb_(&m, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(R), raw_data(C), rowcnd, colcnd, amax, &info)
 
 	return info, info == 0
 }

@@ -1163,10 +1163,10 @@ foreign lib {
 	sptsv_ :: proc(n: ^blasint, nrhs: ^blasint, D: ^f32, E: ^f32, B: ^f32, ldb: ^blasint, info: ^Info) ---
 	zptsv_ :: proc(n: ^blasint, nrhs: ^blasint, D: ^f64, E: ^complex128, B: ^complex128, ldb: ^blasint, info: ^Info) ---
 
-	cptsvx_ :: proc(fact: cstring, n: ^blasint, nrhs: ^blasint, D: ^f32, E: ^complex64, DF: ^f32, EF: ^complex64, B: ^complex64, ldb: ^blasint, X: ^complex64, ldx: ^blasint, rcond: ^f32, ferr: ^f32, berr: ^f32, work: ^complex64, rwork: ^f32, info: ^Info, _: c.size_t) ---
-	dptsvx_ :: proc(fact: cstring, n: ^blasint, nrhs: ^blasint, D: ^f64, E: ^f64, DF: ^f64, EF: ^f64, B: ^f64, ldb: ^blasint, X: ^f64, ldx: ^blasint, rcond: ^f64, ferr: ^f64, berr: ^f64, work: ^f64, info: ^Info, _: c.size_t) ---
-	sptsvx_ :: proc(fact: cstring, n: ^blasint, nrhs: ^blasint, D: ^f32, E: ^f32, DF: ^f32, EF: ^f32, B: ^f32, ldb: ^blasint, X: ^f32, ldx: ^blasint, rcond: ^f32, ferr: ^f32, berr: ^f32, work: ^f32, info: ^Info, _: c.size_t) ---
-	zptsvx_ :: proc(fact: cstring, n: ^blasint, nrhs: ^blasint, D: ^f64, E: ^complex128, DF: ^f64, EF: ^complex128, B: ^complex128, ldb: ^blasint, X: ^complex128, ldx: ^blasint, rcond: ^f64, ferr: ^f64, berr: ^f64, work: ^complex128, rwork: ^f64, info: ^Info, _: c.size_t) ---
+	cptsvx_ :: proc(fact: ^byte, n: ^blasint, nrhs: ^blasint, D: ^f32, E: ^complex64, DF: ^f32, EF: ^complex64, B: ^complex64, ldb: ^blasint, X: ^complex64, ldx: ^blasint, rcond: ^f32, ferr: ^f32, berr: ^f32, work: ^complex64, rwork: ^f32, info: ^Info, _: c.size_t) ---
+	dptsvx_ :: proc(fact: ^byte, n: ^blasint, nrhs: ^blasint, D: ^f64, E: ^f64, DF: ^f64, EF: ^f64, B: ^f64, ldb: ^blasint, X: ^f64, ldx: ^blasint, rcond: ^f64, ferr: ^f64, berr: ^f64, work: ^f64, info: ^Info, _: c.size_t) ---
+	sptsvx_ :: proc(fact: ^byte, n: ^blasint, nrhs: ^blasint, D: ^f32, E: ^f32, DF: ^f32, EF: ^f32, B: ^f32, ldb: ^blasint, X: ^f32, ldx: ^blasint, rcond: ^f32, ferr: ^f32, berr: ^f32, work: ^f32, info: ^Info, _: c.size_t) ---
+	zptsvx_ :: proc(fact: ^byte, n: ^blasint, nrhs: ^blasint, D: ^f64, E: ^complex128, DF: ^f64, EF: ^complex128, B: ^complex128, ldb: ^blasint, X: ^complex128, ldx: ^blasint, rcond: ^f64, ferr: ^f64, berr: ^f64, work: ^complex128, rwork: ^f64, info: ^Info, _: c.size_t) ---
 
 	cpttrf_ :: proc(n: ^blasint, D: ^f32, E: ^complex64, info: ^Info) ---
 	dpttrf_ :: proc(n: ^blasint, D: ^f64, E: ^f64, info: ^Info) ---
@@ -1288,14 +1288,19 @@ foreign lib {
 
 	dsterf_ :: proc(n: ^blasint, D: ^f64, E: ^f64, info: ^Info) ---
 	ssterf_ :: proc(n: ^blasint, D: ^f32, E: ^f32, info: ^Info) ---
+
 	dstev_ :: proc(jobz: cstring, n: ^blasint, D: ^f64, E: ^f64, Z: ^f64, ldz: ^blasint, work: ^f64, info: ^Info, _: c.size_t) ---
 	sstev_ :: proc(jobz: cstring, n: ^blasint, D: ^f32, E: ^f32, Z: ^f32, ldz: ^blasint, work: ^f32, info: ^Info, _: c.size_t) ---
+
 	dstevd_ :: proc(jobz: cstring, n: ^blasint, D: ^f64, E: ^f64, Z: ^f64, ldz: ^blasint, work: ^f64, lwork: ^blasint, iwork: ^blasint, liwork: ^blasint, info: ^Info, _: c.size_t) ---
 	sstevd_ :: proc(jobz: cstring, n: ^blasint, D: ^f32, E: ^f32, Z: ^f32, ldz: ^blasint, work: ^f32, lwork: ^blasint, iwork: ^blasint, liwork: ^blasint, info: ^Info, _: c.size_t) ---
+
 	dstevr_ :: proc(jobz: cstring, range: cstring, n: ^blasint, D: ^f64, E: ^f64, vl: ^f64, vu: ^f64, il: ^blasint, iu: ^blasint, abstol: ^f64, m: ^blasint, W: ^f64, Z: ^f64, ldz: ^blasint, ISUPPZ: ^blasint, work: ^f64, lwork: ^blasint, iwork: ^blasint, liwork: ^blasint, info: ^Info, _: c.size_t, _: c.size_t) ---
 	sstevr_ :: proc(jobz: cstring, range: cstring, n: ^blasint, D: ^f32, E: ^f32, vl: ^f32, vu: ^f32, il: ^blasint, iu: ^blasint, abstol: ^f32, m: ^blasint, W: ^f32, Z: ^f32, ldz: ^blasint, ISUPPZ: ^blasint, work: ^f32, lwork: ^blasint, iwork: ^blasint, liwork: ^blasint, info: ^Info, _: c.size_t, _: c.size_t) ---
+
 	dstevx_ :: proc(jobz: cstring, range: cstring, n: ^blasint, D: ^f64, E: ^f64, vl: ^f64, vu: ^f64, il: ^blasint, iu: ^blasint, abstol: ^f64, m: ^blasint, W: ^f64, Z: ^f64, ldz: ^blasint, work: ^f64, iwork: ^blasint, IFAIL: ^blasint, info: ^Info, _: c.size_t, _: c.size_t) ---
 	sstevx_ :: proc(jobz: cstring, range: cstring, n: ^blasint, D: ^f32, E: ^f32, vl: ^f32, vu: ^f32, il: ^blasint, iu: ^blasint, abstol: ^f32, m: ^blasint, W: ^f32, Z: ^f32, ldz: ^blasint, work: ^f32, iwork: ^blasint, IFAIL: ^blasint, info: ^Info, _: c.size_t, _: c.size_t) ---
+
 	csycon_ :: proc(uplo: cstring, n: ^blasint, A: ^complex64, lda: ^blasint, ipiv: ^blasint, anorm: ^f32, rcond: ^f32, work: ^complex64, info: ^Info, _: c.size_t) ---
 	dsycon_ :: proc(uplo: cstring, n: ^blasint, A: ^f64, lda: ^blasint, ipiv: ^blasint, anorm: ^f64, rcond: ^f64, work: ^f64, iwork: ^blasint, info: ^Info, _: c.size_t) ---
 	ssycon_ :: proc(uplo: cstring, n: ^blasint, A: ^f32, lda: ^blasint, ipiv: ^blasint, anorm: ^f32, rcond: ^f32, work: ^f32, iwork: ^blasint, info: ^Info, _: c.size_t) ---

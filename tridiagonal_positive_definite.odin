@@ -44,29 +44,9 @@ m_compute_tridiagonal_pteqr_f32_c64 :: proc(
 	}
 
 	when T == f32 {
-		lapack.spteqr_(
-			compz_c,
-			&n_val,
-			raw_data(D),
-			raw_data(E),
-			cast(^f32)z_ptr,
-			&ldz,
-			raw_data(work),
-			&info,
-			len(compz_c),
-		)
+		lapack.spteqr_(compz_c, &n_val, raw_data(D), raw_data(E), cast(^f32)z_ptr, &ldz, raw_data(work), &info, len(compz_c))
 	} else when T == complex64 {
-		lapack.cpteqr_(
-			compz_c,
-			&n_val,
-			raw_data(D),
-			raw_data(E),
-			z_ptr,
-			&ldz,
-			raw_data(work),
-			&info,
-			len(compz_c),
-		)
+		lapack.cpteqr_(compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info, len(compz_c))
 	}
 
 
@@ -101,29 +81,9 @@ m_compute_tridiagonal_pteqr_f64_c128 :: proc(
 	}
 
 	when T == f64 {
-		lapack.dpteqr_(
-			compz_c,
-			&n_val,
-			raw_data(D),
-			raw_data(E),
-			z_ptr,
-			&ldz,
-			raw_data(work),
-			&info,
-			len(compz_c),
-		)
+		lapack.dpteqr_(compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info, len(compz_c))
 	} else when T == complex128 {
-		lapack.zpteqr_(
-			compz_c,
-			&n_val,
-			raw_data(D),
-			raw_data(E),
-			z_ptr,
-			&ldz,
-			raw_data(work),
-			&info,
-			len(compz_c),
-		)
+		lapack.zpteqr_(compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info, len(compz_c))
 	}
 
 
@@ -141,14 +101,7 @@ m_compute_tridiagonal_pteqr :: proc {
 // ===================================================================================
 
 // Query workspace for tridiagonal positive definite refinement
-query_workspace_tridiagonal_refinement :: proc(
-	$T: typeid,
-	n: int,
-	nrhs: int,
-) -> (
-	work_size: int,
-	rwork_size: int,
-) {
+query_workspace_tridiagonal_refinement :: proc($T: typeid, n: int, nrhs: int) -> (work_size: int, rwork_size: int) {
 	when T == f32 || T == f64 {
 		// Real types: work is real, no rwork
 		return n, 0
@@ -196,22 +149,7 @@ m_refine_tridiagonal_pd_f32_c64 :: proc(
 		// Real case: no uplo parameter
 		assert(len(work) >= 2 * n, "Insufficient workspace for real")
 
-		lapack.sptrfs_(
-			&n_val,
-			&nrhs_val,
-			raw_data(D),
-			raw_data(E),
-			raw_data(DF),
-			raw_data(EF),
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			raw_data(work),
-			&info,
-		)
+		lapack.sptrfs_(&n_val, &nrhs_val, raw_data(D), raw_data(E), raw_data(DF), raw_data(EF), raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(ferr), raw_data(berr), raw_data(work), &info)
 	} else when T == complex64 {
 		// Complex case: has uplo parameter
 		assert(len(work) >= n, "Insufficient workspace for complex")
@@ -278,22 +216,7 @@ m_refine_tridiagonal_pd_f64_c128 :: proc(
 		// Real case: no uplo parameter
 		assert(len(work) >= 2 * n, "Insufficient workspace for real")
 
-		lapack.dptrfs_(
-			&n_val,
-			&nrhs_val,
-			raw_data(D),
-			raw_data(E),
-			raw_data(DF),
-			raw_data(EF),
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			raw_data(work),
-			&info,
-		)
+		lapack.dptrfs_(&n_val, &nrhs_val, raw_data(D), raw_data(E), raw_data(DF), raw_data(EF), raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(ferr), raw_data(berr), raw_data(work), &info)
 	} else when T == complex128 {
 		// Complex case: has uplo parameter
 		assert(len(work) >= n, "Insufficient workspace for complex")
@@ -431,10 +354,7 @@ tridiagonal_matvec :: proc(
 
 	// y[i] = E[i-1]*x[i-1] + D[i]*x[i] + E[i]*x[i+1]
 	for i in 1 ..< n - 1 {
-		val :=
-			U(E[i - 1]) * vector_get(x, i - 1) +
-			U(D[i]) * vector_get(x, i) +
-			U(E[i]) * vector_get(x, i + 1)
+		val := U(E[i - 1]) * vector_get(x, i - 1) + U(D[i]) * vector_get(x, i) + U(E[i]) * vector_get(x, i + 1)
 		vector_set(y, i, val)
 	}
 

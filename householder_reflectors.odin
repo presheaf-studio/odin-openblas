@@ -12,29 +12,12 @@ import "core:mem"
 // ===================================================================================
 
 // Query workspace for applying Householder reflector
-query_workspace_householder_reflector :: proc(
-	$T: typeid,
-	m: int,
-	n: int,
-	side: ReflectorSide,
-) -> (
-	work: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_householder_reflector :: proc($T: typeid, m: int, n: int, side: ReflectorSide) -> (work: Blas_Int) where is_float(T) || is_complex(T) {
 	return side == .Left ? Blas_Int(n) : Blas_Int(m)
 }
 
 // Apply single Householder reflector (generic)
-solve_apply_householder_reflector :: proc(
-	side: ReflectorSide,
-	m: int,
-	n: int,
-	V: ^Vector($T),
-	tau: T,
-	C: ^Matrix(T),
-	work: []T,
-) where is_float(T) ||
-	is_complex(T) {
+solve_apply_householder_reflector :: proc(side: ReflectorSide, m: int, n: int, V: ^Vector($T), tau: T, C: ^Matrix(T), work: []T) where is_float(T) || is_complex(T) {
 	// Validate workspace
 	work_size := side == .Left ? n : m
 	assert(len(work) >= work_size, "Work array too small")
@@ -47,57 +30,13 @@ solve_apply_householder_reflector :: proc(
 	tau_val := tau
 
 	when T == f32 {
-		lapack.slarf_(
-			side_c,
-			&m_int,
-			&n_int,
-			data_ptr(V),
-			&incv,
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.slarf_(side_c, &m_int, &n_int, data_ptr(V), &incv, &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	} else when T == f64 {
-		lapack.dlarf_(
-			side_c,
-			&m_int,
-			&n_int,
-			data_ptr(V),
-			&incv,
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.dlarf_(side_c, &m_int, &n_int, data_ptr(V), &incv, &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	} else when T == complex64 {
-		lapack.clarf_(
-			side_c,
-			&m_int,
-			&n_int,
-			data_ptr(V),
-			&incv,
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.clarf_(side_c, &m_int, &n_int, data_ptr(V), &incv, &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	} else when T == complex128 {
-		lapack.zlarf_(
-			side_c,
-			&m_int,
-			&n_int,
-			data_ptr(V),
-			&incv,
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.zlarf_(side_c, &m_int, &n_int, data_ptr(V), &incv, &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	}
 }
 
@@ -106,16 +45,7 @@ solve_apply_householder_reflector :: proc(
 // ===================================================================================
 
 // Query workspace for applying block Householder reflector
-query_workspace_block_householder_reflector :: proc(
-	$T: typeid,
-	m: int,
-	n: int,
-	k: int,
-	side: ReflectorSide,
-) -> (
-	work: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_block_householder_reflector :: proc($T: typeid, m: int, n: int, k: int, side: ReflectorSide) -> (work: Blas_Int) where is_float(T) || is_complex(T) {
 	ldwork := side == .Left ? n : m
 	return Blas_Int(ldwork * k)
 }
@@ -254,13 +184,7 @@ query_result_sizes_householder_reflector :: proc(n: int) -> (tau_size: int) {
 }
 
 // Generate Householder reflector (generic)
-solve_generate_householder_reflector :: proc(
-	n: int,
-	alpha: ^$T,
-	X: ^Vector(T),
-	tau: ^T,
-) where is_float(T) ||
-	is_complex(T) {
+solve_generate_householder_reflector :: proc(n: int, alpha: ^$T, X: ^Vector(T), tau: ^T) where is_float(T) || is_complex(T) {
 	n_int := Blas_Int(n)
 	incx := X.incr
 
@@ -280,27 +204,12 @@ solve_generate_householder_reflector :: proc(
 // ===================================================================================
 
 // Query result sizes for triangular T matrix formation
-query_result_sizes_triangular_t_matrix :: proc(
-	k: int,
-) -> (
-	tau_size: int,
-	T_mat_rows: int,
-	T_mat_cols: int,
-) {
+query_result_sizes_triangular_t_matrix :: proc(k: int) -> (tau_size: int, T_mat_rows: int, T_mat_cols: int) {
 	return k, k, k // tau array of size k, T matrix is k×k
 }
 
 // Form triangular T matrix for block Householder reflector (generic)
-solve_form_triangular_t_matrix :: proc(
-	direct: ReflectorDirection,
-	storev: ReflectorStorage,
-	n: int,
-	k: int,
-	V: ^Matrix($T),
-	tau: []T,
-	T_mat: ^Matrix(T),
-) where is_float(T) ||
-	is_complex(T) {
+solve_form_triangular_t_matrix :: proc(direct: ReflectorDirection, storev: ReflectorStorage, n: int, k: int, V: ^Matrix($T), tau: []T, T_mat: ^Matrix(T)) where is_float(T) || is_complex(T) {
 	assert(len(tau) >= k, "Tau array too small")
 
 	n_int := Blas_Int(n)
@@ -312,61 +221,13 @@ solve_form_triangular_t_matrix :: proc(
 	storev_c := storev_to_cstring(storev)
 
 	when T == f32 {
-		lapack.slarft_(
-			direct_c,
-			storev_c,
-			&n_int,
-			&k_int,
-			raw_data(V.data),
-			&ldv,
-			raw_data(tau),
-			raw_data(T_mat.data),
-			&ldt,
-			len(direct_c),
-			len(storev_c),
-		)
+		lapack.slarft_(direct_c, storev_c, &n_int, &k_int, raw_data(V.data), &ldv, raw_data(tau), raw_data(T_mat.data), &ldt, len(direct_c), len(storev_c))
 	} else when T == f64 {
-		lapack.dlarft_(
-			direct_c,
-			storev_c,
-			&n_int,
-			&k_int,
-			raw_data(V.data),
-			&ldv,
-			raw_data(tau),
-			raw_data(T_mat.data),
-			&ldt,
-			len(direct_c),
-			len(storev_c),
-		)
+		lapack.dlarft_(direct_c, storev_c, &n_int, &k_int, raw_data(V.data), &ldv, raw_data(tau), raw_data(T_mat.data), &ldt, len(direct_c), len(storev_c))
 	} else when T == complex64 {
-		lapack.clarft_(
-			direct_c,
-			storev_c,
-			&n_int,
-			&k_int,
-			raw_data(V.data),
-			&ldv,
-			raw_data(tau),
-			raw_data(T_mat.data),
-			&ldt,
-			len(direct_c),
-			len(storev_c),
-		)
+		lapack.clarft_(direct_c, storev_c, &n_int, &k_int, raw_data(V.data), &ldv, raw_data(tau), raw_data(T_mat.data), &ldt, len(direct_c), len(storev_c))
 	} else when T == complex128 {
-		lapack.zlarft_(
-			direct_c,
-			storev_c,
-			&n_int,
-			&k_int,
-			raw_data(V.data),
-			&ldv,
-			raw_data(tau),
-			raw_data(T_mat.data),
-			&ldt,
-			len(direct_c),
-			len(storev_c),
-		)
+		lapack.zlarft_(direct_c, storev_c, &n_int, &k_int, raw_data(V.data), &ldv, raw_data(tau), raw_data(T_mat.data), &ldt, len(direct_c), len(storev_c))
 	}
 }
 
@@ -375,29 +236,12 @@ solve_form_triangular_t_matrix :: proc(
 // ===================================================================================
 
 // Query workspace for small Householder reflector
-query_workspace_small_householder_reflector :: proc(
-	$T: typeid,
-	m: int,
-	n: int,
-	side: ReflectorSide,
-) -> (
-	work: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_small_householder_reflector :: proc($T: typeid, m: int, n: int, side: ReflectorSide) -> (work: Blas_Int) where is_float(T) || is_complex(T) {
 	return side == .Left ? Blas_Int(n) : Blas_Int(m)
 }
 
 // Apply small Householder reflector optimized for small matrices (generic)
-solve_apply_small_householder_reflector :: proc(
-	side: ReflectorSide,
-	m: int,
-	n: int,
-	V: []$T,
-	tau: T,
-	C: ^Matrix(T),
-	work: []T,
-) where is_float(T) ||
-	is_complex(T) {
+solve_apply_small_householder_reflector :: proc(side: ReflectorSide, m: int, n: int, V: []$T, tau: T, C: ^Matrix(T), work: []T) where is_float(T) || is_complex(T) {
 	// Validate workspace
 	work_size := side == .Left ? n : m
 	assert(len(work) >= work_size, "Work array too small")
@@ -410,53 +254,13 @@ solve_apply_small_householder_reflector :: proc(
 	tau_val := tau
 
 	when T == f32 {
-		lapack.slarfx_(
-			side_c,
-			&m_int,
-			&n_int,
-			raw_data(V),
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.slarfx_(side_c, &m_int, &n_int, raw_data(V), &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	} else when T == f64 {
-		lapack.dlarfx_(
-			side_c,
-			&m_int,
-			&n_int,
-			raw_data(V),
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.dlarfx_(side_c, &m_int, &n_int, raw_data(V), &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	} else when T == complex64 {
-		lapack.clarfx_(
-			side_c,
-			&m_int,
-			&n_int,
-			raw_data(V),
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.clarfx_(side_c, &m_int, &n_int, raw_data(V), &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	} else when T == complex128 {
-		lapack.zlarfx_(
-			side_c,
-			&m_int,
-			&n_int,
-			raw_data(V),
-			&tau_val,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			len(side_c),
-		)
+		lapack.zlarfx_(side_c, &m_int, &n_int, raw_data(V), &tau_val, raw_data(C.data), &ldc, raw_data(work), len(side_c))
 	}
 }
 

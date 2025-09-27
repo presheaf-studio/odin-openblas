@@ -52,15 +52,7 @@ query_result_sizes_refine_solution :: proc(n: int, nrhs: int) -> (ferr_size: int
 }
 
 // Query workspace for iterative refinement
-query_workspace_refine_solution :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_refine_solution :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when is_complex(T) {
@@ -244,30 +236,12 @@ solve_refine_solution_f64_c128 :: proc(
 // Provides componentwise and normwise error bounds with equilibration support
 
 // Query result sizes for extended iterative refinement
-query_result_sizes_refine_extended :: proc(
-	n: int,
-	nrhs: int,
-	n_err_bnds: int,
-) -> (
-	R_size: int,
-	C_size: int,
-	berr_size: int,
-	err_bnds_norm_size: int,
-	err_bnds_comp_size: int,
-) {
+query_result_sizes_refine_extended :: proc(n: int, nrhs: int, n_err_bnds: int) -> (R_size: int, C_size: int, berr_size: int, err_bnds_norm_size: int, err_bnds_comp_size: int) {
 	return n, n, nrhs, nrhs * n_err_bnds, nrhs * n_err_bnds
 }
 
 // Query workspace for extended iterative refinement
-query_workspace_refine_extended :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_refine_extended :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when T == f32 || T == f64 {
 		return Blas_Int(4 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -534,16 +508,7 @@ query_result_sizes_mixed :: proc(n: int) -> (ipiv_size: int) {
 }
 
 // Query workspace for mixed precision solver
-query_workspace_mixed :: proc(
-	$T: typeid,
-	n: int,
-	nrhs: int,
-) -> (
-	work: Blas_Int,
-	swork: Blas_Int,
-	rwork: Blas_Int,
-) where T == f64 ||
-	T == complex128 {
+query_workspace_mixed :: proc($T: typeid, n: int, nrhs: int) -> (work: Blas_Int, swork: Blas_Int, rwork: Blas_Int) where T == f64 || T == complex128 {
 	when T == f64 {
 		return Blas_Int(n * nrhs), Blas_Int(n * (n + nrhs)), 0
 	} else when T == complex128 {
@@ -552,18 +517,7 @@ query_workspace_mixed :: proc(
 }
 
 // Double precision solution with single precision factorization
-solve_mixed_d32 :: proc(
-	A: ^Matrix(f64),
-	B: ^Matrix(f64),
-	X: ^Matrix(f64),
-	ipiv: []Blas_Int,
-	iter: ^Blas_Int,
-	work: []f64,
-	swork: []f32,
-) -> (
-	info: Info,
-	ok: bool,
-) {
+solve_mixed_d32 :: proc(A: ^Matrix(f64), B: ^Matrix(f64), X: ^Matrix(f64), ipiv: []Blas_Int, iter: ^Blas_Int, work: []f64, swork: []f32) -> (info: Info, ok: bool) {
 	// Validate inputs
 	n := A.rows
 	nrhs := B.cols
@@ -578,39 +532,13 @@ solve_mixed_d32 :: proc(
 	ldx := X.ld
 
 	// Solve system with iterative refinement
-	lapack.dsgesv_(
-		&n_int,
-		&nrhs_int,
-		raw_data(A.data),
-		&lda,
-		raw_data(ipiv),
-		raw_data(B.data),
-		&ldb,
-		raw_data(X.data),
-		&ldx,
-		raw_data(work),
-		raw_data(swork),
-		iter,
-		&info,
-	)
+	lapack.dsgesv_(&n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(work), raw_data(swork), iter, &info)
 
 	return info, info == 0
 }
 
 // Double complex precision solution with single complex precision factorization
-solve_mixed_z64 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	X: ^Matrix(complex128),
-	ipiv: []Blas_Int,
-	iter: ^Blas_Int,
-	work: []complex128,
-	swork: []complex64,
-	rwork: []f64,
-) -> (
-	info: Info,
-	ok: bool,
-) {
+solve_mixed_z64 :: proc(A: ^Matrix(complex128), B: ^Matrix(complex128), X: ^Matrix(complex128), ipiv: []Blas_Int, iter: ^Blas_Int, work: []complex128, swork: []complex64, rwork: []f64) -> (info: Info, ok: bool) {
 	// Validate inputs
 	n := A.rows
 	nrhs := B.cols
@@ -626,22 +554,7 @@ solve_mixed_z64 :: proc(
 	ldx := X.ld
 
 	// Solve system with iterative refinement
-	lapack.zcgesv_(
-		&n_int,
-		&nrhs_int,
-		raw_data(A.data),
-		&lda,
-		raw_data(ipiv),
-		raw_data(B.data),
-		&ldb,
-		raw_data(X.data),
-		&ldx,
-		raw_data(work),
-		raw_data(swork),
-		raw_data(rwork),
-		iter,
-		&info,
-	)
+	lapack.zcgesv_(&n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(work), raw_data(swork), raw_data(rwork), iter, &info)
 
 	return info, info == 0
 }
@@ -653,29 +566,12 @@ solve_mixed_z64 :: proc(
 // Includes equilibration, condition estimation, and iterative refinement
 
 // Query result sizes for expert solver
-query_result_sizes_expert :: proc(
-	n: int,
-	nrhs: int,
-) -> (
-	ipiv_size: int,
-	R_size: int,
-	C_size: int,
-	ferr_size: int,
-	berr_size: int,
-) {
+query_result_sizes_expert :: proc(n: int, nrhs: int) -> (ipiv_size: int, R_size: int, C_size: int, ferr_size: int, berr_size: int) {
 	return n, n, n, nrhs, nrhs
 }
 
 // Query workspace for expert solver
-query_workspace_expert :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_expert :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when T == f32 || T == f64 {
 		return Blas_Int(4 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -934,15 +830,7 @@ query_result_sizes_expert_extra :: proc(
 }
 
 // Query workspace for expert_extra solver
-query_workspace_expert_extra :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_expert_extra :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when T == f32 || T == f64 {
 		return Blas_Int(4 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -980,14 +868,8 @@ solve_expert_extra_real :: proc(
 	assert(len(R) >= n, "Row scale array too small")
 	assert(len(C) >= n, "Column scale array too small")
 	assert(len(berr) >= nrhs, "Backward error array too small")
-	assert(
-		err_bnds_norm.rows >= nrhs && err_bnds_norm.cols >= n_err_bnds,
-		"Norm error bounds matrix too small",
-	)
-	assert(
-		err_bnds_comp.rows >= nrhs && err_bnds_comp.cols >= n_err_bnds,
-		"Component error bounds matrix too small",
-	)
+	assert(err_bnds_norm.rows >= nrhs && err_bnds_norm.cols >= n_err_bnds, "Norm error bounds matrix too small")
+	assert(err_bnds_comp.rows >= nrhs && err_bnds_comp.cols >= n_err_bnds, "Component error bounds matrix too small")
 	assert(len(work) >= 4 * n, "Work array too small")
 	assert(len(iwork) >= n, "Integer work array too small")
 
@@ -1113,14 +995,8 @@ solve_expert_extra_c64 :: proc(
 	assert(len(R) >= int(n), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
-	assert(
-		err_bnds_norm.rows >= nrhs && err_bnds_norm.cols >= n_err_bnds,
-		"Norm error bounds matrix too small",
-	)
-	assert(
-		err_bnds_comp.rows >= nrhs && err_bnds_comp.cols >= n_err_bnds,
-		"Component error bounds matrix too small",
-	)
+	assert(err_bnds_norm.rows >= nrhs && err_bnds_norm.cols >= n_err_bnds, "Norm error bounds matrix too small")
+	assert(err_bnds_comp.rows >= nrhs && err_bnds_comp.cols >= n_err_bnds, "Component error bounds matrix too small")
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= 3 * int(n), "Real work array too small")
 
@@ -1211,14 +1087,8 @@ solve_expert_extra_c128 :: proc(
 	assert(len(R) >= int(n), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
-	assert(
-		err_bnds_norm.rows >= nrhs && err_bnds_norm.cols >= n_err_bnds,
-		"Norm error bounds matrix too small",
-	)
-	assert(
-		err_bnds_comp.rows >= nrhs && err_bnds_comp.cols >= n_err_bnds,
-		"Component error bounds matrix too small",
-	)
+	assert(err_bnds_norm.rows >= nrhs && err_bnds_norm.cols >= n_err_bnds, "Norm error bounds matrix too small")
+	assert(err_bnds_comp.rows >= nrhs && err_bnds_comp.cols >= n_err_bnds, "Component error bounds matrix too small")
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= 3 * int(n), "Real work array too small")
 
@@ -1329,13 +1199,7 @@ query_result_sizes_inverse :: proc(n: int) -> (ipiv_size: int) {
 	return n
 }
 
-query_workspace_inverse :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	lwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_inverse :: proc($T: typeid, n: int) -> (lwork: Blas_Int) where is_float(T) || is_complex(T) {
 	// Query for optimal workspace
 	n_int := Blas_Int(n)
 	lwork_query: Blas_Int = QUERY_WORKSPACE
@@ -1401,16 +1265,7 @@ inverse :: proc(
 // For m < n: finds minimum norm solution
 
 // Query workspace for least squares solver
-query_workspace_least_squares :: proc(
-	$T: typeid,
-	m: int,
-	n: int,
-	nrhs: int,
-	transpose: TransposeMode = .None,
-) -> (
-	lwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_least_squares :: proc($T: typeid, m: int, n: int, nrhs: int, transpose: TransposeMode = .None) -> (lwork: Blas_Int) where is_float(T) || is_complex(T) {
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
@@ -1424,81 +1279,20 @@ query_workspace_least_squares :: proc(
 	trans_c := transpose_mode_to_cstring(transpose)
 
 	when T == f32 {
-		lapack.sgetsls_(
-			trans_c,
-			&m_int,
-			&n_int,
-			&nrhs_int,
-			&work_query,
-			&lda,
-			&work_query,
-			&ldb,
-			&work_query,
-			&lwork_query,
-			&info,
-			1,
-		)
+		lapack.sgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
 	} else when T == f64 {
-		lapack.dgetsls_(
-			trans_c,
-			&m_int,
-			&n_int,
-			&nrhs_int,
-			&work_query,
-			&lda,
-			&work_query,
-			&ldb,
-			&work_query,
-			&lwork_query,
-			&info,
-			1,
-		)
+		lapack.dgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
 	} else when T == complex64 {
-		lapack.cgetsls_(
-			trans_c,
-			&m_int,
-			&n_int,
-			&nrhs_int,
-			&work_query,
-			&lda,
-			&work_query,
-			&ldb,
-			&work_query,
-			&lwork_query,
-			&info,
-			1,
-		)
+		lapack.cgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
 	} else when T == complex128 {
-		lapack.zgetsls_(
-			trans_c,
-			&m_int,
-			&n_int,
-			&nrhs_int,
-			&work_query,
-			&lda,
-			&work_query,
-			&ldb,
-			&work_query,
-			&lwork_query,
-			&info,
-			1,
-		)
+		lapack.zgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
 	}
 
 	return Blas_Int(real(work_query))
 }
 
 // Solve least squares problem with pre-allocated workspace
-solve_least_squares :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	work: []T,
-	transpose: TransposeMode = .None,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) ||
-	is_complex(T) {
+solve_least_squares :: proc(A: ^Matrix($T), B: ^Matrix(T), work: []T, transpose: TransposeMode = .None) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	nrhs := B.cols
@@ -1518,65 +1312,13 @@ solve_least_squares :: proc(
 
 	// Solve the system (B is overwritten with solution)
 	when T == f32 {
-		lapack.sgetsls_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.sgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	} else when T == f64 {
-		lapack.dgetsls_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.dgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	} else when T == complex64 {
-		lapack.cgetsls_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.cgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	} else when T == complex128 {
-		lapack.zgetsls_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.zgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	}
 
 	return info, info == 0

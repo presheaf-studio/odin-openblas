@@ -22,18 +22,7 @@ least_squares_svd :: proc {
 // Solve overdetermined or underdetermined systems in the least squares sense
 // ===================================================================================
 // Query workspace size for least squares (QR/LQ factorization - legacy gels algorithm)
-query_workspace_least_squares_legacy :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	transpose: bool = false,
-) -> (
-	work_size: int,
-	rwork_size: int,
-	info: Info,
-) where T == f32 ||
-	T == f64 ||
-	T == complex64 ||
-	T == complex128 {
+query_workspace_least_squares_legacy :: proc(A: ^Matrix($T), B: ^Matrix(T), transpose: bool = false) -> (work_size: int, rwork_size: int, info: Info) where T == f32 || T == f64 || T == complex64 || T == complex128 {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	nrhs := Blas_Int(B.cols)
@@ -119,35 +108,9 @@ least_squares_f32_c64 :: proc(
 
 	// Solve least squares
 	when T == f32 {
-		lapack.sgels_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.sgels_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	} else when T == complex64 {
-		lapack.cgels_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.cgels_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	}
 
 	return info, info == 0
@@ -184,35 +147,9 @@ least_squares_f64_c128 :: proc(
 
 	// Solve least squares
 	when T == f64 {
-		lapack.dgels_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.dgels_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	} else when T == complex128 {
-		lapack.zgels_(
-			trans_c,
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-		)
+		lapack.zgels_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
 	}
 
 	return info, info == 0
@@ -381,42 +318,10 @@ least_squares_svd_f32_c64 :: proc(
 
 	// Solve least squares with SVD
 	when T == f32 {
-		lapack.sgelsd_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&info,
-		)
+		lapack.sgelsd_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, raw_data(iwork), &info)
 	} else when T == complex64 {
 		lrwork := Blas_Int(len(rwork))
-		lapack.cgelsd_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&lrwork,
-			raw_data(iwork),
-			&info,
-		)
+		lapack.cgelsd_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &info)
 	}
 
 	return rank, info, info == 0
@@ -457,60 +362,17 @@ least_squares_svd_f64_c128 :: proc(
 
 	// Solve least squares with SVD
 	when T == f64 {
-		lapack.dgelsd_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&info,
-		)
+		lapack.dgelsd_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, raw_data(iwork), &info)
 	} else when T == complex128 {
 		lrwork := Blas_Int(len(rwork))
-		lapack.zgelsd_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&lrwork,
-			raw_data(iwork),
-			&info,
-		)
+		lapack.zgelsd_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &info)
 	}
 
 	return rank, info, info == 0
 }
 
 // Query workspace size for SVD-based least squares (simple gelss algorithm)
-query_workspace_least_squares_svd_simple :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-) -> (
-	work_size: int,
-	rwork_size: int,
-	s_size: int,
-	info: Info,
-) where T == f32 ||
-	T == f64 ||
-	T == complex64 ||
-	T == complex128 {
+query_workspace_least_squares_svd_simple :: proc(A: ^Matrix($T), B: ^Matrix(T)) -> (work_size: int, rwork_size: int, s_size: int, info: Info) where T == f32 || T == f64 || T == complex64 || T == complex128 {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	nrhs := Blas_Int(B.cols)
@@ -645,10 +507,7 @@ least_squares_svd_simple_f32_c64 :: proc(
 
 	// For complex types, verify rwork is provided
 	when T == complex64 {
-		assert(
-			len(rwork) >= int(5 * min_mn),
-			"rwork array too small (minimum 5*min(m,n) for gelss)",
-		)
+		assert(len(rwork) >= int(5 * min_mn), "rwork array too small (minimum 5*min(m,n) for gelss)")
 	}
 
 	rcond_val := rcond
@@ -656,38 +515,9 @@ least_squares_svd_simple_f32_c64 :: proc(
 
 	// Solve least squares with SVD
 	when T == f32 {
-		lapack.sgelss_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgelss_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.cgelss_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&info,
-		)
+		lapack.cgelss_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, raw_data(rwork), &info)
 	}
 
 	return rank, info, info == 0
@@ -718,10 +548,7 @@ least_squares_svd_simple_f64_c128 :: proc(
 
 	// For complex types, verify rwork is provided
 	when T == complex128 {
-		assert(
-			len(rwork) >= int(5 * min_mn),
-			"rwork array too small (minimum 5*min(m,n) for gelss)",
-		)
+		assert(len(rwork) >= int(5 * min_mn), "rwork array too small (minimum 5*min(m,n) for gelss)")
 	}
 
 	rcond_val := rcond
@@ -729,56 +556,16 @@ least_squares_svd_simple_f64_c128 :: proc(
 
 	// Solve least squares with SVD
 	when T == f64 {
-		lapack.dgelss_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgelss_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zgelss_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(S),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&info,
-		)
+		lapack.zgelss_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(S), &rcond_val, &rank, raw_data(work), &lwork, raw_data(rwork), &info)
 	}
 
 	return rank, info, info == 0
 }
 
 // Query workspace size for QR with column pivoting least squares (gelsy algorithm)
-query_workspace_least_squares_qrp :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-) -> (
-	work_size: int,
-	rwork_size: int,
-	jpvt_size: int,
-	info: Info,
-) where T == f32 ||
-	T == f64 ||
-	T == complex64 ||
-	T == complex128 {
+query_workspace_least_squares_qrp :: proc(A: ^Matrix($T), B: ^Matrix(T)) -> (work_size: int, rwork_size: int, jpvt_size: int, info: Info) where T == f32 || T == f64 || T == complex64 || T == complex128 {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	nrhs := Blas_Int(B.cols)
@@ -816,63 +603,19 @@ query_workspace_least_squares_qrp :: proc(
 		rwork_size = 0 // Real types don't need rwork
 	} else when T == f64 {
 		work_query: f64
-		lapack.dgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			nil,
-			&lda,
-			nil,
-			&ldb,
-			&dummy_jpvt[0],
-			&rcond,
-			&rank,
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dgelsy_(&m, &n, &nrhs, nil, &lda, nil, &ldb, &dummy_jpvt[0], &rcond, &rank, &work_query, &lwork, &info)
 		work_size = int(work_query)
 		rwork_size = 0 // Real types don't need rwork
 	} else when T == complex64 {
 		work_query: complex64
 		dummy_rwork := [1]f32{}
-		lapack.cgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			nil,
-			&lda,
-			nil,
-			&ldb,
-			&dummy_jpvt[0],
-			&rcond,
-			&rank,
-			&work_query,
-			&lwork,
-			&dummy_rwork[0],
-			&info,
-		)
+		lapack.cgelsy_(&m, &n, &nrhs, nil, &lda, nil, &ldb, &dummy_jpvt[0], &rcond, &rank, &work_query, &lwork, &dummy_rwork[0], &info)
 		work_size = int(real(work_query))
 		rwork_size = int(2 * n) // gelsy needs 2*n rwork for complex
 	} else when T == complex128 {
 		work_query: complex128
 		dummy_rwork := [1]f64{}
-		lapack.zgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			nil,
-			&lda,
-			nil,
-			&ldb,
-			&dummy_jpvt[0],
-			&rcond,
-			&rank,
-			&work_query,
-			&lwork,
-			&dummy_rwork[0],
-			&info,
-		)
+		lapack.zgelsy_(&m, &n, &nrhs, nil, &lda, nil, &ldb, &dummy_jpvt[0], &rcond, &rank, &work_query, &lwork, &dummy_rwork[0], &info)
 		work_size = int(real(work_query))
 		rwork_size = int(2 * n) // gelsy needs 2*n rwork for complex
 	}
@@ -919,38 +662,9 @@ least_squares_qrp_f32_c64 :: proc(
 
 	// Solve least squares with QR pivoting
 	when T == f32 {
-		lapack.sgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(jpvt),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgelsy_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(jpvt), &rcond_val, &rank, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.cgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(jpvt),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&info,
-		)
+		lapack.cgelsy_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(jpvt), &rcond_val, &rank, raw_data(work), &lwork, raw_data(rwork), &info)
 	}
 
 	return rank, info, info == 0
@@ -988,38 +702,9 @@ least_squares_qrp_f64_c128 :: proc(
 
 	// Solve least squares with QR pivoting
 	when T == f64 {
-		lapack.dgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(jpvt),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgelsy_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(jpvt), &rcond_val, &rank, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zgelsy_(
-			&m,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(jpvt),
-			&rcond_val,
-			&rank,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&info,
-		)
+		lapack.zgelsy_(&m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(jpvt), &rcond_val, &rank, raw_data(work), &lwork, raw_data(rwork), &info)
 	}
 
 	return rank, info, info == 0

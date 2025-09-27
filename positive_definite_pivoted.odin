@@ -54,31 +54,9 @@ m_cholesky_pivoted_f32_c64 :: proc(
 	tol := tolerance
 
 	when T == f32 {
-		lapack.spstrf_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(pivot),
-			&rank_val,
-			&tol,
-			raw_data(work),
-			&info,
-			len(uplo_c),
-		)
+		lapack.spstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpstrf_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(pivot),
-			&rank_val,
-			&tol,
-			raw_data(work),
-			&info,
-			len(uplo_c),
-		)
+		lapack.cpstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
 	}
 
 	rank = int(rank_val)
@@ -116,31 +94,9 @@ m_cholesky_pivoted_f64_c128 :: proc(
 	tol := tolerance
 
 	when T == f64 {
-		lapack.dpstrf_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(pivot),
-			&rank_val,
-			&tol,
-			raw_data(work),
-			&info,
-			len(uplo_c),
-		)
+		lapack.dpstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpstrf_(
-			uplo_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(pivot),
-			&rank_val,
-			&tol,
-			raw_data(work),
-			&info,
-			len(uplo_c),
-		)
+		lapack.zpstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
 	}
 
 	rank = int(rank_val)

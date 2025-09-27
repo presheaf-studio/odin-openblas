@@ -405,13 +405,7 @@ v_axpy_conj :: proc(alpha: $T, x: ^Vector(T), y: ^Vector(T)) where is_float(T) |
 // Performs extended scaled vector addition: y = alpha*x + beta*y
 // This generalizes axpy by also scaling y with beta.
 // Supported types: f32, f64, complex64, complex128
-v_axpby :: proc(
-	alpha: $T,
-	x: ^Vector(T),
-	beta: T,
-	y: ^Vector(T),
-) where is_float(T) ||
-	is_complex(T) {
+v_axpby :: proc(alpha: $T, x: ^Vector(T), beta: T, y: ^Vector(T)) where is_float(T) || is_complex(T) {
 	assert(x.size == y.size, "Vector dimensions must match")
 
 	n := i64(x.size)
@@ -498,13 +492,7 @@ v_rot :: proc {
 	v_rot_f64_c128,
 }
 
-v_rot_f32_c64 :: proc(
-	x: ^Vector($T),
-	y: ^Vector(T),
-	c: f32,
-	s: f32,
-) where T == f32 ||
-	T == complex64 {
+v_rot_f32_c64 :: proc(x: ^Vector($T), y: ^Vector(T), c: f32, s: f32) where T == f32 || T == complex64 {
 	assert(x.size == y.size, "Vector dimensions must match")
 	n := i64(x.size)
 	incx := i64(x.incr)
@@ -516,13 +504,7 @@ v_rot_f32_c64 :: proc(
 	}
 }
 
-v_rot_f64_c128 :: proc(
-	x: ^Vector($T),
-	y: ^Vector(T),
-	c: f64,
-	s: f64,
-) where T == f64 ||
-	T == complex128 {
+v_rot_f64_c128 :: proc(x: ^Vector($T), y: ^Vector(T), c: f64, s: f64) where T == f64 || T == complex128 {
 	assert(x.size == y.size, "Vector dimensions must match")
 	n := i64(x.size)
 	incx := i64(x.incr)
@@ -601,13 +583,7 @@ v_rotm :: proc(x: ^Vector($T), y: ^Vector(T), P: []T) where is_float(T) {
 // More numerically stable construction than regular Givens
 // Returns the parameter array for use with v_rotm
 // Only available for real types (f32, f64)
-v_rotmg :: proc(
-	d1: ^$T,
-	d2: ^T,
-	b1: ^T,
-	b2: T,
-	allocator := context.allocator,
-) -> []T where is_float(T) {
+v_rotmg :: proc(d1: ^$T, d2: ^T, b1: ^T, b2: T, allocator := context.allocator) -> []T where is_float(T) {
 	P := make([]T, 5, allocator)
 
 	when T == f32 {

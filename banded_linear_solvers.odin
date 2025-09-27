@@ -70,57 +70,13 @@ solve_banded_pd :: proc(
 	ldb := B.ld
 
 	when T == f32 {
-		lapack.spbsv_(
-			uplo_c,
-			&n,
-			&kd,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.spbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == f64 {
-		lapack.dpbsv_(
-			uplo_c,
-			&n,
-			&kd,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.dpbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpbsv_(
-			uplo_c,
-			&n,
-			&kd,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.cpbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpbsv_(
-			uplo_c,
-			&n,
-			&kd,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.zpbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -145,16 +101,7 @@ query_result_sizes_banded_pd_expert :: proc(
 }
 
 // Query workspace for expert positive definite banded solver
-query_workspace_banded_pd_expert :: proc(
-	$T: typeid,
-	n: int,
-	nrhs: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_banded_pd_expert :: proc($T: typeid, n: int, nrhs: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when T == f32 || T == f64 {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -390,15 +337,7 @@ query_result_sizes_banded_factor :: proc(
 }
 
 // LU factorization doesn't need workspace
-query_workspace_banded_factor :: proc(
-	$T: typeid,
-	m: int,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_banded_factor :: proc($T: typeid, m: int, n: int) -> (work: Blas_Int, rwork: Blas_Int) where is_float(T) || is_complex(T) {
 	return 0, 0
 }
 
@@ -500,35 +439,9 @@ solve_banded_factored_real :: proc(
 	trans_str := transpose_mode_to_cstring(trans)
 
 	when T == f32 {
-		lapack.sgbtrs_(
-			trans_str,
-			&n,
-			&kl,
-			&ku,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(ipiv),
-			raw_data(B.data),
-			&ldb,
-			&info,
-			1,
-		)
+		lapack.sgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
 	} else when T == f64 {
-		lapack.dgbtrs_(
-			trans_str,
-			&n,
-			&kl,
-			&ku,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(ipiv),
-			raw_data(B.data),
-			&ldb,
-			&info,
-			1,
-		)
+		lapack.dgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
 	}
 
 	return info, info == 0
@@ -555,20 +468,7 @@ solve_banded_factored_c64 :: proc(
 
 	trans_str := transpose_mode_to_cstring(trans)
 
-	lapack.cgbtrs_(
-		trans_str,
-		&n,
-		&kl,
-		&ku,
-		&nrhs,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(ipiv),
-		raw_data(B.data),
-		&ldb,
-		&info,
-		1,
-	)
+	lapack.cgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
 
 	return info, info == 0
 }
@@ -594,20 +494,7 @@ solve_banded_factored_c128 :: proc(
 
 	trans_str := transpose_mode_to_cstring(trans)
 
-	lapack.zgbtrs_(
-		trans_str,
-		&n,
-		&kl,
-		&ku,
-		&nrhs,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(ipiv),
-		raw_data(B.data),
-		&ldb,
-		&info,
-		1,
-	)
+	lapack.zgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
 
 	return info, info == 0
 }
@@ -648,31 +535,9 @@ solve_banded_real :: proc(
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 
 	when T == f32 {
-		lapack.sgbsv_(
-			&n,
-			&kl,
-			&ku,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(ipiv),
-			raw_data(B.data),
-			&ldb,
-			&info,
-		)
+		lapack.sgbsv_(&n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
-		lapack.dgbsv_(
-			&n,
-			&kl,
-			&ku,
-			&nrhs,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(ipiv),
-			raw_data(B.data),
-			&ldb,
-			&info,
-		)
+		lapack.dgbsv_(&n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	}
 
 	return info, info == 0
@@ -700,18 +565,7 @@ solve_banded_c64 :: proc(
 	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 
-	lapack.cgbsv_(
-		&n,
-		&kl,
-		&ku,
-		&nrhs,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(ipiv),
-		raw_data(B.data),
-		&ldb,
-		&info,
-	)
+	lapack.cgbsv_(&n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 
 	return info, info == 0
 }
@@ -738,18 +592,7 @@ solve_banded_c128 :: proc(
 	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 
-	lapack.zgbsv_(
-		&n,
-		&kl,
-		&ku,
-		&nrhs,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(ipiv),
-		raw_data(B.data),
-		&ldb,
-		&info,
-	)
+	lapack.zgbsv_(&n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 
 	return info, info == 0
 }
@@ -781,15 +624,7 @@ query_result_sizes_solve_banded_expert :: proc(
 }
 
 // Query workspace for expert banded solve
-query_workspace_solve_banded_expert :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_solve_banded_expert :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -1108,32 +943,11 @@ query_result_sizes_solve_banded_expert_extended :: proc(
 	rpvgrw_size: int,
 	equed_size: int, // Pivot indices array// Factored matrix rows// Factored matrix columns// Row scale factors// Column scale factors// Solution matrix rows// Solution matrix columns// Backward error bounds// Normwise error bounds// Componentwise error bounds// Algorithm parameters// Reciprocal condition number (scalar)// Reciprocal pivot growth (scalar)// Equilibration state (single byte)
 ) {
-	return n,
-		2 * kl + ku + 1,
-		n,
-		n,
-		n,
-		n,
-		nrhs,
-		nrhs,
-		nrhs * n_err_bnds,
-		nrhs * n_err_bnds,
-		3,
-		1,
-		1,
-		1
+	return n, 2 * kl + ku + 1, n, n, n, n, nrhs, nrhs, nrhs * n_err_bnds, nrhs * n_err_bnds, 3, 1, 1, 1
 }
 
 // Query workspace for extended expert banded solve
-query_workspace_solve_banded_expert_extended :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_solve_banded_expert_extended :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(4 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -1185,10 +999,7 @@ solve_banded_expert_extended_real :: proc(
 	assert(len(C) >= int(n), "Column scale array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(err_bnds_norm) >= int(nrhs * n_err_bnds), "Normwise error bounds array too small")
-	assert(
-		len(err_bnds_comp) >= int(nrhs * n_err_bnds),
-		"Componentwise error bounds array too small",
-	)
+	assert(len(err_bnds_comp) >= int(nrhs * n_err_bnds), "Componentwise error bounds array too small")
 	assert(len(params) >= 3, "Parameters array too small")
 	assert(len(work) >= 4 * int(n), "Work array too small")
 	assert(len(iwork) >= int(n), "Integer work array too small")
@@ -1324,10 +1135,7 @@ solve_banded_expert_extended_c64 :: proc(
 	assert(len(C) >= int(n), "Column scale array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(err_bnds_norm) >= int(nrhs * n_err_bnds), "Normwise error bounds array too small")
-	assert(
-		len(err_bnds_comp) >= int(nrhs * n_err_bnds),
-		"Componentwise error bounds array too small",
-	)
+	assert(len(err_bnds_comp) >= int(nrhs * n_err_bnds), "Componentwise error bounds array too small")
 	assert(len(params) >= 3, "Parameters array too small")
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= 2 * int(n), "Real work array too small")
@@ -1426,10 +1234,7 @@ solve_banded_expert_extended_c128 :: proc(
 	assert(len(C) >= int(n), "Column scale array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(err_bnds_norm) >= int(nrhs * n_err_bnds), "Normwise error bounds array too small")
-	assert(
-		len(err_bnds_comp) >= int(nrhs * n_err_bnds),
-		"Componentwise error bounds array too small",
-	)
+	assert(len(err_bnds_comp) >= int(nrhs * n_err_bnds), "Componentwise error bounds array too small")
 	assert(len(params) >= 3, "Parameters array too small")
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= 2 * int(n), "Real work array too small")

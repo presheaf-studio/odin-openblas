@@ -168,12 +168,7 @@ is_balanced_equilibration_needed :: proc(scond: $T) -> bool where is_float(T) {
 // Apply equilibration scaling to matrix (f32/complex64)
 // Applies D*A*D scaling where D = diag(S)
 // For symmetric positive definite matrices, only need to scale upper or lower triangle
-apply_positive_definite_scaling_f32_c64 :: proc(
-	A: ^Matrix($T),
-	S: []f32,
-	uplo := MatrixRegion.Upper,
-) where T == f32 ||
-	T == complex64 {
+apply_positive_definite_scaling_f32_c64 :: proc(A: ^Matrix($T), S: []f32, uplo := MatrixRegion.Upper) where T == f32 || T == complex64 {
 	assert(len(S) == A.rows && A.rows == A.cols, "Invalid scaling factors or non-square matrix")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
@@ -233,12 +228,7 @@ apply_positive_definite_scaling_f32_c64 :: proc(
 // Apply equilibration scaling to matrix (f64/complex128)
 // Applies D*A*D scaling where D = diag(S)
 // For symmetric positive definite matrices, only need to scale upper or lower triangle
-apply_positive_definite_scaling_f64_c128 :: proc(
-	A: ^Matrix($T),
-	S: []f64,
-	uplo := MatrixRegion.Upper,
-) where T == f64 ||
-	T == complex128 {
+apply_positive_definite_scaling_f64_c128 :: proc(A: ^Matrix($T), S: []f64, uplo := MatrixRegion.Upper) where T == f64 || T == complex128 {
 	assert(len(S) == A.rows && A.rows == A.cols, "Invalid scaling factors or non-square matrix")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
@@ -286,11 +276,7 @@ apply_positive_definite_scaling_f64_c128 :: proc(
 // Remove equilibration scaling from solution vector (f32/complex64)
 // Note: For equilibration, this applies x_original = D * x_scaled
 // where the solution x was computed with the scaled system
-remove_positive_definite_scaling_f32_c64 :: proc(
-	x: ^Vector($T),
-	S: []f32,
-) where T == f32 ||
-	T == complex64 {
+remove_positive_definite_scaling_f32_c64 :: proc(x: ^Vector($T), S: []f32) where T == f32 || T == complex64 {
 	assert(len(S) == x.len, "Invalid scaling factors")
 
 	// Apply element-wise scaling: x[i] = S[i] * x[i]
@@ -308,11 +294,7 @@ remove_positive_definite_scaling_f32_c64 :: proc(
 // Remove equilibration scaling from solution vector (f64/complex128)
 // Note: For equilibration, this applies x_original = D * x_scaled
 // where the solution x was computed with the scaled system
-remove_positive_definite_scaling_f64_c128 :: proc(
-	x: ^Vector($T),
-	S: []f64,
-) where T == f64 ||
-	T == complex128 {
+remove_positive_definite_scaling_f64_c128 :: proc(x: ^Vector($T), S: []f64) where T == f64 || T == complex128 {
 	assert(len(S) == x.len, "Invalid scaling factors")
 
 	// Apply element-wise scaling: x[i] = S[i] * x[i]

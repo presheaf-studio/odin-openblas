@@ -28,16 +28,7 @@ m_apply_givens_rotation :: proc {
 // ===================================================================================
 
 // Apply random orthogonal transformation for f32/complex64
-m_apply_random_orthogonal_f32_c64 :: proc(
-	A: ^Matrix($T),
-	side: OrthogonalSide = .Left,
-	init: OrthogonalInit = .None,
-	seed: ^[4]i32,
-	allocator := context.allocator,
-) -> (
-	info: Info,
-) where T == f32 ||
-	T == complex64 {
+m_apply_random_orthogonal_f32_c64 :: proc(A: ^Matrix($T), side: OrthogonalSide = .Left, init: OrthogonalInit = .None, seed: ^[4]i32, allocator := context.allocator) -> (info: Info) where T == f32 || T == complex64 {
 	// Validate input
 	assert(A != nil && A.data != nil, "Matrix A cannot be nil")
 	assert(seed != nil, "Seed cannot be nil")
@@ -66,43 +57,14 @@ m_apply_random_orthogonal_f32_c64 :: proc(
 	defer delete(work)
 
 	// Convert i32 seed to Blas_Int
-	seed_blas := [4]Blas_Int {
-		Blas_Int(seed[0]),
-		Blas_Int(seed[1]),
-		Blas_Int(seed[2]),
-		Blas_Int(seed[3]),
-	}
+	seed_blas := [4]Blas_Int{Blas_Int(seed[0]), Blas_Int(seed[1]), Blas_Int(seed[2]), Blas_Int(seed[3])}
 
 	info_val: Info
 
 	when T == f32 {
-		lapack.slaror_(
-			side_c,
-			init_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&seed_blas[0],
-			raw_data(work),
-			&info_val,
-			c.size_t(len(side_c)),
-			c.size_t(len(init_c)),
-		)
+		lapack.slaror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
 	} else when T == complex64 {
-		lapack.claror_(
-			side_c,
-			init_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&seed_blas[0],
-			raw_data(work),
-			&info_val,
-			c.size_t(len(side_c)),
-			c.size_t(len(init_c)),
-		)
+		lapack.claror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
 	}
 
 	// Update the original seed
@@ -115,16 +77,7 @@ m_apply_random_orthogonal_f32_c64 :: proc(
 }
 
 // Apply random orthogonal transformation for f64/complex128
-m_apply_random_orthogonal_f64_c128 :: proc(
-	A: ^Matrix($T),
-	side: OrthogonalSide = .Left,
-	init: OrthogonalInit = .None,
-	seed: ^[4]i32,
-	allocator := context.allocator,
-) -> (
-	info: Info,
-) where T == f64 ||
-	T == complex128 {
+m_apply_random_orthogonal_f64_c128 :: proc(A: ^Matrix($T), side: OrthogonalSide = .Left, init: OrthogonalInit = .None, seed: ^[4]i32, allocator := context.allocator) -> (info: Info) where T == f64 || T == complex128 {
 	// Validate input
 	assert(A != nil && A.data != nil, "Matrix A cannot be nil")
 	assert(seed != nil, "Seed cannot be nil")
@@ -153,43 +106,14 @@ m_apply_random_orthogonal_f64_c128 :: proc(
 	defer delete(work)
 
 	// Convert i32 seed to Blas_Int
-	seed_blas := [4]Blas_Int {
-		Blas_Int(seed[0]),
-		Blas_Int(seed[1]),
-		Blas_Int(seed[2]),
-		Blas_Int(seed[3]),
-	}
+	seed_blas := [4]Blas_Int{Blas_Int(seed[0]), Blas_Int(seed[1]), Blas_Int(seed[2]), Blas_Int(seed[3])}
 
 	info_val: Info
 
 	when T == f64 {
-		lapack.dlaror_(
-			side_c,
-			init_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&seed_blas[0],
-			raw_data(work),
-			&info_val,
-			c.size_t(len(side_c)),
-			c.size_t(len(init_c)),
-		)
+		lapack.dlaror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
 	} else when T == complex128 {
-		lapack.zlaror_(
-			side_c,
-			init_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&seed_blas[0],
-			raw_data(work),
-			&info_val,
-			c.size_t(len(side_c)),
-			c.size_t(len(init_c)),
-		)
+		lapack.zlaror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
 	}
 
 	// Update the original seed
@@ -250,31 +174,9 @@ m_apply_givens_rotation_f32_c64 :: proc(
 	xright_val := xright
 
 	when T == f32 {
-		lapack.slarot_(
-			&lrows,
-			&lleft,
-			&lright,
-			&nl_val,
-			&c_val,
-			&s_val,
-			start_ptr,
-			&lda,
-			&xleft_val,
-			&xright_val,
-		)
+		lapack.slarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
 	} else when T == complex64 {
-		lapack.clarot_(
-			&lrows,
-			&lleft,
-			&lright,
-			&nl_val,
-			&c_val,
-			&s_val,
-			start_ptr,
-			&lda,
-			&xleft_val,
-			&xright_val,
-		)
+		lapack.clarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
 	}
 }
 
@@ -323,31 +225,9 @@ m_apply_givens_rotation_f64_c128 :: proc(
 	xright_val := xright
 
 	when T == f64 {
-		lapack.dlarot_(
-			&lrows,
-			&lleft,
-			&lright,
-			&nl_val,
-			&c_val,
-			&s_val,
-			start_ptr,
-			&lda,
-			&xleft_val,
-			&xright_val,
-		)
+		lapack.dlarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
 	} else when T == complex128 {
-		lapack.zlarot_(
-			&lrows,
-			&lleft,
-			&lright,
-			&nl_val,
-			&c_val,
-			&s_val,
-			start_ptr,
-			&lda,
-			&xleft_val,
-			&xright_val,
-		)
+		lapack.zlarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
 	}
 }
 
@@ -356,12 +236,7 @@ m_apply_givens_rotation_f64_c128 :: proc(
 // ===================================================================================
 
 // Generate random orthogonal matrix
-m_generate_random_orthogonal :: proc(
-	A: ^Matrix($T),
-	seed: ^[4]i32,
-	allocator := context.allocator,
-) -> Info where is_float(T) ||
-	is_complex(T) {
+m_generate_random_orthogonal :: proc(A: ^Matrix($T), seed: ^[4]i32, allocator := context.allocator) -> Info where is_float(T) || is_complex(T) {
 	// Initialize to identity and apply random orthogonal transformation
 	when T == f32 || T == complex64 {
 		return m_apply_random_orthogonal_f32_c64(A, .Left, .Identity, seed, allocator)
@@ -371,14 +246,7 @@ m_generate_random_orthogonal :: proc(
 }
 
 // Apply Givens rotation to eliminate an element
-m_apply_givens_elimination :: proc(
-	A: ^Matrix($T),
-	row1: int,
-	row2: int,
-	col: int,
-	allocator := context.allocator,
-) where is_float(T) ||
-	is_complex(T) {
+m_apply_givens_elimination :: proc(A: ^Matrix($T), row1: int, row2: int, col: int, allocator := context.allocator) where is_float(T) || is_complex(T) {
 	// Compute rotation parameters to eliminate A[row2, col]
 	a11 := matrix_get(A, row1, col)
 	a21 := matrix_get(A, row2, col)

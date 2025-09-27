@@ -31,15 +31,7 @@ refine_banded_extended :: proc {
 // ===================================================================================
 
 // Query workspace requirements for iterative refinement
-query_workspace_refine_banded_pd :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_refine_banded_pd :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when T == f32 || T == f64 {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -271,15 +263,7 @@ query_result_sizes_refine_banded :: proc(
 }
 
 // Query workspace for iterative refinement
-query_workspace_refine_banded :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_refine_banded :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(3 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {
@@ -513,15 +497,7 @@ query_result_sizes_refine_banded_extended :: proc(
 }
 
 // Query workspace for extended iterative refinement
-query_workspace_refine_banded_extended :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work: Blas_Int,
-	rwork: Blas_Int,
-	iwork: Blas_Int,
-) where is_float(T) ||
-	is_complex(T) {
+query_workspace_refine_banded_extended :: proc($T: typeid, n: int) -> (work: Blas_Int, rwork: Blas_Int, iwork: Blas_Int) where is_float(T) || is_complex(T) {
 	when is_float(T) {
 		return Blas_Int(4 * n), 0, Blas_Int(n)
 	} else when T == complex64 || T == complex128 {

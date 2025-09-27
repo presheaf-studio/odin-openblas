@@ -81,24 +81,10 @@ default_test_matrix_params :: proc() -> TestMatrixParams {
 // ===================================================================================
 
 // Generate test matrix for f32 and f64
-m_generate_test_matrix_f32_f64 :: proc(
-	A: ^Matrix($T),
-	params: TestMatrixParams,
-	allocator := context.allocator,
-) -> (
-	success: bool,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
+m_generate_test_matrix_f32_f64 :: proc(A: ^Matrix($T), params: TestMatrixParams, allocator := context.allocator) -> (success: bool, info: Info) where T == f32 || T == f64 {
 	// Validate parameters
-	assert(
-		params.distribution != .ComplexUniform,
-		"ComplexUniform distribution is not supported by DLATMS/SLATMS - use Uniform, UniformMinus1To1, or Normal",
-	)
-	assert(
-		A.rows == Blas_Int(params.rows) && A.cols == Blas_Int(params.cols),
-		"Matrix dimensions must match parameters",
-	)
+	assert(params.distribution != .ComplexUniform, "ComplexUniform distribution is not supported by DLATMS/SLATMS - use Uniform, UniformMinus1To1, or Normal")
+	assert(A.rows == Blas_Int(params.rows) && A.cols == Blas_Int(params.cols), "Matrix dimensions must match parameters")
 
 	// Prepare parameters
 	m := Blas_Int(params.rows)
@@ -141,73 +127,19 @@ m_generate_test_matrix_f32_f64 :: proc(
 
 	info_val: Info
 	when T == f32 {
-		lapack.slatms_(
-			&m,
-			&n,
-			dist_c,
-			raw_data(iseed),
-			sym_c,
-			raw_data(D),
-			&mode,
-			&cond,
-			&dmax,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.slatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
 	} else when T == f64 {
-		lapack.dlatms_(
-			&m,
-			&n,
-			dist_c,
-			raw_data(iseed),
-			sym_c,
-			raw_data(D),
-			&mode,
-			&cond,
-			&dmax,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.dlatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
 	}
 
 	return info_val == 0, info_val
 }
 
 // Generate test matrix for complex64 and complex128
-m_generate_test_matrix_c64_c128 :: proc(
-	A: ^Matrix($T),
-	params: TestMatrixParams,
-	allocator := context.allocator,
-) -> (
-	success: bool,
-	info: Info,
-) where T == complex64 ||
-	T == complex128 {
+m_generate_test_matrix_c64_c128 :: proc(A: ^Matrix($T), params: TestMatrixParams, allocator := context.allocator) -> (success: bool, info: Info) where T == complex64 || T == complex128 {
 	// Validate parameters
-	assert(
-		params.distribution != .ComplexUniform,
-		"ComplexUniform distribution is not supported by CLATMS/ZLATMS - use Uniform, UniformMinus1To1, or Normal",
-	)
-	assert(
-		A.rows == Blas_Int(params.rows) && A.cols == Blas_Int(params.cols),
-		"Matrix dimensions must match parameters",
-	)
+	assert(params.distribution != .ComplexUniform, "ComplexUniform distribution is not supported by CLATMS/ZLATMS - use Uniform, UniformMinus1To1, or Normal")
+	assert(A.rows == Blas_Int(params.rows) && A.cols == Blas_Int(params.cols), "Matrix dimensions must match parameters")
 
 	// Prepare parameters
 	m := Blas_Int(params.rows)
@@ -247,27 +179,7 @@ m_generate_test_matrix_c64_c128 :: proc(
 		cond := f32(params.condition_number)
 		dmax := f32(params.max_element)
 
-		lapack.clatms_(
-			&m,
-			&n,
-			dist_c,
-			raw_data(iseed),
-			sym_c,
-			raw_data(D),
-			&mode,
-			&cond,
-			&dmax,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.clatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
 	} else when T == complex128 {
 		// Setup singular values array
 		D := make([]f64, max(params.rows, params.cols), context.temp_allocator)
@@ -283,27 +195,7 @@ m_generate_test_matrix_c64_c128 :: proc(
 		cond := params.condition_number
 		dmax := params.max_element
 
-		lapack.zlatms_(
-			&m,
-			&n,
-			dist_c,
-			raw_data(iseed),
-			sym_c,
-			raw_data(D),
-			&mode,
-			&cond,
-			&dmax,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.zlatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
 	}
 
 	return info_val == 0, info_val
@@ -315,13 +207,7 @@ m_generate_test_matrix_c64_c128 :: proc(
 
 // Generate Hilbert matrix for f32 and f64
 // Hilbert matrix H[i,j] = 1/(i+j-1), extremely ill-conditioned
-m_generate_hilbert_f32_f64 :: proc(
-	A: ^Matrix($T),
-	allocator := context.allocator,
-) -> (
-	info: Info,
-) where T == f32 ||
-	T == f64 {
+m_generate_hilbert_f32_f64 :: proc(A: ^Matrix($T), allocator := context.allocator) -> (info: Info) where T == f32 || T == f64 {
 	// Validate input
 	assert(A.rows == A.cols, "Hilbert matrix must be square")
 
@@ -339,13 +225,7 @@ m_generate_hilbert_f32_f64 :: proc(
 
 // Generate Hilbert matrix for complex64 and complex128
 // For complex, we use the same formula with real values
-m_generate_hilbert_c64_c128 :: proc(
-	A: ^Matrix($T),
-	allocator := context.allocator,
-) -> (
-	info: Info,
-) where T == complex64 ||
-	T == complex128 {
+m_generate_hilbert_c64_c128 :: proc(A: ^Matrix($T), allocator := context.allocator) -> (info: Info) where T == complex64 || T == complex128 {
 	// Validate input
 	assert(A.rows == A.cols, "Hilbert matrix must be square")
 
@@ -383,10 +263,7 @@ m_generate_test_matrix_eigenvalues_f32_f64 :: proc(
 	info: Info,
 ) where T == f32 || T == f64 {
 	// Validate parameters
-	assert(
-		distribution != .ComplexUniform,
-		"ComplexUniform distribution is not supported by DLATMT/SLATMT - use Uniform, UniformMinus1To1, or Normal",
-	)
+	assert(distribution != .ComplexUniform, "ComplexUniform distribution is not supported by DLATMT/SLATMT - use Uniform, UniformMinus1To1, or Normal")
 	n := int(A.rows)
 	assert(A.rows == A.cols, "Matrix must be square for eigenvalue specification")
 	assert(len(eigenvalues) == n, "Number of eigenvalues must match matrix dimension")
@@ -478,10 +355,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 	info: Info,
 ) where T == complex64 || T == complex128 {
 	// Validate parameters
-	assert(
-		distribution != .ComplexUniform,
-		"ComplexUniform distribution is not supported by CLATMT/ZLATMT - use Uniform, UniformMinus1To1, or Normal",
-	)
+	assert(distribution != .ComplexUniform, "ComplexUniform distribution is not supported by CLATMT/ZLATMT - use Uniform, UniformMinus1To1, or Normal")
 	n := int(A.rows)
 	assert(A.rows == A.cols, "Matrix must be square for eigenvalue specification")
 	assert(len(eigenvalues) == n, "Number of eigenvalues must match matrix dimension")
@@ -518,28 +392,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 		cond := f32(1.0)
 		dmax := f32(1.0)
 
-		lapack.clatmt_(
-			&m_val,
-			&n_val,
-			dist_c,
-			&iseed[0],
-			sym_c,
-			raw_data(D),
-			&mode,
-			&cond,
-			&dmax,
-			&rank_val,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.clatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(D), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
 	} else when T == complex128 {
 		// Convert complex eigenvalues to real array for ZLATMT
 		// (ZLATMT expects real eigenvalues for non-Hermitian matrices)
@@ -551,28 +404,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 		cond := f64(1.0)
 		dmax := f64(1.0)
 
-		lapack.zlatmt_(
-			&m_val,
-			&n_val,
-			dist_c,
-			&iseed[0],
-			sym_c,
-			raw_data(D),
-			&mode,
-			&cond,
-			&dmax,
-			&rank_val,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.zlatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(D), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
 	}
 
 	return info_val == 0, info_val
@@ -583,13 +415,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 // ===================================================================================
 
 // Generate well-conditioned random matrix
-generate_random_matrix :: proc(
-	$T: typeid,
-	rows, cols: int,
-	seed: [4]Blas_Int = {1, 2, 3, 4},
-	allocator := context.allocator,
-) -> Matrix(T) where is_float(T) ||
-	is_complex(T) {
+generate_random_matrix :: proc($T: typeid, rows, cols: int, seed: [4]Blas_Int = {1, 2, 3, 4}, allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
 	A := make_matrix(T, rows, cols, .General, allocator)
 	params := TestMatrixParams {
 		rows             = rows,
@@ -613,13 +439,7 @@ generate_random_matrix :: proc(
 }
 
 // Generate ill-conditioned matrix with specified condition number
-generate_ill_conditioned_matrix :: proc(
-	$T: typeid,
-	size: int,
-	condition_number: f64,
-	seed: [4]Blas_Int = {1, 2, 3, 4},
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_ill_conditioned_matrix :: proc($T: typeid, size: int, condition_number: f64, seed: [4]Blas_Int = {1, 2, 3, 4}, allocator := context.allocator) -> Matrix(T) {
 	A := make_matrix(T, size, size, .General, allocator)
 	params := TestMatrixParams {
 		rows             = size,
@@ -643,13 +463,7 @@ generate_ill_conditioned_matrix :: proc(
 }
 
 // Generate symmetric positive definite matrix
-generate_spd_matrix :: proc(
-	$T: typeid,
-	size: int,
-	condition_number: f64 = 1.0,
-	seed: [4]Blas_Int = {1, 2, 3, 4},
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_spd_matrix :: proc($T: typeid, size: int, condition_number: f64 = 1.0, seed: [4]Blas_Int = {1, 2, 3, 4}, allocator := context.allocator) -> Matrix(T) {
 	A := make_matrix(T, size, size, .Symmetric, allocator)
 
 	symmetry_type: MatrixSymmetry
@@ -681,14 +495,7 @@ generate_spd_matrix :: proc(
 }
 
 // Generate banded matrix
-generate_banded_matrix :: proc(
-	$T: typeid,
-	size: int,
-	lower_bandwidth, upper_bandwidth: int,
-	condition_number: f64 = 1.0,
-	seed: [4]Blas_Int = {1, 2, 3, 4},
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_banded_matrix :: proc($T: typeid, size: int, lower_bandwidth, upper_bandwidth: int, condition_number: f64 = 1.0, seed: [4]Blas_Int = {1, 2, 3, 4}, allocator := context.allocator) -> Matrix(T) {
 	A := make_banded_matrix(T, size, size, lower_bandwidth, upper_bandwidth, allocator)
 	params := TestMatrixParams {
 		rows             = size,
@@ -714,13 +521,7 @@ generate_banded_matrix :: proc(
 }
 
 // Generate matrix with specific singular value distribution
-generate_matrix_with_spectrum :: proc(
-	$T: typeid,
-	rows, cols: int,
-	singular_values: []f64,
-	seed: [4]Blas_Int = {1, 2, 3, 4},
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_matrix_with_spectrum :: proc($T: typeid, rows, cols: int, singular_values: []f64, seed: [4]Blas_Int = {1, 2, 3, 4}, allocator := context.allocator) -> Matrix(T) {
 	A := make_matrix(T, rows, cols, .General, allocator)
 	params := TestMatrixParams {
 		rows             = rows,
@@ -745,11 +546,7 @@ generate_matrix_with_spectrum :: proc(
 }
 
 // Generate Hilbert matrix (extremely ill-conditioned test matrix)
-generate_hilbert_matrix :: proc(
-	$T: typeid,
-	size: int,
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_hilbert_matrix :: proc($T: typeid, size: int, allocator := context.allocator) -> Matrix(T) {
 	A := make_matrix(T, size, size, .General, allocator)
 
 	when T == f32 || T == f64 {
@@ -764,37 +561,17 @@ generate_hilbert_matrix :: proc(
 }
 
 // Generate matrix with specified eigenvalues using DLATMT
-generate_matrix_with_eigenvalues :: proc(
-	$T: typeid,
-	eigenvalues: []T,
-	rank: int = -1,
-	seed: [4]Blas_Int = {1, 2, 3, 5},
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_matrix_with_eigenvalues :: proc($T: typeid, eigenvalues: []T, rank: int = -1, seed: [4]Blas_Int = {1, 2, 3, 5}, allocator := context.allocator) -> Matrix(T) {
 	n := len(eigenvalues)
 	A := make_matrix(T, n, n, .General, allocator)
 
 	when T == f32 || T == f64 {
-		success, _ := m_generate_test_matrix_eigenvalues_f32_f64(
-			&A,
-			eigenvalues,
-			rank,
-			.UniformMinus1To1,
-			seed,
-			allocator,
-		)
+		success, _ := m_generate_test_matrix_eigenvalues_f32_f64(&A, eigenvalues, rank, .UniformMinus1To1, seed, allocator)
 		if !success {
 			panic("Failed to generate matrix with specified eigenvalues")
 		}
 	} else when T == complex64 || T == complex128 {
-		success, _ := m_generate_test_matrix_eigenvalues_c64_c128(
-			&A,
-			eigenvalues,
-			rank,
-			.UniformMinus1To1,
-			seed,
-			allocator,
-		)
+		success, _ := m_generate_test_matrix_eigenvalues_c64_c128(&A, eigenvalues, rank, .UniformMinus1To1, seed, allocator)
 		if !success {
 			panic("Failed to generate matrix with specified eigenvalues")
 		}
@@ -806,13 +583,7 @@ generate_matrix_with_eigenvalues :: proc(
 }
 
 // Generate rank-deficient matrix with specified rank
-generate_rank_deficient_matrix :: proc(
-	$T: typeid,
-	size: int,
-	rank: int,
-	seed: [4]Blas_Int = {1, 2, 3, 5},
-	allocator := context.allocator,
-) -> Matrix(T) {
+generate_rank_deficient_matrix :: proc($T: typeid, size: int, rank: int, seed: [4]Blas_Int = {1, 2, 3, 5}, allocator := context.allocator) -> Matrix(T) {
 	assert(rank > 0 && rank <= size, "Rank must be positive and <= size")
 
 	// Create eigenvalues with appropriate number of zeros

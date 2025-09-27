@@ -29,14 +29,7 @@ m_solve_positive_definite_simple :: proc {
 // ===================================================================================
 
 // Query workspace for standard iterative refinement
-query_workspace_refine_positive_definite :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work_size: int,
-	iwork_size: int,
-	rwork_size: int,
-) {
+query_workspace_refine_positive_definite :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) {
 	when is_float(T) {
 		// sporfs/dporfs need work of size 3*n and iwork of size n
 		return 3 * n, n, 0
@@ -47,25 +40,13 @@ query_workspace_refine_positive_definite :: proc(
 }
 
 // Query result array sizes for standard iterative refinement
-query_result_sizes_refine_positive_definite :: proc(
-	nrhs: int,
-) -> (
-	ferr_size: int,
-	berr_size: int,
-) {
+query_result_sizes_refine_positive_definite :: proc(nrhs: int) -> (ferr_size: int, berr_size: int) {
 	// One error bound per RHS column
 	return nrhs, nrhs
 }
 
 // Query workspace for extended iterative refinement
-query_workspace_refine_positive_definite_extended :: proc(
-	$T: typeid,
-	n: int,
-) -> (
-	work_size: int,
-	iwork_size: int,
-	rwork_size: int,
-) {
+query_workspace_refine_positive_definite_extended :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) {
 	when is_float(T) {
 		// sporfsx/dporfsx
 		return 3 * n, n, 0
@@ -76,13 +57,7 @@ query_workspace_refine_positive_definite_extended :: proc(
 }
 
 // Query result array sizes for extended iterative refinement
-query_result_sizes_refine_positive_definite_extended :: proc(
-	nrhs: int,
-) -> (
-	berr_size: int,
-	err_bnds_norm_size: int,
-	err_bnds_comp_size: int,
-) {
+query_result_sizes_refine_positive_definite_extended :: proc(nrhs: int) -> (berr_size: int, err_bnds_norm_size: int, err_bnds_comp_size: int) {
 	n_err_bnds := 3 // Extended version has 3 error bound types
 	return nrhs, nrhs * n_err_bnds, nrhs * n_err_bnds
 }
@@ -545,29 +520,9 @@ m_solve_positive_definite_simple_f32_c64 :: proc(
 	uplo_c := matrix_region_to_cstring(uplo)
 
 	when T == f32 {
-		lapack.sposv_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.sposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cposv_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.cposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
 	}
 
 	ok = info == 0
@@ -596,29 +551,9 @@ m_solve_positive_definite_simple_f64_c128 :: proc(
 	uplo_c := matrix_region_to_cstring(uplo)
 
 	when T == f64 {
-		lapack.dposv_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.dposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zposv_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&info,
-			len(uplo_c),
-		)
+		lapack.zposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
 	}
 
 	ok = info == 0

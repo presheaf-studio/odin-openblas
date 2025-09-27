@@ -13,13 +13,7 @@ import "base:intrinsics"
 // Copies matrix A to B with optional transpose/conjugate-transpose and scaling.
 // This is useful for matrix transposition, scaling, and format conversion.
 // Supported types: f32, f64, complex64, complex128
-m_copy :: proc(
-	A: ^Matrix( $T),
-	B: ^Matrix( T),
-	alpha: T,
-	trans: blas.CBLAS_TRANSPOSE = .NoTrans,
-) where is_float(T) ||
-	is_complex(T) {
+m_copy :: proc(A: ^Matrix($T), B: ^Matrix(T), alpha: T, trans: blas.CBLAS_TRANSPOSE = .NoTrans) where is_float(T) || is_complex(T) {
 	// Determine expected dimensions of B based on transpose
 	if trans == .NoTrans {
 		assert(B.rows == A.rows, "B rows must match A rows")
@@ -35,57 +29,17 @@ m_copy :: proc(
 	ldb := i64(B.ld)
 
 	when T == f32 {
-		blas.cblas_somatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_somatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == f64 {
-		blas.cblas_domatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_domatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == complex64 {
 		alpha := alpha
 		alpha_ptr := cast(^f32)&alpha
-		blas.cblas_comatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha_ptr,
-			cast(^f32)raw_data(A.data),
-			lda,
-			cast(^f32)raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_comatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha_ptr, cast(^f32)raw_data(A.data), lda, cast(^f32)raw_data(B.data), ldb)
 	} else when T == complex128 {
 		alpha := alpha
 		alpha_ptr := cast(^f64)&alpha
-		blas.cblas_zomatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha_ptr,
-			cast(^f64)raw_data(A.data),
-			lda,
-			cast(^f64)raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_zomatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha_ptr, cast(^f64)raw_data(A.data), lda, cast(^f64)raw_data(B.data), ldb)
 	} else {
 		#panic("Unsupported type for omatcopy")
 	}
@@ -97,7 +51,7 @@ m_copy :: proc(
 // For non-square matrices being transposed, ldb specifies the leading dimension after transpose.
 // Supported types: f32, f64, complex64, complex128
 m_copy_inplace :: proc(
-	A: ^Matrix( $T),
+	A: ^Matrix($T),
 	alpha: T,
 	trans: blas.CBLAS_TRANSPOSE = .NoTrans,
 	ldb: int = 0, // Leading dimension after operation (0 = use default)
@@ -119,58 +73,22 @@ m_copy_inplace :: proc(
 		if trans != .NoTrans {
 			A.rows = int(cols)
 			A.cols = int(rows)
-			A.ld = int(cols)  // New leading dimension after transpose
+			A.ld = int(cols) // New leading dimension after transpose
 		}
 	}
 
 	when T == f32 {
-		blas.cblas_simatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha,
-			raw_data(A.data),
-			lda,
-			ldb_actual,
-		)
+		blas.cblas_simatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha, raw_data(A.data), lda, ldb_actual)
 	} else when T == f64 {
-		blas.cblas_dimatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha,
-			raw_data(A.data),
-			lda,
-			ldb_actual,
-		)
+		blas.cblas_dimatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha, raw_data(A.data), lda, ldb_actual)
 	} else when T == complex64 {
 		alpha := alpha
 		alpha_ptr := cast(^f32)&alpha
-		blas.cblas_cimatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha_ptr,
-			cast(^f32)raw_data(A.data),
-			lda,
-			ldb_actual,
-		)
+		blas.cblas_cimatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha_ptr, cast(^f32)raw_data(A.data), lda, ldb_actual)
 	} else when T == complex128 {
 		alpha := alpha
 		alpha_ptr := cast(^f64)&alpha
-		blas.cblas_zimatcopy(
-			blas.CBLAS_ORDER.ColMajor,
-			trans,
-			rows,
-			cols,
-			alpha_ptr,
-			cast(^f64)raw_data(A.data),
-			lda,
-			ldb_actual,
-		)
+		blas.cblas_zimatcopy(blas.CBLAS_ORDER.ColMajor, trans, rows, cols, alpha_ptr, cast(^f64)raw_data(A.data), lda, ldb_actual)
 	} else {
 		#panic("Unsupported type for imatcopy")
 	}
@@ -180,13 +98,7 @@ m_copy_inplace :: proc(
 // Adds matrix A to C with optional scaling of both matrices.
 // This is useful for matrix accumulation and linear combinations.
 // Supported types: f32, f64, complex64, complex128
-m_add :: proc(
-	A: ^Matrix( $T),
-	C: ^Matrix( T),
-	alpha: T,
-	beta: T,
-) where is_float(T) ||
-	is_complex(T) {
+m_add :: proc(A: ^Matrix($T), C: ^Matrix(T), alpha: T, beta: T) where is_float(T) || is_complex(T) {
 	assert(A.rows == C.rows, "Matrix rows must match")
 	assert(A.cols == C.cols, "Matrix columns must match")
 
@@ -196,59 +108,19 @@ m_add :: proc(
 	ldc := i64(C.ld)
 
 	when T == f32 {
-		blas.cblas_sgeadd(
-			blas.CBLAS_ORDER.ColMajor,
-			rows,
-			cols,
-			alpha,
-			raw_data(A.data),
-			lda,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_sgeadd(blas.CBLAS_ORDER.ColMajor, rows, cols, alpha, raw_data(A.data), lda, beta, raw_data(C.data), ldc)
 	} else when T == f64 {
-		blas.cblas_dgeadd(
-			blas.CBLAS_ORDER.ColMajor,
-			rows,
-			cols,
-			alpha,
-			raw_data(A.data),
-			lda,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_dgeadd(blas.CBLAS_ORDER.ColMajor, rows, cols, alpha, raw_data(A.data), lda, beta, raw_data(C.data), ldc)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
 		alpha_ptr := cast(^f32)&alpha
 		beta_ptr := cast(^f32)&beta
-		blas.cblas_cgeadd(
-			blas.CBLAS_ORDER.ColMajor,
-			rows,
-			cols,
-			alpha_ptr,
-			cast(^f32)raw_data(A.data),
-			lda,
-			beta_ptr,
-			cast(^f32)raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_cgeadd(blas.CBLAS_ORDER.ColMajor, rows, cols, alpha_ptr, cast(^f32)raw_data(A.data), lda, beta_ptr, cast(^f32)raw_data(C.data), ldc)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
 		alpha_ptr := cast(^f64)&alpha
 		beta_ptr := cast(^f64)&beta
-		blas.cblas_zgeadd(
-			blas.CBLAS_ORDER.ColMajor,
-			rows,
-			cols,
-			alpha_ptr,
-			cast(^f64)raw_data(A.data),
-			lda,
-			beta_ptr,
-			cast(^f64)raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zgeadd(blas.CBLAS_ORDER.ColMajor, rows, cols, alpha_ptr, cast(^f64)raw_data(A.data), lda, beta_ptr, cast(^f64)raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for geadd")
 	}
@@ -263,16 +135,7 @@ m_add :: proc(
 // A, B, and C can be transposed or conjugate-transposed as specified.
 // Result is stored in C, which is scaled by beta before adding the product.
 // Supported types: f32, f64, complex64, complex128
-m_mul :: proc(
-	A: ^Matrix( $T),
-	B: ^Matrix( T),
-	C: ^Matrix( T),
-	alpha: T,
-	beta: T,
-	transA: blas.CBLAS_TRANSPOSE = .NoTrans,
-	transB: blas.CBLAS_TRANSPOSE = .NoTrans,
-) where is_float(T) ||
-	is_complex(T) {
+m_mul :: proc(A: ^Matrix($T), B: ^Matrix(T), C: ^Matrix(T), alpha: T, beta: T, transA: blas.CBLAS_TRANSPOSE = .NoTrans, transB: blas.CBLAS_TRANSPOSE = .NoTrans) where is_float(T) || is_complex(T) {
 	// Get dimensions based on transpose operations
 	m := i64(C.rows) // Rows of C
 	n := i64(C.cols) // Columns of C
@@ -300,75 +163,15 @@ m_mul :: proc(
 	ldc := i64(C.ld) // Leading dimension of C
 
 	when T == f32 {
-		blas.cblas_sgemm(
-			blas.CBLAS_ORDER.ColMajor,
-			transA,
-			transB,
-			m,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_sgemm(blas.CBLAS_ORDER.ColMajor, transA, transB, m, n, k, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == f64 {
-		blas.cblas_dgemm(
-			blas.CBLAS_ORDER.ColMajor,
-			transA,
-			transB,
-			m,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_dgemm(blas.CBLAS_ORDER.ColMajor, transA, transB, m, n, k, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
-		blas.cblas_cgemm(
-			blas.CBLAS_ORDER.ColMajor,
-			transA,
-			transB,
-			m,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_cgemm(blas.CBLAS_ORDER.ColMajor, transA, transB, m, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
-		blas.cblas_zgemm(
-			blas.CBLAS_ORDER.ColMajor,
-			transA,
-			transB,
-			m,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zgemm(blas.CBLAS_ORDER.ColMajor, transA, transB, m, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for gemm")
 	}
@@ -379,15 +182,7 @@ m_mul :: proc(
 // This can be faster for complex matrices on some architectures.
 // Only available for complex types.
 // Supported types: complex64, complex128
-m_mul_3m :: proc(
-	A: ^Matrix( $T),
-	B: ^Matrix( T),
-	C: ^Matrix( T),
-	alpha: T,
-	beta: T,
-	transA: blas.CBLAS_TRANSPOSE = .NoTrans,
-	transB: blas.CBLAS_TRANSPOSE = .NoTrans,
-) where is_complex(T) {
+m_mul_3m :: proc(A: ^Matrix($T), B: ^Matrix(T), C: ^Matrix(T), alpha: T, beta: T, transA: blas.CBLAS_TRANSPOSE = .NoTrans, transB: blas.CBLAS_TRANSPOSE = .NoTrans) where is_complex(T) {
 	// Get dimensions based on transpose operations
 	m := i64(C.rows) // Rows of C
 	n := i64(C.cols) // Columns of C
@@ -416,39 +211,9 @@ m_mul_3m :: proc(
 	alpha, beta := alpha, beta
 
 	when T == complex64 {
-		blas.cblas_cgemm3m(
-			blas.CBLAS_ORDER.ColMajor,
-			transA,
-			transB,
-			m,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_cgemm3m(blas.CBLAS_ORDER.ColMajor, transA, transB, m, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
-		blas.cblas_zgemm3m(
-			blas.CBLAS_ORDER.ColMajor,
-			transA,
-			transB,
-			m,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zgemm3m(blas.CBLAS_ORDER.ColMajor, transA, transB, m, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for gemm3m")
 	}
@@ -459,9 +224,9 @@ m_mul_3m :: proc(
 // Useful when the result is known to be symmetric or when only one triangle is needed.
 // Supported types: f32, f64, complex64, complex128
 m_mul_triangular :: proc(
-	A: ^Matrix( $T),
-	B: ^Matrix( T),
-	C: ^Matrix( T),
+	A: ^Matrix($T),
+	B: ^Matrix(T),
+	C: ^Matrix(T),
 	alpha: T,
 	beta: T,
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -496,75 +261,15 @@ m_mul_triangular :: proc(
 	ldc := i64(C.ld)
 
 	when T == f32 {
-		blas.cblas_sgemmt(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			transA,
-			transB,
-			m,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_sgemmt(blas.CBLAS_ORDER.ColMajor, uplo, transA, transB, m, k, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == f64 {
-		blas.cblas_dgemmt(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			transA,
-			transB,
-			m,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_dgemmt(blas.CBLAS_ORDER.ColMajor, uplo, transA, transB, m, k, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
-		blas.cblas_cgemmt(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			transA,
-			transB,
-			m,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_cgemmt(blas.CBLAS_ORDER.ColMajor, uplo, transA, transB, m, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
-		blas.cblas_zgemmt(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			transA,
-			transB,
-			m,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zgemmt(blas.CBLAS_ORDER.ColMajor, uplo, transA, transB, m, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for gemmt")
 	}
@@ -579,9 +284,9 @@ m_mul_triangular :: proc(
 // The side parameter determines if A is on the left (A*B) or right (B*A).
 // Supported types: f32, f64, complex64, complex128
 m_symm :: proc(
-	A: ^Matrix( $T), // Symmetric matrix
-	B: ^Matrix( T),
-	C: ^Matrix( T),
+	A: ^Matrix($T), // Symmetric matrix
+	B: ^Matrix(T),
+	C: ^Matrix(T),
 	alpha: T,
 	beta: T,
 	side: blas.CBLAS_SIDE = .Left,
@@ -609,71 +314,15 @@ m_symm :: proc(
 	ldc := i64(C.ld)
 
 	when T == f32 {
-		blas.cblas_ssymm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_ssymm(blas.CBLAS_ORDER.ColMajor, side, uplo, m, n, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == f64 {
-		blas.cblas_dsymm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_dsymm(blas.CBLAS_ORDER.ColMajor, side, uplo, m, n, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
-		blas.cblas_csymm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_csymm(blas.CBLAS_ORDER.ColMajor, side, uplo, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
-		blas.cblas_zsymm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zsymm(blas.CBLAS_ORDER.ColMajor, side, uplo, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for symm")
 	}
@@ -689,8 +338,8 @@ m_symm :: proc(
 // Useful for computing Gram matrices, covariance matrices, etc.
 // Supported types: f32, f64, complex64, complex128
 m_syrk :: proc(
-	A: ^Matrix( $T),
-	C: ^Matrix( T), // Symmetric output matrix
+	A: ^Matrix($T),
+	C: ^Matrix(T), // Symmetric output matrix
 	alpha: T,
 	beta: T,
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -715,63 +364,15 @@ m_syrk :: proc(
 	ldc := i64(C.ld)
 
 	when T == f32 {
-		blas.cblas_ssyrk(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_ssyrk(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, alpha, raw_data(A.data), lda, beta, raw_data(C.data), ldc)
 	} else when T == f64 {
-		blas.cblas_dsyrk(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_dsyrk(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, alpha, raw_data(A.data), lda, beta, raw_data(C.data), ldc)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
-		blas.cblas_csyrk(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_csyrk(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, &alpha, raw_data(A.data), lda, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
-		blas.cblas_zsyrk(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zsyrk(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, &alpha, raw_data(A.data), lda, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for syrk")
 	}
@@ -783,9 +384,9 @@ m_syrk :: proc(
 // More general than syrk, useful for various matrix factorizations.
 // Supported types: f32, f64, complex64, complex128
 m_syr2k :: proc(
-	A: ^Matrix( $T),
-	B: ^Matrix( T),
-	C: ^Matrix( T), // Symmetric output matrix
+	A: ^Matrix($T),
+	B: ^Matrix(T),
+	C: ^Matrix(T), // Symmetric output matrix
 	alpha: T,
 	beta: T,
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -815,71 +416,15 @@ m_syr2k :: proc(
 	ldc := i64(C.ld)
 
 	when T == f32 {
-		blas.cblas_ssyr2k(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_ssyr2k(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == f64 {
-		blas.cblas_dsyr2k(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_dsyr2k(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == complex64 {
 		alpha, beta := alpha, beta
-		blas.cblas_csyr2k(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_csyr2k(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
 		alpha, beta := alpha, beta
-		blas.cblas_zsyr2k(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zsyr2k(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for syr2k")
 	}
@@ -894,8 +439,8 @@ m_syr2k :: proc(
 // The result overwrites B. Side determines if A is on left or right.
 // Supported types: f32, f64, complex64, complex128
 m_trmm :: proc(
-	A: ^Matrix( $T), // Triangular matrix
-	B: ^Matrix( T), // Input/output matrix
+	A: ^Matrix($T), // Triangular matrix
+	B: ^Matrix(T), // Input/output matrix
 	alpha: T,
 	side: blas.CBLAS_SIDE = .Left,
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -919,67 +464,15 @@ m_trmm :: proc(
 	ldb := i64(B.ld)
 
 	when T == f32 {
-		blas.cblas_strmm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_strmm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == f64 {
-		blas.cblas_dtrmm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_dtrmm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == complex64 {
 		alpha := alpha
-		blas.cblas_ctrmm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_ctrmm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == complex128 {
 		alpha := alpha
-		blas.cblas_ztrmm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_ztrmm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else {
 		#panic("Unsupported type for trmm")
 	}
@@ -990,8 +483,8 @@ m_trmm :: proc(
 // The solution X overwrites B. Side determines if A is on left or right.
 // Supported types: f32, f64, complex64, complex128
 m_trsm :: proc(
-	A: ^Matrix( $T), // Triangular coefficient matrix
-	B: ^Matrix( T), // Right-hand side(s) / solution matrix
+	A: ^Matrix($T), // Triangular coefficient matrix
+	B: ^Matrix(T), // Right-hand side(s) / solution matrix
 	alpha: T,
 	side: blas.CBLAS_SIDE = .Left,
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -1015,67 +508,15 @@ m_trsm :: proc(
 	ldb := i64(B.ld)
 
 	when T == f32 {
-		blas.cblas_strsm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_strsm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == f64 {
-		blas.cblas_dtrsm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_dtrsm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == complex64 {
 		alpha := alpha
-		blas.cblas_ctrsm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_ctrsm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else when T == complex128 {
 		alpha := alpha
-		blas.cblas_ztrsm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			transA,
-			diag,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-		)
+		blas.cblas_ztrsm(blas.CBLAS_ORDER.ColMajor, side, uplo, transA, diag, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb)
 	} else {
 		#panic("Unsupported type for trsm")
 	}
@@ -1087,9 +528,9 @@ m_trsm :: proc(
 // Only available for complex types since Hermitian matrices are complex.
 // Supported types: complex64, complex128
 m_hemm :: proc(
-	A: ^Matrix( $T), // Hermitian matrix
-	B: ^Matrix( T),
-	C: ^Matrix( T),
+	A: ^Matrix($T), // Hermitian matrix
+	B: ^Matrix(T),
+	C: ^Matrix(T),
 	alpha: T,
 	beta: T,
 	side: blas.CBLAS_SIDE = .Left,
@@ -1118,37 +559,9 @@ m_hemm :: proc(
 	alpha, beta := alpha, beta
 
 	when T == complex64 {
-		blas.cblas_chemm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_chemm(blas.CBLAS_ORDER.ColMajor, side, uplo, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else when T == complex128 {
-		blas.cblas_zhemm(
-			blas.CBLAS_ORDER.ColMajor,
-			side,
-			uplo,
-			m,
-			n,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			&beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zhemm(blas.CBLAS_ORDER.ColMajor, side, uplo, m, n, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, &beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Unsupported type for hemm - must be complex")
 	}
@@ -1165,8 +578,8 @@ m_hemm :: proc(
 // Only available for complex types.
 // Supported types: complex64, complex128
 m_herk :: proc(
-	A: ^Matrix( $T),
-	C: ^Matrix( T), // Hermitian output matrix
+	A: ^Matrix($T),
+	C: ^Matrix(T), // Hermitian output matrix
 	alpha: $R, // Real scalar
 	beta: R, // Real scalar
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -1191,33 +604,9 @@ m_herk :: proc(
 	ldc := i64(C.ld)
 
 	when T == complex64 && R == f32 {
-		blas.cblas_cherk(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_cherk(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, alpha, raw_data(A.data), lda, beta, raw_data(C.data), ldc)
 	} else when T == complex128 && R == f64 {
-		blas.cblas_zherk(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			alpha,
-			raw_data(A.data),
-			lda,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zherk(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, alpha, raw_data(A.data), lda, beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Type mismatch: complex64 requires f32 scalars, complex128 requires f64 scalars")
 	}
@@ -1230,9 +619,9 @@ m_herk :: proc(
 // Only available for complex types.
 // Supported types: complex64, complex128
 m_her2k :: proc(
-	A: ^Matrix( $T),
-	B: ^Matrix( T),
-	C: ^Matrix( T), // Hermitian output matrix
+	A: ^Matrix($T),
+	B: ^Matrix(T),
+	C: ^Matrix(T), // Hermitian output matrix
 	alpha: T, // Complex scalar
 	beta: $R, // Real scalar
 	uplo: blas.CBLAS_UPLO = .Upper,
@@ -1263,37 +652,9 @@ m_her2k :: proc(
 	alpha := alpha
 
 	when T == complex64 && R == f32 {
-		blas.cblas_cher2k(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_cher2k(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else when T == complex128 && R == f64 {
-		blas.cblas_zher2k(
-			blas.CBLAS_ORDER.ColMajor,
-			uplo,
-			trans,
-			n,
-			k,
-			&alpha,
-			raw_data(A.data),
-			lda,
-			raw_data(B.data),
-			ldb,
-			beta,
-			raw_data(C.data),
-			ldc,
-		)
+		blas.cblas_zher2k(blas.CBLAS_ORDER.ColMajor, uplo, trans, n, k, &alpha, raw_data(A.data), lda, raw_data(B.data), ldb, beta, raw_data(C.data), ldc)
 	} else {
 		#panic("Type mismatch: complex64 requires f32 beta, complex128 requires f64 beta")
 	}

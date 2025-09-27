@@ -4,6 +4,8 @@ package openblas
 // ENUMS FOR ORTHOGONAL TRANSFORMATIONS
 // ===================================================================================
 QUERY_WORKSPACE: Blas_Int : -1
+ERROR_BOUND_TYPES :: 3 // Number of error bound types
+
 // Side for orthogonal transformation
 OrthogonalSide :: enum {
 	Left, // 'L' - Multiply on the left (premultiply)
@@ -243,6 +245,18 @@ matrix_region_to_cstring :: proc(region: MatrixRegion) -> cstring {
 		return "U"
 	case .Lower:
 		return "L"
+	}
+	unreachable()
+}
+
+matrix_region_to_char :: proc(region: MatrixRegion) -> u8 {
+	switch region {
+	case .Full:
+		return 'A'
+	case .Upper:
+		return 'U'
+	case .Lower:
+		return 'L'
 	}
 	unreachable()
 }
@@ -491,6 +505,16 @@ eigen_job_to_cstring :: proc(job: EigenJobOption) -> cstring {
 	}
 	unreachable()
 }
+
+eigen_job_to_char :: proc(job: EigenJobOption) -> u8 {
+	switch job {
+	case .VALUES_ONLY:
+		return 'N'
+	case .VALUES_VECTORS:
+		return 'V'
+	}
+	unreachable()
+}
 // Compz
 CompzOption :: enum {
 	None, // "N" - Eigenvalues only
@@ -499,7 +523,19 @@ CompzOption :: enum {
 }
 
 // Convert eigenvector mode to LAPACK character
-compz_to_char :: proc(mode: CompzOption) -> cstring {
+compz_to_char :: proc(mode: CompzOption) -> u8 {
+	switch mode {
+	case .None:
+		return 'N'
+	case .Identity:
+		return 'I'
+	case .Vectors:
+		return 'V'
+	}
+	unreachable()
+}
+
+compz_to_cstring :: proc(mode: CompzOption) -> cstring {
 	switch mode {
 	case .None:
 		return "N"
@@ -530,6 +566,18 @@ eigen_range_to_cstring :: proc(range: EigenRangeOption) -> cstring {
 		return "V"
 	case .INDEX:
 		return "I"
+	}
+	unreachable()
+}
+
+eigen_range_to_char :: proc(range: EigenRangeOption) -> u8 {
+	switch range {
+	case .ALL:
+		return 'A'
+	case .VALUE:
+		return 'V'
+	case .INDEX:
+		return 'I'
 	}
 	unreachable()
 }
