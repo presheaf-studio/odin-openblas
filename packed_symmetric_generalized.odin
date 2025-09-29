@@ -17,8 +17,8 @@ import "core:slice"
 // ============================================================================
 
 // Query workspace for packed generalized eigenvalue computation
-query_workspace_compute_packed_generalized_eigenvalues :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
-	when T == f32 || T == f64 {
+query_workspace_compute_packed_generalized_eigenvalues :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where is_float(T) || T == complex64 || T == complex128 {
+	when is_float(T) {
 		// Real types: work = 3*n, no rwork
 		work_size = 3 * n
 		if work_size < 1 {
@@ -47,34 +47,33 @@ m_compute_packed_generalized_eigenvalues_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array A too small")
 	assert(len(bp) >= n * (n + 1) / 2, "Packed array B too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
 
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
-		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	when T == f32 {
-		lapack.sspgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &info, 1, 1)
+		lapack.sspgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dspgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &info, 1, 1)
+		lapack.dspgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Compute packed generalized eigenvalues for complex64/complex128
@@ -92,8 +91,7 @@ m_compute_packed_generalized_eigenvalues_c64_c128 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array A too small")
 	assert(len(bp) >= n * (n + 1) / 2, "Packed array B too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -101,27 +99,26 @@ m_compute_packed_generalized_eigenvalues_c64_c128 :: proc(
 	assert(len(rwork) >= max(1, 3 * n), "Real workspace too small")
 
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
-		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	when T == complex64 {
-		lapack.chpgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info, 1, 1)
+		lapack.chpgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
 	} else when T == complex128 {
-		lapack.zhpgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info, 1, 1)
+		lapack.zhpgv_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Procedure group for packed generalized eigenvalue computation
@@ -149,12 +146,12 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 	T == complex128 {
 	// Query LAPACK for optimal workspace size
 	itype_int := Blas_Int(1) // Default to AX_LBX
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c: u8 = 'U' // Default to upper
+	jobz_c := cast(u8)jobz
+	uplo_c: u8 = 'U' // Default to upper FIXME:?
 	n_int := Blas_Int(n)
 	ldz := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -175,8 +172,6 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -199,8 +194,6 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -209,7 +202,7 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 		work_query: complex64
 		iwork_query: Blas_Int
 		rwork_query: f32
-		lrwork := Blas_Int(QUERY_WORKSPACE)
+		lrwork := QUERY_WORKSPACE
 		lapack.chpgvd_(
 			&itype_int,
 			&jobz_c,
@@ -227,8 +220,6 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 		iwork_size = int(iwork_query)
@@ -237,7 +228,7 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 		work_query: complex128
 		iwork_query: Blas_Int
 		rwork_query: f64
-		lrwork := Blas_Int(QUERY_WORKSPACE)
+		lrwork := QUERY_WORKSPACE
 		lapack.zhpgvd_(
 			&itype_int,
 			&jobz_c,
@@ -255,8 +246,6 @@ query_workspace_compute_packed_generalized_eigenvalues_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 		iwork_size = int(iwork_query)
@@ -292,7 +281,7 @@ m_compute_packed_generalized_eigenvalues_dc_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array A too small")
 	assert(len(bp) >= n * (n + 1) / 2, "Packed array B too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -300,8 +289,8 @@ m_compute_packed_generalized_eigenvalues_dc_f32_f64 :: proc(
 	assert(len(iwork) > 0, "Integer workspace required")
 
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
@@ -309,20 +298,19 @@ m_compute_packed_generalized_eigenvalues_dc_f32_f64 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
-		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	when T == f32 {
-		lapack.sspgvd_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.sspgvd_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == f64 {
-		lapack.dspgvd_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.dspgvd_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Compute packed generalized eigenvalues using divide-and-conquer for complex64/complex128
@@ -341,8 +329,7 @@ m_compute_packed_generalized_eigenvalues_dc_c64_c128 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array A too small")
 	assert(len(bp) >= n * (n + 1) / 2, "Packed array B too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -351,8 +338,8 @@ m_compute_packed_generalized_eigenvalues_dc_c64_c128 :: proc(
 	assert(len(iwork) > 0, "Integer workspace required")
 
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	lwork := Blas_Int(len(work))
 	lrwork := Blas_Int(len(rwork))
@@ -361,58 +348,19 @@ m_compute_packed_generalized_eigenvalues_dc_c64_c128 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
-		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	when T == complex64 {
-		lapack.chpgvd_(
-			&itype_int,
-			&jobz_c,
-			&uplo_c,
-			&n_int,
-			cast(^lapack.complex)raw_data(ap),
-			cast(^lapack.complex)raw_data(bp),
-			raw_data(w),
-			cast(^lapack.complex)z_ptr,
-			&ldz,
-			cast(^lapack.complex)raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&lrwork,
-			raw_data(iwork),
-			&liwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.chpgvd_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
 	} else when T == complex128 {
-		lapack.zhpgvd_(
-			&itype_int,
-			&jobz_c,
-			&uplo_c,
-			&n_int,
-			cast(^lapack.doublecomplex)raw_data(ap),
-			cast(^lapack.doublecomplex)raw_data(bp),
-			raw_data(w),
-			cast(^lapack.doublecomplex)z_ptr,
-			&ldz,
-			cast(^lapack.doublecomplex)raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			&lrwork,
-			raw_data(iwork),
-			&liwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.zhpgvd_(&itype_int, &jobz_c, &uplo_c, &n_int, raw_data(ap), raw_data(bp), raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Procedure group for divide-and-conquer packed generalized eigenvalue computation
@@ -448,7 +396,7 @@ m_compute_packed_generalized_eigenvalues_selective_f32_f64 :: proc(
 	m: int,
 	info: Info,
 	ok: bool, // Number of eigenvalues found
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array A too small")
 	assert(len(bp) >= n * (n + 1) / 2, "Packed array B too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -457,9 +405,9 @@ m_compute_packed_generalized_eigenvalues_selective_f32_f64 :: proc(
 	assert(len(ifail) >= n, "Failure array too small")
 
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	// Range parameters
@@ -473,13 +421,13 @@ m_compute_packed_generalized_eigenvalues_selective_f32_f64 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		max_eigenvectors := n
 		if range == .INDEX {
 			max_eigenvectors = iu - il + 1
 		}
-		assert(Z.rows >= n && Z.cols >= max_eigenvectors, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		assert(int(Z.rows) >= n && int(Z.cols) >= max_eigenvectors, "Eigenvector matrix too small")
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -505,9 +453,6 @@ m_compute_packed_generalized_eigenvalues_selective_f32_f64 :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dspgvx_(
@@ -531,15 +476,11 @@ m_compute_packed_generalized_eigenvalues_selective_f32_f64 :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }
 
 // Compute selective packed generalized eigenvalues for complex64/complex128
@@ -566,8 +507,7 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 	m: int,
 	info: Info,
 	ok: bool, // Number of eigenvalues found
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array A too small")
 	assert(len(bp) >= n * (n + 1) / 2, "Packed array B too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -577,9 +517,9 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 	assert(len(ifail) >= n, "Failure array too small")
 
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	// Range parameters
@@ -593,13 +533,13 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		max_eigenvectors := n
 		if range == .INDEX {
 			max_eigenvectors = iu - il + 1
 		}
-		assert(Z.rows >= n && Z.cols >= max_eigenvectors, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		assert(int(Z.rows) >= n && int(Z.cols) >= max_eigenvectors, "Eigenvector matrix too small")
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -610,8 +550,8 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 			&range_c,
 			&uplo_c,
 			&n_int,
-			cast(^lapack.complex)raw_data(ap),
-			cast(^lapack.complex)raw_data(bp),
+			raw_data(ap),
+			raw_data(bp),
 			&vl_val,
 			&vu_val,
 			&il_int,
@@ -619,16 +559,13 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 			&abstol_val,
 			&m_int,
 			raw_data(w),
-			cast(^lapack.complex)z_ptr,
+			z_ptr,
 			&ldz,
-			cast(^lapack.complex)raw_data(work),
+			raw_data(work),
 			raw_data(rwork),
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		lapack.zhpgvx_(
@@ -637,8 +574,8 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 			&range_c,
 			&uplo_c,
 			&n_int,
-			cast(^lapack.doublecomplex)raw_data(ap),
-			cast(^lapack.doublecomplex)raw_data(bp),
+			raw_data(ap),
+			raw_data(bp),
 			&vl_val,
 			&vu_val,
 			&il_int,
@@ -646,22 +583,18 @@ m_compute_packed_generalized_eigenvalues_selective_c64_c128 :: proc(
 			&abstol_val,
 			&m_int,
 			raw_data(w),
-			cast(^lapack.doublecomplex)z_ptr,
+			z_ptr,
 			&ldz,
-			cast(^lapack.doublecomplex)raw_data(work),
+			raw_data(work),
 			raw_data(rwork),
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }
 
 // Procedure group for selective packed generalized eigenvalue computation
@@ -689,7 +622,7 @@ m_refine_packed_symmetric_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := b.rows
 	nrhs := b.cols
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
@@ -701,20 +634,19 @@ m_refine_packed_symmetric_f32_f64 :: proc(
 	assert(len(work) >= 3 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	ldb := b.ld
+	ldx := x.ld
 
 	when T == f32 {
-		lapack.ssprfs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1)
+		lapack.ssprfs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dsprfs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1)
+		lapack.dsprfs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Refine packed symmetric solution for complex64/complex128
@@ -732,8 +664,7 @@ m_refine_packed_symmetric_c64_c128 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	n := b.rows
 	nrhs := b.cols
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
@@ -745,54 +676,19 @@ m_refine_packed_symmetric_c64_c128 :: proc(
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(rwork) >= n, "Real workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	ldb := b.ld
+	ldx := x.ld
 
 	when T == complex64 {
-		lapack.csprfs_(
-			&uplo_c,
-			&n_int,
-			&nrhs_int,
-			cast(^lapack.complex)raw_data(ap),
-			cast(^lapack.complex)raw_data(afp),
-			raw_data(ipiv),
-			cast(^lapack.complex)b.data,
-			&ldb,
-			cast(^lapack.complex)x.data,
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			cast(^lapack.complex)raw_data(work),
-			raw_data(rwork),
-			&info,
-			1,
-		)
+		lapack.csprfs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	} else when T == complex128 {
-		lapack.zsprfs_(
-			&uplo_c,
-			&n_int,
-			&nrhs_int,
-			cast(^lapack.doublecomplex)raw_data(ap),
-			cast(^lapack.doublecomplex)raw_data(afp),
-			raw_data(ipiv),
-			cast(^lapack.doublecomplex)b.data,
-			&ldb,
-			cast(^lapack.doublecomplex)x.data,
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			cast(^lapack.doublecomplex)raw_data(work),
-			raw_data(rwork),
-			&info,
-			1,
-		)
+		lapack.zsprfs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Procedure group for packed symmetric refinement

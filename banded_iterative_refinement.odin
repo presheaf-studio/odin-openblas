@@ -70,7 +70,7 @@ solve_refine_banded_pd_f32_c64 :: proc(
 		assert(len(rwork) >= n, "Real work array too small")
 	}
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int: Blas_Int = n
 	kd_int: Blas_Int = kd
 	nrhs_int: Blas_Int = nrhs
@@ -81,7 +81,7 @@ solve_refine_banded_pd_f32_c64 :: proc(
 
 	when T == f32 {
 		lapack.spbrfs_(
-			uplo_c,
+			&uplo_c,
 			&n_int,
 			&kd_int,
 			&nrhs_int,
@@ -98,11 +98,10 @@ solve_refine_banded_pd_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(uplo_c),
 		)
 	} else when T == complex64 {
 		lapack.cpbrfs_(
-			uplo_c,
+			&uplo_c,
 			&n_int,
 			&kd_int,
 			&nrhs_int,
@@ -119,7 +118,6 @@ solve_refine_banded_pd_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(uplo_c),
 		)
 	}
 
@@ -157,7 +155,7 @@ solve_refine_banded_pd_f64_c128 :: proc(
 		assert(len(rwork) >= n, "Real work array too small")
 	}
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int: Blas_Int = n
 	kd_int: Blas_Int = kd
 	nrhs_int: Blas_Int = nrhs
@@ -168,7 +166,7 @@ solve_refine_banded_pd_f64_c128 :: proc(
 
 	when T == f64 {
 		lapack.dpbrfs_(
-			uplo_c,
+			&uplo_c,
 			&n_int,
 			&kd_int,
 			&nrhs_int,
@@ -185,11 +183,10 @@ solve_refine_banded_pd_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(uplo_c),
 		)
 	} else when T == complex128 {
 		lapack.zpbrfs_(
-			uplo_c,
+			&uplo_c,
 			&n_int,
 			&kd_int,
 			&nrhs_int,
@@ -206,7 +203,6 @@ solve_refine_banded_pd_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(uplo_c),
 		)
 	}
 
@@ -229,19 +225,19 @@ solve_split_cholesky_banded :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	ldab := AB.ld
 
 	when T == f32 {
-		lapack.spbstf_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
+		lapack.spbstf_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
 	} else when T == f64 {
-		lapack.dpbstf_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
+		lapack.dpbstf_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
 	} else when T == complex64 {
-		lapack.cpbstf_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
+		lapack.cpbstf_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
 	} else when T == complex128 {
-		lapack.zpbstf_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
+		lapack.zpbstf_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &info, len(uplo_c))
 	}
 
 	return info, info == 0
@@ -297,7 +293,7 @@ refine_banded_real :: proc(
 	assert(len(iwork) >= n, "Integer work array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	trans_c := transpose_mode_to_cstring(trans)
+	trans_c := cast(u8)trans
 	n_int := Blas_Int(n)
 	kl_int := Blas_Int(kl)
 	ku_int := Blas_Int(ku)
@@ -309,7 +305,7 @@ refine_banded_real :: proc(
 
 	when T == f32 {
 		lapack.sgbrfs_(
-			trans_c,
+			&trans_c,
 			&n_int,
 			&kl_int,
 			&ku_int,
@@ -328,11 +324,10 @@ refine_banded_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
 		)
 	} else when T == f64 {
 		lapack.dgbrfs_(
-			trans_c,
+			&trans_c,
 			&n_int,
 			&kl_int,
 			&ku_int,
@@ -351,7 +346,6 @@ refine_banded_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
 		)
 	}
 
@@ -384,7 +378,7 @@ refine_banded_c64 :: proc(
 	assert(len(rwork) >= n, "Real work array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	trans_c := transpose_mode_to_cstring(trans)
+	trans_c := cast(u8)trans
 	n_int := Blas_Int(n)
 	kl_int := Blas_Int(kl)
 	ku_int := Blas_Int(ku)
@@ -395,7 +389,7 @@ refine_banded_c64 :: proc(
 	ldx := X.ld
 
 	lapack.cgbrfs_(
-		trans_c,
+		&trans_c,
 		&n_int,
 		&kl_int,
 		&ku_int,
@@ -414,7 +408,6 @@ refine_banded_c64 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		len(trans_c),
 	)
 
 	return info, info == 0
@@ -446,7 +439,7 @@ refine_banded_c128 :: proc(
 	assert(len(rwork) >= n, "Real work array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	trans_c := transpose_mode_to_cstring(trans)
+	trans_c := cast(u8)trans
 	n_int := Blas_Int(n)
 	kl_int := Blas_Int(kl)
 	ku_int := Blas_Int(ku)
@@ -457,7 +450,7 @@ refine_banded_c128 :: proc(
 	ldx := X.ld
 
 	lapack.zgbrfs_(
-		trans_c,
+		&trans_c,
 		&n_int,
 		&kl_int,
 		&ku_int,
@@ -476,7 +469,6 @@ refine_banded_c128 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		len(trans_c),
 	)
 
 	return info, info == 0
@@ -544,8 +536,8 @@ refine_banded_extended_real :: proc(
 	assert(len(R) >= n, "Row scaling array too small")
 	assert(len(C) >= n, "Column scaling array too small")
 
-	trans_c := transpose_mode_to_cstring(trans)
-	equed_c := equilibration_request_to_cstring(equed)
+	trans_c := cast(u8)trans
+	equed_c := cast(u8)equed
 	n_int := Blas_Int(n)
 	kl_int := Blas_Int(kl)
 	ku_int := Blas_Int(ku)
@@ -558,8 +550,8 @@ refine_banded_extended_real :: proc(
 
 	when T == f32 {
 		lapack.sgbrfsx_(
-			trans_c,
-			equed_c,
+			&trans_c,
+			&equed_c,
 			&n_int,
 			&kl_int,
 			&ku_int,
@@ -585,13 +577,11 @@ refine_banded_extended_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
-			len(equed_c),
 		)
 	} else when T == f64 {
 		lapack.dgbrfsx_(
-			trans_c,
-			equed_c,
+			&trans_c,
+			&equed_c,
 			&n_int,
 			&kl_int,
 			&ku_int,
@@ -617,8 +607,6 @@ refine_banded_extended_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
-			len(equed_c),
 		)
 	}
 
@@ -664,8 +652,8 @@ refine_banded_extended_c64 :: proc(
 	assert(len(R) >= n, "Row scaling array too small")
 	assert(len(C) >= n, "Column scaling array too small")
 
-	trans_c := transpose_mode_to_cstring(trans)
-	equed_c := equilibration_request_to_cstring(equed)
+	trans_c := cast(u8)trans
+	equed_c := cast(u8)equed
 	n_int := Blas_Int(n)
 	kl_int := Blas_Int(kl)
 	ku_int := Blas_Int(ku)
@@ -677,8 +665,8 @@ refine_banded_extended_c64 :: proc(
 	n_err_bnds^ = 3
 
 	lapack.cgbrfsx_(
-		trans_c,
-		equed_c,
+		&trans_c,
+		&equed_c,
 		&n_int,
 		&kl_int,
 		&ku_int,
@@ -704,8 +692,6 @@ refine_banded_extended_c64 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		len(trans_c),
-		len(equed_c),
 	)
 
 	return info, info == 0
@@ -750,8 +736,8 @@ refine_banded_extended_c128 :: proc(
 	assert(len(R) >= n, "Row scaling array too small")
 	assert(len(C) >= n, "Column scaling array too small")
 
-	trans_c := transpose_mode_to_cstring(trans)
-	equed_c := equilibration_request_to_cstring(equed)
+	trans_c := cast(u8)trans
+	equed_c := cast(u8)equed
 	n_int := Blas_Int(n)
 	kl_int := Blas_Int(kl)
 	ku_int := Blas_Int(ku)
@@ -763,8 +749,8 @@ refine_banded_extended_c128 :: proc(
 	n_err_bnds^ = 3
 
 	lapack.zgbrfsx_(
-		trans_c,
-		equed_c,
+		&trans_c,
+		&equed_c,
 		&n_int,
 		&kl_int,
 		&ku_int,
@@ -790,8 +776,6 @@ refine_banded_extended_c128 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		len(trans_c),
-		len(equed_c),
 	)
 
 	return info, info == 0

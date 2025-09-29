@@ -91,7 +91,7 @@ solve_refine_solution_f32_c64 :: proc(
 		assert(len(rwork) >= n, "Real work array too small")
 	}
 
-	trans_c := transpose_mode_to_cstring(trans)
+	trans_c := cast(u8)trans
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
 	lda := A.ld
@@ -101,7 +101,7 @@ solve_refine_solution_f32_c64 :: proc(
 
 	when T == f32 {
 		lapack.sgerfs_(
-			trans_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -118,11 +118,10 @@ solve_refine_solution_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
 		)
 	} else when T == complex64 {
 		lapack.cgerfs_(
-			trans_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -139,7 +138,6 @@ solve_refine_solution_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(trans_c),
 		)
 	}
 
@@ -176,7 +174,7 @@ solve_refine_solution_f64_c128 :: proc(
 		assert(len(rwork) >= n, "Real work array too small")
 	}
 
-	trans_c := transpose_mode_to_cstring(trans)
+	trans_c := cast(u8)trans
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
 	lda := A.ld
@@ -186,7 +184,7 @@ solve_refine_solution_f64_c128 :: proc(
 
 	when T == f64 {
 		lapack.dgerfs_(
-			trans_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -203,11 +201,10 @@ solve_refine_solution_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
 		)
 	} else when T == complex128 {
 		lapack.zgerfs_(
-			trans_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -224,7 +221,6 @@ solve_refine_solution_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(trans_c),
 		)
 	}
 
@@ -293,8 +289,8 @@ solve_refine_extended_f32_c64 :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	trans_c := transpose_mode_to_cstring(transpose)
-	equed_c := equilibration_request_to_cstring(equilibrated)
+	trans_c := cast(u8)transpose
+	equed_c := cast(u8)equilibrated
 
 	// Default parameters
 	nparams: Blas_Int = 0
@@ -303,8 +299,8 @@ solve_refine_extended_f32_c64 :: proc(
 
 	when T == f32 {
 		lapack.sgerfsx_(
-			trans_c,
-			equed_c,
+			&trans_c,
+			&equed_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -328,13 +324,11 @@ solve_refine_extended_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
-			len(equed_c),
 		)
 	} else when T == complex64 {
 		lapack.cgerfsx_(
-			trans_c,
-			equed_c,
+			&trans_c,
+			&equed_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -358,8 +352,6 @@ solve_refine_extended_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(trans_c),
-			len(equed_c),
 		)
 	}
 
@@ -410,8 +402,8 @@ solve_refine_extended_f64_c128 :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	trans_c := transpose_mode_to_cstring(transpose)
-	equed_c := equilibration_request_to_cstring(equilibrated)
+	trans_c := cast(u8)transpose
+	equed_c := cast(u8)equilibrated
 
 	// Default parameters
 	nparams: Blas_Int = 0
@@ -420,8 +412,8 @@ solve_refine_extended_f64_c128 :: proc(
 
 	when T == f64 {
 		lapack.dgerfsx_(
-			trans_c,
-			equed_c,
+			&trans_c,
+			&equed_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -445,13 +437,11 @@ solve_refine_extended_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(trans_c),
-			len(equed_c),
 		)
 	} else when T == complex128 {
 		lapack.zgerfsx_(
-			trans_c,
-			equed_c,
+			&trans_c,
+			&equed_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -475,8 +465,6 @@ solve_refine_extended_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(trans_c),
-			len(equed_c),
 		)
 	}
 
@@ -624,15 +612,15 @@ solve_expert_f32_c64 :: proc(
 	ldaf := AF.ld
 	ldx := X.ld
 
-	fact_c := _factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(transpose)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)transpose
 
-	equed_char: byte = equilibration_request_to_char(equed^)
+	equed_char: byte = cast(byte)(equed^)
 
 	when T == f32 {
 		lapack.sgesvx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -653,14 +641,11 @@ solve_expert_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	} else when T == complex64 {
 		lapack.cgesvx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -681,13 +666,10 @@ solve_expert_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	}
 
-	equed^ = equilibration_request_from_char(equed_char)
+	equed^ = cast(EquilibrationRequest)(equed_char)
 
 	return info, info == 0
 }
@@ -737,15 +719,15 @@ solve_expert_f64_c128 :: proc(
 	ldaf := AF.ld
 	ldx := X.ld
 
-	fact_c := _factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(transpose)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)transpose
 
-	equed_char: byte = equilibration_request_to_char(equed^)
+	equed_char: byte = cast(byte)(equed^)
 
 	when T == f64 {
 		lapack.dgesvx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -766,14 +748,11 @@ solve_expert_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	} else when T == complex128 {
 		lapack.zgesvx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -794,13 +773,10 @@ solve_expert_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	}
 
-	equed^ = equilibration_request_from_char(equed_char)
+	equed^ = cast(EquilibrationRequest)(equed_char)
 
 	return info, info == 0
 }
@@ -880,11 +856,11 @@ solve_expert_extra_real :: proc(
 	ldaf := AF.ld
 	ldx := X.ld
 
-	fact_c := _factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(transpose)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)transpose
 
 	// Convert EquilibrationRequest to byte for LAPACK
-	equed_char: byte = equilibration_request_to_char(equed^)
+	equed_char: byte = cast(byte)(equed^)
 
 	// Parameters for algorithm tuning
 	nparams: Blas_Int = 0
@@ -893,8 +869,8 @@ solve_expert_extra_real :: proc(
 
 	when T == f32 {
 		lapack.sgesvxx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -920,14 +896,11 @@ solve_expert_extra_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	} else {
 		lapack.dgesvxx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n_int,
 			&nrhs_int,
 			raw_data(A.data),
@@ -953,14 +926,11 @@ solve_expert_extra_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	}
 
 	// Convert equilibration flag back to enum
-	equed^ = equilibration_request_from_char(equed_char)
+	equed^ = cast(EquilibrationRequest)(equed_char)
 
 	return info, info == 0
 }
@@ -1007,11 +977,11 @@ solve_expert_extra_c64 :: proc(
 	ldaf := AF.ld
 	ldx := X.ld
 
-	fact_c := factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(transpose)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)transpose
 
 	// Convert EquilibrationRequest to byte for LAPACK
-	equed_char: byte = equilibration_request_to_char(equed^)
+	equed_char: byte = cast(byte)(equed^)
 
 	// Parameters for algorithm tuning
 	nparams: Blas_Int = 0
@@ -1020,7 +990,7 @@ solve_expert_extra_c64 :: proc(
 
 	lapack.cgesvxx_(
 		&fact_c,
-		trans_c,
+		&trans_c,
 		&n_int,
 		&nrhs_int,
 		raw_data(A.data),
@@ -1046,13 +1016,10 @@ solve_expert_extra_c64 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		1,
-		len(trans_c),
-		1,
 	)
 
 	// Convert equilibration flag back to enum
-	equed^ = equilibration_request_from_char(equed_char)
+	equed^ = cast(EquilibrationRequest)(equed_char)
 
 	return info, info == 0
 }
@@ -1099,11 +1066,11 @@ solve_expert_extra_c128 :: proc(
 	ldaf := AF.ld
 	ldx := X.ld
 
-	fact_c := factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(transpose)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)transpose
 
 	// Convert EquilibrationRequest to byte for LAPACK
-	equed_char: byte = equilibration_request_to_char(equed^)
+	equed_char: byte = cast(byte)(equed^)
 
 	// Parameters for algorithm tuning
 	nparams: Blas_Int = 0
@@ -1112,7 +1079,7 @@ solve_expert_extra_c128 :: proc(
 
 	lapack.zgesvxx_(
 		&fact_c,
-		trans_c,
+		&trans_c,
 		&n_int,
 		&nrhs_int,
 		raw_data(A.data),
@@ -1138,13 +1105,10 @@ solve_expert_extra_c128 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		1,
-		1,
-		1,
 	)
 
 	// Convert back from byte to enum
-	equed^ = equilibration_request_from_char(equed_char)
+	equed^ = cast(EquilibrationRequest)(equed_char)
 
 	return info, info == 0
 }
@@ -1276,16 +1240,16 @@ query_workspace_least_squares :: proc($T: typeid, m: int, n: int, nrhs: int, tra
 	// Dummy values for query
 	lda := m_int
 	ldb := max(m_int, n_int)
-	trans_c := transpose_mode_to_cstring(transpose)
+	trans_c := cast(u8)transpose
 
 	when T == f32 {
-		lapack.sgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
+		lapack.sgetsls_(&trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info)
 	} else when T == f64 {
-		lapack.dgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
+		lapack.dgetsls_(&trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info)
 	} else when T == complex64 {
-		lapack.cgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
+		lapack.cgetsls_(&trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info)
 	} else when T == complex128 {
-		lapack.zgetsls_(trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info, 1)
+		lapack.zgetsls_(&trans_c, &m_int, &n_int, &nrhs_int, &work_query, &lda, &work_query, &ldb, &work_query, &lwork_query, &info)
 	}
 
 	return Blas_Int(real(work_query))
@@ -1308,17 +1272,17 @@ solve_least_squares :: proc(A: ^Matrix($T), B: ^Matrix(T), work: []T, transpose:
 	}
 	assert(len(work) >= 1, "Work array too small")
 
-	trans_c := transpose_mode_to_cstring(transpose)
+	trans_c := cast(u8)transpose
 
 	// Solve the system (B is overwritten with solution)
 	when T == f32 {
-		lapack.sgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.sgetsls_(&trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.dgetsls_(&trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.cgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.cgetsls_(&trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zgetsls_(trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.zgetsls_(&trans_c, &m, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0

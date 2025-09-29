@@ -32,10 +32,10 @@ query_workspace_extended_expert_positive_definite :: proc(
 ) {
 	n_err_bnds := 3 // Extended version always has 3 error bound types
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		// Real types: sposvxx/dposvxx
 		return 3 * n, n, 0, nrhs, nrhs * n_err_bnds, nrhs * n_err_bnds, n
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		// Complex types: cposvxx/zposvxx
 		return 2 * n, 0, 3 * n, nrhs, nrhs * n_err_bnds, nrhs * n_err_bnds, n
 	}
@@ -77,23 +77,23 @@ m_solve_positive_definite_extended_expert_f32_c64 :: proc(
 	assert(B.cols == X.cols, "RHS and solution must have same number of columns")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldaf := Blas_Int(AF.stride)
-	ldb := Blas_Int(B.stride)
-	ldx := Blas_Int(X.stride)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
 	n_err_bnds: Blas_Int = 3
 
-	fact_c := factorization_to_cstring(fact)
-	uplo_c := matrix_region_to_cstring(uplo)
+	fact_c := cast(u8)fact
+	uplo_c := cast(u8)uplo
 
 	// Handle equilibration state
 	equed_mode := EquilibrationState.None
 	if equed_inout != nil {
 		equed_mode = equed_inout^
 	}
-	equed_c := equilibration_state_to_cstring(equed_mode)
+	equed_c := cast(u8)equed_mode
 
 	// Validate workspace sizes
 	assert(len(S) >= int(n), "Insufficient S space")
@@ -112,15 +112,15 @@ m_solve_positive_definite_extended_expert_f32_c64 :: proc(
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
 
 		lapack.sposvxx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
 			&lda,
 			raw_data(AF.data),
 			&ldaf,
-			equed_c,
+			&equed_c,
 			raw_data(S),
 			raw_data(B.data),
 			&ldb,
@@ -137,24 +137,21 @@ m_solve_positive_definite_extended_expert_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			len(equed_c),
 		)
 	} else when T == complex64 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= 3 * int(n), "Insufficient rwork space")
 
 		lapack.cposvxx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
 			&lda,
 			raw_data(AF.data),
 			&ldaf,
-			equed_c,
+			&equed_c,
 			raw_data(S),
 			raw_data(B.data),
 			&ldb,
@@ -171,24 +168,20 @@ m_solve_positive_definite_extended_expert_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			len(equed_c),
 		)
 	}
 
 	// Update equilibration state if provided
 	if equed_inout != nil {
 		// LAPACK may modify equed
-		if equed_c[0] == 'Y' {
+		if equed_c == 'Y' {
 			equed_inout^ = .Applied
 		} else {
 			equed_inout^ = .None
 		}
 	}
 
-	ok = info == 0
-	return rcond, rpvgrw, info, ok
+	return rcond, rpvgrw, info, info == 0
 }
 
 // Extended expert solver for f64/complex128 with pre-allocated arrays
@@ -223,23 +216,23 @@ m_solve_positive_definite_extended_expert_f64_c128 :: proc(
 	assert(B.cols == X.cols, "RHS and solution must have same number of columns")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldaf := Blas_Int(AF.stride)
-	ldb := Blas_Int(B.stride)
-	ldx := Blas_Int(X.stride)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
 	n_err_bnds: Blas_Int = 3
 
-	fact_c := factorization_to_cstring(fact)
-	uplo_c := matrix_region_to_cstring(uplo)
+	fact_c := cast(u8)fact
+	uplo_c := cast(u8)uplo
 
 	// Handle equilibration state
 	equed_mode := EquilibrationState.None
 	if equed_inout != nil {
 		equed_mode = equed_inout^
 	}
-	equed_c := equilibration_state_to_cstring(equed_mode)
+	equed_c := cast(u8)equed_mode
 
 	// Validate workspace sizes
 	assert(len(S) >= int(n), "Insufficient S space")
@@ -258,15 +251,15 @@ m_solve_positive_definite_extended_expert_f64_c128 :: proc(
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
 
 		lapack.dposvxx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
 			&lda,
 			raw_data(AF.data),
 			&ldaf,
-			equed_c,
+			&equed_c,
 			raw_data(S),
 			raw_data(B.data),
 			&ldb,
@@ -283,24 +276,21 @@ m_solve_positive_definite_extended_expert_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			len(equed_c),
 		)
 	} else when T == complex128 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= 3 * int(n), "Insufficient rwork space")
 
 		lapack.zposvxx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
 			&lda,
 			raw_data(AF.data),
 			&ldaf,
-			equed_c,
+			&equed_c,
 			raw_data(S),
 			raw_data(B.data),
 			&ldb,
@@ -317,22 +307,18 @@ m_solve_positive_definite_extended_expert_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			len(equed_c),
 		)
 	}
 
 	// Update equilibration state if provided
 	if equed_inout != nil {
 		// LAPACK may modify equed
-		if equed_c[0] == 'Y' {
+		if equed_c == 'Y' {
 			equed_inout^ = .Applied
 		} else {
 			equed_inout^ = .None
 		}
 	}
 
-	ok = info == 0
-	return rcond, rpvgrw, info, ok
+	return rcond, rpvgrw, info, info == 0
 }

@@ -76,16 +76,16 @@ solve_estimate_condition_banded_pd_f32_c64 :: proc(
 		assert(len(rwork) >= n, "Real work array too small")
 	}
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	ldab := AB.ld
 	anorm_val := anorm
 
 	when T == f32 {
-		lapack.spbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
+		lapack.spbcon_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(iwork), &info)
 	} else when T == complex64 {
-		lapack.cpbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
+		lapack.cpbcon_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(rwork), &info)
 	}
 
 	return info, info == 0
@@ -117,16 +117,16 @@ solve_estimate_condition_banded_pd_f64_c128 :: proc(
 		assert(len(rwork) >= n, "Real work array too small")
 	}
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	ldab := AB.ld
 	anorm_val := anorm
 
 	when T == f64 {
-		lapack.dpbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, len(uplo_c))
+		lapack.dpbcon_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(iwork), &info)
 	} else when T == complex128 {
-		lapack.zpbcon_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, len(uplo_c))
+		lapack.zpbcon_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, &anorm_val, rcond, raw_data(work), raw_data(rwork), &info)
 	}
 
 	return info, info == 0
@@ -165,15 +165,15 @@ solve_equilibration_banded_pd_f32_c64 :: proc(
 	// Validate inputs
 	assert(len(S) >= n, "Scaling array too small")
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	ldab := AB.ld
 
 	when T == f32 {
-		lapack.spbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
+		lapack.spbequ_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info)
 	} else when T == complex64 {
-		lapack.cpbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
+		lapack.cpbequ_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info)
 	}
 
 	return info, info == 0
@@ -196,15 +196,15 @@ solve_equilibration_banded_pd_f64_c128 :: proc(
 	// Validate inputs
 	assert(len(S) >= n, "Scaling array too small")
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	ldab := AB.ld
 
 	when T == f64 {
-		lapack.dpbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
+		lapack.dpbequ_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info)
 	} else when T == complex128 {
-		lapack.zpbequ_(uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info, len(uplo_c))
+		lapack.zpbequ_(&uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(S), scond, amax, &info)
 	}
 
 	return info, info == 0
@@ -250,12 +250,12 @@ banded_cond_real :: proc(
 	assert(anorm >= 0, "anorm must be non-negative")
 
 	anorm_val := anorm
-	norm_str := norm_to_cstring(norm)
+	norm_str := cast(u8)norm
 
 	when T == f32 {
-		lapack.sgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, 1)
+		lapack.sgbcon_(&norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(iwork), &info, 1)
+		lapack.dgbcon_(&norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(iwork), &info)
 	}
 
 	return info, info == 0
@@ -288,9 +288,9 @@ banded_cond_c64 :: proc(
 	assert(anorm >= 0, "anorm must be non-negative")
 
 	anorm_val := anorm
-	norm_str := norm_to_cstring(norm)
+	norm_str := cast(u8)norm
 
-	lapack.cgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, 1)
+	lapack.cgbcon_(&norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }
@@ -322,9 +322,9 @@ banded_cond_c128 :: proc(
 	assert(anorm >= 0, "anorm must be non-negative")
 
 	anorm_val := anorm
-	norm_str := norm_to_cstring(norm)
+	norm_str := cast(u8)norm
 
-	lapack.zgbcon_(norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(rwork), &info, 1)
+	lapack.zgbcon_(&norm_str, &n, &kl, &ku, raw_data(AB.data), &ldab, raw_data(ipiv), &anorm_val, rcond, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }

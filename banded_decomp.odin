@@ -185,7 +185,7 @@ banded_to_bidiag_c64 :: proc(
 		c_ptr = raw_data(C.data)
 	}
 
-	lapack.cgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), raw_data(rwork), &info, 1)
+	lapack.cgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }
@@ -248,7 +248,7 @@ banded_to_bidiag_c128 :: proc(
 		c_ptr = raw_data(C.data)
 	}
 
-	lapack.zgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), raw_data(rwork), &info, 1)
+	lapack.zgbbrd_(vect, &m, &n, &ncc, &kl, &ku, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, pt_ptr, &ldpt, c_ptr, &ldc, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }

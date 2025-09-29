@@ -12,8 +12,8 @@ import "core:slice"
 // Improves the computed solution to a symmetric system of linear equations
 
 // Query workspace size for symmetric iterative refinement
-query_workspace_refine_symmetric :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
-	when T == f32 || T == f64 {
+query_workspace_refine_symmetric :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		// Real types: work = 3*n, iwork = n
 		work_size = 3 * n
 		iwork_size = n
@@ -47,7 +47,7 @@ m_refine_symmetric_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Original matrix too small")
@@ -60,18 +60,18 @@ m_refine_symmetric_f32_f64 :: proc(
 	assert(len(work) >= 3 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldaf := Blas_Int(af.ld)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	lda := a.ld
+	ldaf := af.ld
+	ldb := b.ld
+	ldx := x.ld
 
 	when T == f32 {
-		lapack.ssyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1)
+		lapack.ssyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dsyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1)
+		lapack.dsyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	}
 
 	return info, info == 0
@@ -92,8 +92,7 @@ m_refine_symmetric_c64_c128 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Original matrix too small")
@@ -106,18 +105,18 @@ m_refine_symmetric_c64_c128 :: proc(
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(rwork) >= n, "Real workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldaf := Blas_Int(af.ld)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	lda := a.ld
+	ldaf := af.ld
+	ldb := b.ld
+	ldx := x.ld
 
 	when T == complex64 {
-		lapack.csyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info, 1)
+		lapack.csyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	} else when T == complex128 {
-		lapack.zsyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info, 1)
+		lapack.zsyrfs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, af.data, &ldaf, raw_data(ipiv), b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
 	return info, info == 0
@@ -136,8 +135,8 @@ m_refine_symmetric :: proc {
 // Extended version with equilibration and advanced error bounds
 
 // Query workspace size for extended symmetric iterative refinement
-query_workspace_refine_symmetric_extended :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
-	when T == f32 || T == f64 {
+query_workspace_refine_symmetric_extended :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		// Real types: work = 4*n, iwork = n
 		work_size = 4 * n
 		iwork_size = n
@@ -178,7 +177,7 @@ m_refine_symmetric_extended_f32_f64 :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Original matrix too small")
@@ -192,14 +191,14 @@ m_refine_symmetric_extended_f32_f64 :: proc(
 	assert(len(work) >= 4 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	equed_c := equilibration_state_to_char(equed)
+	uplo_c := cast(u8)uplo
+	equed_c := cast(u8)(equed)
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldaf := Blas_Int(af.ld)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	lda := a.ld
+	ldaf := af.ld
+	ldb := b.ld
+	ldx := x.ld
 	n_err_bnds_int := Blas_Int(n_err_bnds)
 	nparams_int := Blas_Int(nparams)
 
@@ -229,8 +228,6 @@ m_refine_symmetric_extended_f32_f64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsyrfsx_(
@@ -258,8 +255,6 @@ m_refine_symmetric_extended_f32_f64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -288,8 +283,7 @@ m_refine_symmetric_extended_c64_c128 :: proc(
 	rcond: R,
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Original matrix too small")
@@ -303,14 +297,14 @@ m_refine_symmetric_extended_c64_c128 :: proc(
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(rwork) >= 3 * n, "Real workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	equed_c := equilibration_state_to_char(equed)
+	uplo_c := cast(u8)uplo
+	equed_c := cast(u8)(equed)
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldaf := Blas_Int(af.ld)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	lda := a.ld
+	ldaf := af.ld
+	ldb := b.ld
+	ldx := x.ld
 	n_err_bnds_int := Blas_Int(n_err_bnds)
 	nparams_int := Blas_Int(nparams)
 
@@ -340,8 +334,6 @@ m_refine_symmetric_extended_c64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		lapack.zsyrfsx_(
@@ -369,8 +361,6 @@ m_refine_symmetric_extended_c64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			1,
-			1,
 		)
 	}
 

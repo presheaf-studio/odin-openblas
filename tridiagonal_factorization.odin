@@ -39,8 +39,7 @@ m_factorize_tridiagonal_pd_f32_c64 :: proc(
 		lapack.cpttrf_(&n_int, raw_data(D), raw_data(E), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Factorize tridiagonal positive definite matrix (f64/c128)
@@ -62,8 +61,7 @@ m_factorize_tridiagonal_pd_f64_c128 :: proc(
 		lapack.zpttrf_(&n_int, raw_data(D), raw_data(E), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 
@@ -84,19 +82,18 @@ m_solve_factorized_tridiagonal_pd_f32_c64 :: proc(
 
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
+	ldb := B.ld
 
 	when T == f32 {
 		// Real case doesn't use uplo parameter
 		lapack.spttrs_(&n_int, &nrhs_int, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
 	} else when T == complex64 {
 		// Complex case uses uplo parameter
-		uplo_c := matrix_region_to_cstring(uplo)
-		lapack.cpttrs_(uplo_c, &n_int, &nrhs_int, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
+		uplo_c := cast(u8)uplo
+		lapack.cpttrs_(&uplo_c, &n_int, &nrhs_int, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Solve using factorized tridiagonal positive definite matrix (f64/c128)
@@ -116,17 +113,16 @@ m_solve_factorized_tridiagonal_pd_f64_c128 :: proc(
 
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
+	ldb := B.ld
 
 	when T == f64 {
 		// Real case doesn't use uplo parameter
 		lapack.dpttrs_(&n_int, &nrhs_int, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
 		// Complex case uses uplo parameter
-		uplo_c := matrix_region_to_cstring(uplo)
-		lapack.zpttrs_(uplo_c, &n_int, &nrhs_int, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
+		uplo_c := cast(u8)uplo
+		lapack.zpttrs_(&uplo_c, &n_int, &nrhs_int, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }

@@ -39,8 +39,8 @@ m_apply_random_orthogonal_f32_c64 :: proc(A: ^Matrix($T), side: OrthogonalSide =
 	lda := A.ld
 
 	// Convert enums to cstrings
-	side_c := orthogonal_side_to_char(side)
-	init_c := orthogonal_init_to_char(init)
+	side_c := cast(u8)side
+	init_c := cast(u8)init
 
 	// Allocate workspace
 	work_size: Blas_Int
@@ -62,9 +62,9 @@ m_apply_random_orthogonal_f32_c64 :: proc(A: ^Matrix($T), side: OrthogonalSide =
 	info_val: Info
 
 	when T == f32 {
-		lapack.slaror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
+		lapack.slaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val)
 	} else when T == complex64 {
-		lapack.claror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
+		lapack.claror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val)
 	}
 
 	// Update the original seed
@@ -88,8 +88,8 @@ m_apply_random_orthogonal_f64_c128 :: proc(A: ^Matrix($T), side: OrthogonalSide 
 	lda := A.ld
 
 	// Convert enums to cstrings
-	side_c := orthogonal_side_to_char(side)
-	init_c := orthogonal_init_to_char(init)
+	side_c := cast(u8)side
+	init_c := cast(u8)init
 
 	// Allocate workspace
 	work_size: Blas_Int
@@ -111,9 +111,9 @@ m_apply_random_orthogonal_f64_c128 :: proc(A: ^Matrix($T), side: OrthogonalSide 
 	info_val: Info
 
 	when T == f64 {
-		lapack.dlaror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
+		lapack.dlaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val)
 	} else when T == complex128 {
-		lapack.zlaror_(side_c, init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val, c.size_t(len(side_c)), c.size_t(len(init_c)))
+		lapack.zlaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val)
 	}
 
 	// Update the original seed
@@ -255,7 +255,7 @@ m_apply_givens_elimination :: proc(A: ^Matrix($T), row1: int, row2: int, col: in
 	c: f64
 	s: T
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		// Real case
 		r := math.hypot(f64(a11), f64(a21))
 		if r != 0 {
@@ -265,7 +265,7 @@ m_apply_givens_elimination :: proc(A: ^Matrix($T), row1: int, row2: int, col: in
 			c = 1.0
 			s = 0.0
 		}
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		// Complex case - need to handle complex arithmetic
 		// For complex Givens rotations, c is real and s is complex
 		abs_a11 := abs(a11)

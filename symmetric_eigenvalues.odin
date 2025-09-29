@@ -11,13 +11,13 @@ import "core:slice"
 // ============================================================================
 
 // Query workspace for symmetric eigenvalue computation (QR algorithm)
-query_workspace_compute_symmetric_eigenvalues :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int) where T == f32 || T == f64 {
+query_workspace_compute_symmetric_eigenvalues :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -32,8 +32,6 @@ query_workspace_compute_symmetric_eigenvalues :: proc($T: typeid, n: int, jobz: 
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
@@ -48,8 +46,6 @@ query_workspace_compute_symmetric_eigenvalues :: proc($T: typeid, n: int, jobz: 
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	}
@@ -64,7 +60,7 @@ query_workspace_compute_symmetric_eigenvalues :: proc($T: typeid, n: int, jobz: 
 
 // Compute symmetric eigenvalues using QR algorithm for f32/f64
 m_compute_symmetric_eigenvalues :: proc(
-	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_VECTORS)
+	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_AND_VECTORS)
 	w: []T, // Pre-allocated eigenvalues array (size n)
 	work: []T, // Pre-allocated workspace
 	jobz := EigenJobOption.VALUES_ONLY,
@@ -72,26 +68,25 @@ m_compute_symmetric_eigenvalues :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssyev_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.ssyev_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsyev_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.dsyev_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // ============================================================================
@@ -99,13 +94,13 @@ m_compute_symmetric_eigenvalues :: proc(
 // ============================================================================
 
 // Query workspace for 2-stage symmetric eigenvalue computation
-query_workspace_compute_symmetric_eigenvalues_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int) where T == f32 || T == f64 {
+query_workspace_compute_symmetric_eigenvalues_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -120,8 +115,6 @@ query_workspace_compute_symmetric_eigenvalues_2stage :: proc($T: typeid, n: int,
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
@@ -136,8 +129,6 @@ query_workspace_compute_symmetric_eigenvalues_2stage :: proc($T: typeid, n: int,
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	}
@@ -147,7 +138,7 @@ query_workspace_compute_symmetric_eigenvalues_2stage :: proc($T: typeid, n: int,
 
 // Compute symmetric eigenvalues using 2-stage algorithm for f32/f64
 m_compute_symmetric_eigenvalues_2stage :: proc(
-	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_VECTORS)
+	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_AND_VECTORS)
 	w: []T, // Pre-allocated eigenvalues array (size n)
 	work: []T, // Pre-allocated workspace
 	jobz := EigenJobOption.VALUES_ONLY,
@@ -155,26 +146,25 @@ m_compute_symmetric_eigenvalues_2stage :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssyev_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.ssyev_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsyev_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.dsyev_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // ============================================================================
@@ -182,14 +172,14 @@ m_compute_symmetric_eigenvalues_2stage :: proc(
 // ============================================================================
 
 // Query workspace for symmetric eigenvalue computation (divide-and-conquer)
-query_workspace_compute_symmetric_eigenvalues_dc :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 {
+query_workspace_compute_symmetric_eigenvalues_dc :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int, iwork_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -207,8 +197,6 @@ query_workspace_compute_symmetric_eigenvalues_dc :: proc($T: typeid, n: int, job
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -227,8 +215,6 @@ query_workspace_compute_symmetric_eigenvalues_dc :: proc($T: typeid, n: int, job
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -239,7 +225,7 @@ query_workspace_compute_symmetric_eigenvalues_dc :: proc($T: typeid, n: int, job
 
 // Compute symmetric eigenvalues using divide-and-conquer for f32/f64
 m_compute_symmetric_eigenvalues_dc :: proc(
-	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_VECTORS)
+	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_AND_VECTORS)
 	w: []T, // Pre-allocated eigenvalues array (size n)
 	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace
@@ -248,39 +234,38 @@ m_compute_symmetric_eigenvalues_dc :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) > 0, "Workspace required")
 	assert(len(iwork) > 0, "Integer workspace required")
 
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
 
 	when T == f32 {
-		lapack.ssyevd_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.ssyevd_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == f64 {
-		lapack.dsyevd_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.dsyevd_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Query workspace for 2-stage symmetric eigenvalue computation (divide-and-conquer)
-query_workspace_compute_symmetric_eigenvalues_dc_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 {
+query_workspace_compute_symmetric_eigenvalues_dc_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int, iwork_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -298,8 +283,6 @@ query_workspace_compute_symmetric_eigenvalues_dc_2stage :: proc($T: typeid, n: i
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -318,8 +301,6 @@ query_workspace_compute_symmetric_eigenvalues_dc_2stage :: proc($T: typeid, n: i
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -330,7 +311,7 @@ query_workspace_compute_symmetric_eigenvalues_dc_2stage :: proc($T: typeid, n: i
 
 // Compute symmetric eigenvalues using 2-stage divide-and-conquer for f32/f64
 m_compute_symmetric_eigenvalues_dc_2stage :: proc(
-	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_VECTORS)
+	a: ^Matrix($T), // Input matrix (destroyed, eigenvectors on output if jobz == VALUES_AND_VECTORS)
 	w: []T, // Pre-allocated eigenvalues array (size n)
 	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace
@@ -339,28 +320,27 @@ m_compute_symmetric_eigenvalues_dc_2stage :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) > 0, "Workspace required")
 	assert(len(iwork) > 0, "Integer workspace required")
 
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
 
 	when T == f32 {
-		lapack.ssyevd_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.ssyevd_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == f64 {
-		lapack.dsyevd_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.dsyevd_2stage_(&jobz_c, &uplo_c, &n_int, raw_data(a.data), &lda, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // ============================================================================
@@ -368,10 +348,10 @@ m_compute_symmetric_eigenvalues_dc_2stage :: proc(
 // ============================================================================
 
 // Query workspace for symmetric eigenvalue computation (MRRR)
-query_workspace_compute_symmetric_eigenvalues_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: EigenRangeOption) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 {
+query_workspace_compute_symmetric_eigenvalues_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: EigenRangeOption) -> (work_size: int, iwork_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
@@ -382,8 +362,8 @@ query_workspace_compute_symmetric_eigenvalues_mrrr :: proc($T: typeid, n: int, j
 	abstol: T
 	m: Blas_Int
 	ldz := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -411,9 +391,6 @@ query_workspace_compute_symmetric_eigenvalues_mrrr :: proc($T: typeid, n: int, j
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -442,9 +419,6 @@ query_workspace_compute_symmetric_eigenvalues_mrrr :: proc($T: typeid, n: int, j
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -473,18 +447,18 @@ m_compute_symmetric_eigenvalues_mrrr :: proc(
 	m: int,
 	info: Info,
 	ok: bool, // Number of eigenvalues found
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) > 0, "Workspace required")
 	assert(len(iwork) > 0, "Integer workspace required")
 
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	// Range parameters
 	vl_val := vl
@@ -497,14 +471,14 @@ m_compute_symmetric_eigenvalues_mrrr :: proc(
 	// Eigenvector setup
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	// Support array check
-	if jobz == .VALUES_VECTORS && isuppz != nil {
+	if jobz == .VALUES_AND_VECTORS && isuppz != nil {
 		max_m := range == .ALL ? n : (range == .INDEX ? iu - il + 1 : n)
 		assert(len(isuppz) >= 2 * max(1, max_m), "Support array too small")
 	}
@@ -535,9 +509,6 @@ m_compute_symmetric_eigenvalues_mrrr :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsyevr_(
@@ -562,22 +533,18 @@ m_compute_symmetric_eigenvalues_mrrr :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }
 
 // Query workspace for 2-stage symmetric eigenvalue computation (MRRR)
-query_workspace_compute_symmetric_eigenvalues_mrrr_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption, range: EigenRangeOption) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 {
+query_workspace_compute_symmetric_eigenvalues_mrrr_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption, range: EigenRangeOption) -> (work_size: int, iwork_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
@@ -588,8 +555,8 @@ query_workspace_compute_symmetric_eigenvalues_mrrr_2stage :: proc($T: typeid, n:
 	abstol: T
 	m: Blas_Int
 	ldz := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -617,9 +584,6 @@ query_workspace_compute_symmetric_eigenvalues_mrrr_2stage :: proc($T: typeid, n:
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -648,9 +612,6 @@ query_workspace_compute_symmetric_eigenvalues_mrrr_2stage :: proc($T: typeid, n:
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -679,18 +640,18 @@ m_compute_symmetric_eigenvalues_mrrr_2stage :: proc(
 	m: int,
 	info: Info,
 	ok: bool, // Number of eigenvalues found
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) > 0, "Workspace required")
 	assert(len(iwork) > 0, "Integer workspace required")
 
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	// Range parameters
 	vl_val := vl
@@ -703,14 +664,14 @@ m_compute_symmetric_eigenvalues_mrrr_2stage :: proc(
 	// Eigenvector setup
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	// Support array check
-	if jobz == .VALUES_VECTORS && isuppz != nil {
+	if jobz == .VALUES_AND_VECTORS && isuppz != nil {
 		max_m := range == .ALL ? n : (range == .INDEX ? iu - il + 1 : n)
 		assert(len(isuppz) >= 2 * max(1, max_m), "Support array too small")
 	}
@@ -741,9 +702,6 @@ m_compute_symmetric_eigenvalues_mrrr_2stage :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsyevr_2stage_(
@@ -768,13 +726,9 @@ m_compute_symmetric_eigenvalues_mrrr_2stage :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }

@@ -104,8 +104,8 @@ solve_reduce_banded_generalized_f32_c64 :: proc(
 		assert(len(rwork) > 0, "Real work array required for complex types")
 	}
 
-	vect_cstring := vector_option_to_cstring(vect)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	n := n
 	ka := ka
@@ -122,9 +122,9 @@ solve_reduce_banded_generalized_f32_c64 :: proc(
 	}
 
 	when T == f32 {
-		lapack.ssbgst_(vect_cstring, uplo_cstring, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), &info, 1, 1)
+		lapack.ssbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.chbgst_(vect_cstring, uplo_cstring, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info, 1, 1)
+		lapack.chbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info)
 	}
 
 	return info, info == 0
@@ -157,8 +157,8 @@ solve_reduce_banded_generalized_f64_c128 :: proc(
 		assert(len(rwork) > 0, "Real work array required for complex types")
 	}
 
-	vect_cstring := vector_option_to_cstring(vect)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	n := n
 	ka := ka
@@ -175,9 +175,9 @@ solve_reduce_banded_generalized_f64_c128 :: proc(
 	}
 
 	when T == f64 {
-		lapack.dsbgst_(vect_cstring, uplo_cstring, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), &info, 1, 1)
+		lapack.dsbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zhbgst_(vect_cstring, uplo_cstring, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info, 1, 1)
+		lapack.zhbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info)
 	}
 
 	return info, info == 0
@@ -196,21 +196,10 @@ query_result_sizes_banded_generalized :: proc(
 	z_rows: int,
 	z_cols: int, // Eigenvalues array// Eigenvector matrix rows// Eigenvector matrix cols
 ) {
-	if jobz == .VALUES_VECTORS {
+	if jobz == .VALUES_AND_VECTORS {
 		return n, n, n // n eigenvalues, n×n eigenvector matrix
 	}
 	return n, 0, 0 // Only n eigenvalues
-}
-
-// Banded generalized eigenvalue result
-BandedGeneralizedEigenResult :: struct($T: typeid) {
-	eigenvalues:            []T, // Computed eigenvalues (sorted)
-	eigenvectors:           Matrix(T), // Eigenvector matrix (if requested)
-	b_is_positive_definite: bool, // True if B was successfully factored
-	all_positive:           bool, // True if all eigenvalues > 0
-	min_eigenvalue:         T, // Smallest eigenvalue
-	max_eigenvalue:         T, // Largest eigenvalue
-	condition_number:       T, // max|λ|/min|λ|
 }
 
 // Query workspace requirements for banded generalized solver
@@ -230,8 +219,8 @@ solve_banded_generalized :: proc(jobz: EigenJobOption, uplo: MatrixRegion, n: in
 	assert(len(w) >= n, "Eigenvalue array too small")
 	assert(len(work) >= 3 * n, "Work array too small")
 
-	jobz_cstring := eigen_job_to_cstring(jobz)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	n_int: Blas_Int = n
 	ka_int: Blas_Int = ka
@@ -241,16 +230,16 @@ solve_banded_generalized :: proc(jobz: EigenJobOption, uplo: MatrixRegion, n: in
 	ldz: Blas_Int = 1
 	z_ptr: ^T = nil
 
-	if jobz == .VALUES_VECTORS && z != nil {
+	if jobz == .VALUES_AND_VECTORS && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Eigenvector matrix too small")
 		ldz = z.ld
 		z_ptr = raw_data(z.data)
 	}
 
 	when T == f32 {
-		lapack.ssbgv_(jobz_cstring, uplo_cstring, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info, 1, 1)
+		lapack.ssbgv_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsbgv_(jobz_cstring, uplo_cstring, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info, 1, 1)
+		lapack.dsbgv_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
 	}
 
 	return info, info == 0 || info > n_int
@@ -269,7 +258,7 @@ query_result_sizes_banded_generalized_dc :: proc(
 	z_rows: int,
 	z_cols: int, // Eigenvalues array// Eigenvector matrix rows// Eigenvector matrix cols
 ) {
-	if jobz == .VALUES_VECTORS {
+	if jobz == .VALUES_AND_VECTORS {
 		return n, n, n // n eigenvalues, n×n eigenvector matrix
 	}
 	return n, 0, 0 // Only n eigenvalues
@@ -291,8 +280,8 @@ query_workspace_banded_generalized_dc :: proc(
 	iwork: Blas_Int,
 ) where is_float(T) ||
 	is_complex(T) {
-	jobz_cstring := eigen_job_to_cstring(jobz)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	n_int: Blas_Int = n
 	ka_int: Blas_Int = ka
@@ -309,14 +298,14 @@ query_workspace_banded_generalized_dc :: proc(
 		work_query: f32
 		iwork_query: Blas_Int
 
-		lapack.ssbgvd_(jobz_cstring, uplo_cstring, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info, 1, 1)
+		lapack.ssbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
 
 		return Blas_Int(work_query), 0, iwork_query
 	} else when T == f64 {
 		work_query: f64
 		iwork_query: Blas_Int
 
-		lapack.dsbgvd_(jobz_cstring, uplo_cstring, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info, 1, 1)
+		lapack.dsbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
 
 		return Blas_Int(work_query), 0, iwork_query
 	} else when T == complex64 {
@@ -324,29 +313,7 @@ query_workspace_banded_generalized_dc :: proc(
 		rwork_query: f32
 		iwork_query: Blas_Int
 
-		lapack.chbgvd_(
-			jobz_cstring,
-			uplo_cstring,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			raw_data(ab.data),
-			&ldab,
-			raw_data(bb.data),
-			&ldbb,
-			nil,
-			nil,
-			&ldz,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.chbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, nil, nil, &ldz, &work_query, &lwork, &rwork_query, &lrwork, &iwork_query, &liwork, &info)
 
 		return Blas_Int(real(work_query)), Blas_Int(rwork_query), iwork_query
 	} else when T == complex128 {
@@ -354,29 +321,7 @@ query_workspace_banded_generalized_dc :: proc(
 		rwork_query: f64
 		iwork_query: Blas_Int
 
-		lapack.zhbgvd_(
-			jobz_cstring,
-			uplo_cstring,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			raw_data(ab.data),
-			&ldab,
-			raw_data(bb.data),
-			&ldbb,
-			nil,
-			nil,
-			&ldz,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.zhbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, nil, nil, &ldz, &work_query, &lwork, &rwork_query, &lrwork, &iwork_query, &liwork, &info)
 
 		return Blas_Int(real(work_query)), Blas_Int(rwork_query), iwork_query
 	}
@@ -393,7 +338,7 @@ solve_banded_generalized_dc_f32_c64 :: proc(
 	ab: ^Matrix($T),
 	bb: ^Matrix(T),
 	w: []f32, // Pre-allocated eigenvalues (size n)
-	z: ^Matrix(T), // Pre-allocated eigenvectors (n x n if jobz == VALUES_VECTORS)
+	z: ^Matrix(T), // Pre-allocated eigenvectors (n x n if jobz == VALUES_AND_VECTORS)
 	work: []T, // Pre-allocated workspace
 	rwork: []f32 = nil, // Pre-allocated real workspace (complex only)
 	iwork: []Blas_Int, // Pre-allocated integer workspace
@@ -408,8 +353,8 @@ solve_banded_generalized_dc_f32_c64 :: proc(
 		assert(len(rwork) > 0, "Real work array required for complex types")
 	}
 
-	jobz_cstring := eigen_job_to_cstring(jobz)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	n_int: Blas_Int = n
 	ka_int: Blas_Int = ka
@@ -419,7 +364,7 @@ solve_banded_generalized_dc_f32_c64 :: proc(
 	ldz: Blas_Int = 1
 	z_ptr: ^T = nil
 
-	if jobz == .VALUES_VECTORS && z != nil {
+	if jobz == .VALUES_AND_VECTORS && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Eigenvector matrix too small")
 		ldz = z.ld
 		z_ptr = raw_data(z.data)
@@ -429,12 +374,12 @@ solve_banded_generalized_dc_f32_c64 :: proc(
 	liwork := Blas_Int(len(iwork))
 
 	when T == f32 {
-		lapack.ssbgvd_(jobz_cstring, uplo_cstring, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.ssbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == complex64 {
 		lrwork := Blas_Int(len(rwork))
 		lapack.chbgvd_(
-			jobz_cstring,
-			uplo_cstring,
+			&jobz_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -452,8 +397,6 @@ solve_banded_generalized_dc_f32_c64 :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -471,7 +414,7 @@ solve_banded_generalized_dc_f64_c128 :: proc(
 	ab: ^Matrix($T),
 	bb: ^Matrix(T),
 	w: []f64, // Pre-allocated eigenvalues (size n)
-	z: ^Matrix(T), // Pre-allocated eigenvectors (n x n if jobz == VALUES_VECTORS)
+	z: ^Matrix(T), // Pre-allocated eigenvectors (n x n if jobz == VALUES_AND_VECTORS)
 	work: []T, // Pre-allocated workspace
 	rwork: []f64 = nil, // Pre-allocated real workspace (complex only)
 	iwork: []Blas_Int, // Pre-allocated integer workspace
@@ -486,8 +429,8 @@ solve_banded_generalized_dc_f64_c128 :: proc(
 		assert(len(rwork) > 0, "Real work array required for complex types")
 	}
 
-	jobz_cstring := eigen_job_to_cstring(jobz)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	n_int: Blas_Int = n
 	ka_int: Blas_Int = ka
@@ -497,7 +440,7 @@ solve_banded_generalized_dc_f64_c128 :: proc(
 	ldz: Blas_Int = 1
 	z_ptr: ^T = nil
 
-	if jobz == .VALUES_VECTORS && z != nil {
+	if jobz == .VALUES_AND_VECTORS && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Eigenvector matrix too small")
 		ldz = z.ld
 		z_ptr = raw_data(z.data)
@@ -507,12 +450,12 @@ solve_banded_generalized_dc_f64_c128 :: proc(
 	liwork := Blas_Int(len(iwork))
 
 	when T == f64 {
-		lapack.dsbgvd_(jobz_cstring, uplo_cstring, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.dsbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(ab.data), &ldab, raw_data(bb.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == complex128 {
 		lrwork := Blas_Int(len(rwork))
 		lapack.zhbgvd_(
-			jobz_cstring,
-			uplo_cstring,
+			&jobz_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -530,8 +473,6 @@ solve_banded_generalized_dc_f64_c128 :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -563,19 +504,10 @@ query_result_sizes_banded_generalized_selective :: proc(
 		max_eigenvectors = iu - il + 1
 	}
 
-	if jobz == .VALUES_VECTORS {
+	if jobz == .VALUES_AND_VECTORS {
 		return n, n, n, n, max_eigenvectors, n
 	}
 	return n, n, n, 0, 0, n
-}
-
-// Selective banded generalized eigenvalue result
-SelectiveBandedGeneralizedResult :: struct($T: typeid) {
-	eigenvalues:            []T,
-	eigenvectors:           Matrix(T),
-	num_found:              int,
-	failed_indices:         []Blas_Int,
-	b_is_positive_definite: bool,
 }
 
 // Query workspace requirements for selective banded generalized solver
@@ -615,9 +547,9 @@ solve_banded_generalized_selective :: proc(
 	assert(len(iwork) >= 5 * n, "Integer work array too small")
 	assert(len(ifail) >= n, "Failure array too small")
 
-	jobz_cstring := eigen_job_to_cstring(jobz)
-	range_cstring := eigen_range_to_cstring(range)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
 
 	n_int: Blas_Int = n
 	ka_int: Blas_Int = ka
@@ -641,7 +573,7 @@ solve_banded_generalized_selective :: proc(
 
 	ldz := Blas_Int(1)
 	z_ptr: ^T = nil
-	if jobz == .VALUES_VECTORS && z != nil {
+	if jobz == .VALUES_AND_VECTORS && z != nil {
 		max_eigenvectors := n
 		if range == .INDEX {
 			max_eigenvectors = iu - il + 1
@@ -655,9 +587,9 @@ solve_banded_generalized_selective :: proc(
 
 	when T == f32 {
 		lapack.ssbgvx_(
-			jobz_cstring,
-			range_cstring,
-			uplo_cstring,
+			&jobz_c,
+			&range_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -680,15 +612,12 @@ solve_banded_generalized_selective :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsbgvx_(
-			jobz_cstring,
-			range_cstring,
-			uplo_cstring,
+			&jobz_c,
+			&range_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -711,9 +640,6 @@ solve_banded_generalized_selective :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
@@ -766,8 +692,8 @@ solve_band_to_tridiagonal :: proc(
 	assert(n == 0 || len(e) >= n - 1, "Off-diagonal array too small")
 	assert(len(work) >= n, "Work array too small")
 
-	vect_cstring := vector_option_to_cstring(vect)
-	uplo_cstring := matrix_region_to_cstring(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	n_int: Blas_Int = n
 	kd_int: Blas_Int = kd
@@ -782,9 +708,9 @@ solve_band_to_tridiagonal :: proc(
 	}
 
 	when T == f32 {
-		lapack.ssbtrd_(vect_cstring, uplo_cstring, &n_int, &kd_int, raw_data(ab.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info, 1, 1)
+		lapack.ssbtrd_(&vect_c, &uplo_c, &n_int, &kd_int, raw_data(ab.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsbtrd_(vect_cstring, uplo_cstring, &n_int, &kd_int, raw_data(ab.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info, 1, 1)
+		lapack.dsbtrd_(&vect_c, &uplo_c, &n_int, &kd_int, raw_data(ab.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -818,9 +744,9 @@ solve_sym_rank_k :: proc(
 	assert(n >= 0 && k >= 0, "Dimensions must be non-negative")
 	assert(len(c) >= n * (n + 1) / 2, "RFP array too small")
 
-	transr_cstring := rfp_transpose_to_cstring(transr)
-	uplo_cstring := matrix_region_to_cstring(uplo)
-	trans_cstring := transpose_to_cstring(trans)
+	transr_c := cast(u8)transr
+	uplo_c := cast(u8)uplo
+	trans_c := cast(u8)trans
 
 	n_int: Blas_Int = n
 	k_int: Blas_Int = k
@@ -829,9 +755,9 @@ solve_sym_rank_k :: proc(
 	lda := a.ld
 
 	when T == f32 {
-		lapack.ssfrk_(transr_cstring, uplo_cstring, trans_cstring, &n_int, &k_int, &alpha_val, raw_data(a.data), &lda, &beta_val, raw_data(c), 1, 1, 1)
+		lapack.ssfrk_(&transr_c, &uplo_c, &trans_c, &n_int, &k_int, &alpha_val, raw_data(a.data), &lda, &beta_val, raw_data(c))
 	} else when T == f64 {
-		lapack.dsfrk_(transr_cstring, uplo_cstring, trans_cstring, &n_int, &k_int, &alpha_val, raw_data(a.data), &lda, &beta_val, raw_data(c), 1, 1, 1)
+		lapack.dsfrk_(&transr_c, &uplo_c, &trans_c, &n_int, &k_int, &alpha_val, raw_data(a.data), &lda, &beta_val, raw_data(c))
 	}
 	// dsfrk/ssfrk don't have info parameter
 }
@@ -882,8 +808,8 @@ reduce_banded_generalized_hermitian_real :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	vect_c := vector_option_to_cstring(vect)
-	uplo_c := matrix_region_to_cstring(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	ldx := Blas_Int(1)
 	x_ptr: ^T = nil
@@ -894,9 +820,9 @@ reduce_banded_generalized_hermitian_real :: proc(
 	}
 
 	when T == f32 {
-		lapack.ssbgst_(vect_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), &info, len(vect_c), len(uplo_c))
+		lapack.ssbgst_(&vect_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsbgst_(vect_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), &info, len(vect_c), len(uplo_c))
+		lapack.dsbgst_(&vect_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -929,8 +855,8 @@ reduce_banded_generalized_hermitian_c64 :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	vect_c := vector_option_to_cstring(vect)
-	uplo_c := matrix_region_to_cstring(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	ldx := Blas_Int(1)
 	x_ptr: ^complex64 = nil
@@ -940,7 +866,7 @@ reduce_banded_generalized_hermitian_c64 :: proc(
 		x_ptr = raw_data(X.data)
 	}
 
-	lapack.chbgst_(vect_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info, len(vect_c), len(uplo_c))
+	lapack.chbgst_(&vect_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }
@@ -972,8 +898,8 @@ reduce_banded_generalized_hermitian_c128 :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	vect_c := vector_option_to_cstring(vect)
-	uplo_c := matrix_region_to_cstring(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	ldx := Blas_Int(1)
 	x_ptr: ^complex128 = nil
@@ -983,7 +909,7 @@ reduce_banded_generalized_hermitian_c128 :: proc(
 		x_ptr = raw_data(X.data)
 	}
 
-	lapack.zhbgst_(vect_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info, len(vect_c), len(uplo_c))
+	lapack.zhbgst_(&vect_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }
@@ -1044,8 +970,8 @@ eigen_banded_generalized_hermitian_real :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	ldz := Blas_Int(1)
 	z_ptr: ^T = nil
@@ -1056,9 +982,9 @@ eigen_banded_generalized_hermitian_real :: proc(
 	}
 
 	when T == f32 {
-		lapack.ssbgv_(jobz_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info, len(jobz_c), len(uplo_c))
+		lapack.ssbgv_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsbgv_(jobz_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info, len(jobz_c), len(uplo_c))
+		lapack.dsbgv_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -1093,8 +1019,8 @@ eigen_banded_generalized_hermitian_c64 :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	ldz := Blas_Int(1)
 	z_ptr: ^complex64 = nil
@@ -1104,7 +1030,7 @@ eigen_banded_generalized_hermitian_c64 :: proc(
 		z_ptr = raw_data(Z.data)
 	}
 
-	lapack.chbgv_(jobz_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info, len(jobz_c), len(uplo_c))
+	lapack.chbgv_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }
@@ -1138,8 +1064,8 @@ eigen_banded_generalized_hermitian_c128 :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	ldz := Blas_Int(1)
 	z_ptr: ^complex128 = nil
@@ -1149,7 +1075,7 @@ eigen_banded_generalized_hermitian_c128 :: proc(
 		z_ptr = raw_data(Z.data)
 	}
 
-	lapack.zhbgv_(jobz_c, uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info, len(jobz_c), len(uplo_c))
+	lapack.zhbgv_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
 
 	return info, info == 0
 }
@@ -1173,8 +1099,8 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 ) where is_float(T) ||
 	is_complex(T) {
 	// Query LAPACK for optimal workspace sizes
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	ka_int := Blas_Int(ka)
 	kb_int := Blas_Int(kb)
@@ -1190,8 +1116,8 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 		iwork_query: Blas_Int
 
 		lapack.ssbgvd_(
-			jobz_c,
-			uplo_c,
+			&jobz_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -1207,8 +1133,6 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			len(jobz_c),
-			len(uplo_c),
 		)
 
 		work_size = int(work_query)
@@ -1218,8 +1142,8 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 		iwork_query: Blas_Int
 
 		lapack.dsbgvd_(
-			jobz_c,
-			uplo_c,
+			&jobz_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -1235,8 +1159,6 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			len(jobz_c),
-			len(uplo_c),
 		)
 
 		work_size = int(work_query)
@@ -1248,8 +1170,8 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 		lrwork := QUERY_WORKSPACE
 
 		lapack.chbgvd_(
-			jobz_c,
-			uplo_c,
+			&jobz_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -1267,8 +1189,6 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			len(jobz_c),
-			len(uplo_c),
 		)
 
 		work_size = int(real(work_query))
@@ -1281,8 +1201,8 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 		lrwork := QUERY_WORKSPACE
 
 		lapack.zhbgvd_(
-			jobz_c,
-			uplo_c,
+			&jobz_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -1300,8 +1220,6 @@ query_workspace_eigen_banded_generalized_hermitian_dc :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			len(jobz_c),
-			len(uplo_c),
 		)
 
 		work_size = int(real(work_query))
@@ -1339,8 +1257,8 @@ eigen_banded_generalized_hermitian_dc_real :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	ldz := Blas_Int(1)
 	z_ptr: ^T = nil
@@ -1354,49 +1272,9 @@ eigen_banded_generalized_hermitian_dc_real :: proc(
 	liwork := Blas_Int(len(iwork))
 
 	when T == f32 {
-		lapack.ssbgvd_(
-			jobz_c,
-			uplo_c,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(BB.data),
-			&ldbb,
-			raw_data(w),
-			z_ptr,
-			&ldz,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&liwork,
-			&info,
-			len(jobz_c),
-			len(uplo_c),
-		)
+		lapack.ssbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == f64 {
-		lapack.dsbgvd_(
-			jobz_c,
-			uplo_c,
-			&n_int,
-			&ka_int,
-			&kb_int,
-			raw_data(AB.data),
-			&ldab,
-			raw_data(BB.data),
-			&ldbb,
-			raw_data(w),
-			z_ptr,
-			&ldz,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&liwork,
-			&info,
-			len(jobz_c),
-			len(uplo_c),
-		)
+		lapack.dsbgvd_(&jobz_c, &uplo_c, &n_int, &ka_int, &kb_int, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	}
 
 	return info, info == 0
@@ -1430,8 +1308,8 @@ eigen_banded_generalized_hermitian_dc_c64 :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	ldz := Blas_Int(1)
 	z_ptr: ^complex64 = nil
@@ -1446,8 +1324,8 @@ eigen_banded_generalized_hermitian_dc_c64 :: proc(
 	liwork := Blas_Int(len(iwork))
 
 	lapack.chbgvd_(
-		jobz_c,
-		uplo_c,
+		&jobz_c,
+		&uplo_c,
 		&n_int,
 		&ka_int,
 		&kb_int,
@@ -1465,8 +1343,6 @@ eigen_banded_generalized_hermitian_dc_c64 :: proc(
 		raw_data(iwork),
 		&liwork,
 		&info,
-		len(jobz_c),
-		len(uplo_c),
 	)
 
 	return info, info == 0
@@ -1500,8 +1376,8 @@ eigen_banded_generalized_hermitian_dc_c128 :: proc(
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
 
-	jobz_c := vector_option_to_cstring(jobz)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 
 	ldz := Blas_Int(1)
 	z_ptr: ^complex128 = nil
@@ -1516,8 +1392,8 @@ eigen_banded_generalized_hermitian_dc_c128 :: proc(
 	liwork := Blas_Int(len(iwork))
 
 	lapack.zhbgvd_(
-		jobz_c,
-		uplo_c,
+		&jobz_c,
+		&uplo_c,
 		&n_int,
 		&ka_int,
 		&kb_int,
@@ -1535,8 +1411,6 @@ eigen_banded_generalized_hermitian_dc_c128 :: proc(
 		raw_data(iwork),
 		&liwork,
 		&info,
-		len(jobz_c),
-		len(uplo_c),
 	)
 
 	return info, info == 0
@@ -1630,11 +1504,11 @@ eigen_banded_generalized_hermitian_expert_real :: proc(
 	kb_int := Blas_Int(kb)
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
-	ldq := Blas_Int(Q.ld)
+	ldq := Q.ld
 
-	jobz_c := vector_option_to_cstring(jobz)
-	range_c := eigen_range_to_cstring(range_type)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	r := cast(u8)range_type
+	uplo_c := cast(u8)uplo
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu if iu > 0 else n)
@@ -1653,9 +1527,9 @@ eigen_banded_generalized_hermitian_expert_real :: proc(
 
 	when T == f32 {
 		lapack.ssbgvx_(
-			jobz_c,
-			range_c,
-			uplo_c,
+			&jobz_c,
+			&range_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -1678,15 +1552,12 @@ eigen_banded_generalized_hermitian_expert_real :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			len(jobz_c),
-			len(range_c),
-			len(uplo_c),
 		)
 	} else when T == f64 {
 		lapack.dsbgvx_(
-			jobz_c,
-			range_c,
-			uplo_c,
+			&jobz_c,
+			&range_c,
+			&uplo_c,
 			&n_int,
 			&ka_int,
 			&kb_int,
@@ -1709,9 +1580,6 @@ eigen_banded_generalized_hermitian_expert_real :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			len(jobz_c),
-			len(range_c),
-			len(uplo_c),
 		)
 	}
 
@@ -1760,11 +1628,11 @@ eigen_banded_generalized_hermitian_expert_c64 :: proc(
 	kb_int := Blas_Int(kb)
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
-	ldq := Blas_Int(Q.ld)
+	ldq := Q.ld
 
-	jobz_c := vector_option_to_cstring(jobz)
-	range_c := eigen_range_to_cstring(range_type)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range_type
+	uplo_c := cast(u8)uplo
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu if iu > 0 else n)
@@ -1782,9 +1650,9 @@ eigen_banded_generalized_hermitian_expert_c64 :: proc(
 	m_int := Blas_Int(0)
 
 	lapack.chbgvx_(
-		jobz_c,
-		range_c,
-		uplo_c,
+		&jobz_c,
+		&range_c,
+		&uplo_c,
 		&n_int,
 		&ka_int,
 		&kb_int,
@@ -1808,9 +1676,6 @@ eigen_banded_generalized_hermitian_expert_c64 :: proc(
 		raw_data(iwork),
 		raw_data(ifail),
 		&info,
-		len(jobz_c),
-		len(range_c),
-		len(uplo_c),
 	)
 
 	m^ = int(m_int)
@@ -1858,11 +1723,11 @@ eigen_banded_generalized_hermitian_expert_c128 :: proc(
 	kb_int := Blas_Int(kb)
 	ldab := AB.storage.banded.ldab
 	ldbb := BB.storage.banded.ldab
-	ldq := Blas_Int(Q.ld)
+	ldq := Q.ld
 
-	jobz_c := vector_option_to_cstring(jobz)
-	range_c := eigen_range_to_cstring(range_type)
-	uplo_c := matrix_region_to_cstring(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range_type
+	uplo_c := cast(u8)uplo
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu if iu > 0 else n)
@@ -1880,9 +1745,9 @@ eigen_banded_generalized_hermitian_expert_c128 :: proc(
 	m_int := Blas_Int(0)
 
 	lapack.zhbgvx_(
-		jobz_c,
-		range_c,
-		uplo_c,
+		&jobz_c,
+		&range_c,
+		&uplo_c,
 		&n_int,
 		&ka_int,
 		&kb_int,
@@ -1906,9 +1771,6 @@ eigen_banded_generalized_hermitian_expert_c128 :: proc(
 		raw_data(iwork),
 		raw_data(ifail),
 		&info,
-		len(jobz_c),
-		len(range_c),
-		len(uplo_c),
 	)
 
 	m^ = int(m_int)

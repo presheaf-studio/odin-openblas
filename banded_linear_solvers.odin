@@ -62,7 +62,7 @@ solve_banded_pd :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n := Blas_Int(n)
 	kd := Blas_Int(kd)
 	nrhs := Blas_Int(nrhs)
@@ -70,13 +70,13 @@ solve_banded_pd :: proc(
 	ldb := B.ld
 
 	when T == f32 {
-		lapack.spbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.spbsv_(&uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
-		lapack.dpbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.dpbsv_(&uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info)
 	} else when T == complex64 {
-		lapack.cpbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.cpbsv_(&uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
-		lapack.zpbsv_(uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.zpbsv_(&uplo_c, &n, &kd, &nrhs, raw_data(AB.data), &ldab, raw_data(B.data), &ldb, &info)
 	}
 
 	return info, info == 0
@@ -119,7 +119,7 @@ solve_banded_pd_expert_f32_c64 :: proc(
 	nrhs: int,
 	AB: ^Matrix($T), // Banded matrix (input/output)
 	AFB: ^Matrix(T), // Factored matrix (input/output)
-	equed: ^byte, // Equilibration state (input/output)
+	equed: ^EquilibrationRequest, // Equilibration state (input/output)
 	S: []f32, // Scaling factors (input/output)
 	B: ^Matrix(T), // Right-hand side (input/output)
 	X: ^Matrix(T), // Solution matrix (output)
@@ -146,8 +146,8 @@ solve_banded_pd_expert_f32_c64 :: proc(
 	}
 
 	// Prepare parameters
-	fact_c := _factorization_to_char(fact)
-	uplo_c := matrix_region_to_cstring(uplo)
+	fact_c := cast(u8)fact
+	uplo_c := cast(u8)uplo
 	n := Blas_Int(n)
 	kd := Blas_Int(kd)
 	nrhs := Blas_Int(nrhs)
@@ -158,8 +158,8 @@ solve_banded_pd_expert_f32_c64 :: proc(
 
 	when T == f32 {
 		lapack.spbsvx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&kd,
 			&nrhs,
@@ -179,14 +179,11 @@ solve_banded_pd_expert_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			1,
 		)
 	} else when T == complex64 {
 		lapack.cpbsvx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&kd,
 			&nrhs,
@@ -206,9 +203,6 @@ solve_banded_pd_expert_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			1,
 		)
 	}
 
@@ -225,7 +219,7 @@ solve_banded_pd_expert_f64_c128 :: proc(
 	nrhs: int,
 	AB: ^Matrix($T), // Banded matrix (input/output)
 	AFB: ^Matrix(T), // Factored matrix (input/output)
-	equed: ^byte, // Equilibration state (input/output)
+	equed: ^EquilibrationRequest, // Equilibration state (input/output)
 	S: []f64, // Scaling factors (input/output)
 	B: ^Matrix(T), // Right-hand side (input/output)
 	X: ^Matrix(T), // Solution matrix (output)
@@ -252,8 +246,8 @@ solve_banded_pd_expert_f64_c128 :: proc(
 	}
 
 	// Prepare parameters
-	fact_c := _factorization_to_char(fact)
-	uplo_c := matrix_region_to_cstring(uplo)
+	fact_c := cast(u8)fact
+	uplo_c := cast(u8)uplo
 	n := Blas_Int(n)
 	kd := Blas_Int(kd)
 	nrhs := Blas_Int(nrhs)
@@ -264,8 +258,8 @@ solve_banded_pd_expert_f64_c128 :: proc(
 
 	when T == f64 {
 		lapack.dpbsvx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&kd,
 			&nrhs,
@@ -285,14 +279,11 @@ solve_banded_pd_expert_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			1,
 		)
 	} else when T == complex128 {
 		lapack.zpbsvx_(
-			fact_c,
-			uplo_c,
+			&fact_c,
+			&uplo_c,
 			&n,
 			&kd,
 			&nrhs,
@@ -312,9 +303,6 @@ solve_banded_pd_expert_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(fact_c),
-			len(uplo_c),
-			1,
 		)
 	}
 
@@ -436,12 +424,12 @@ solve_banded_factored_real :: proc(
 	ldab := AB.ld
 	ldb := B.ld
 
-	trans_str := transpose_mode_to_cstring(trans)
+	trans_str := cast(u8)trans
 
 	when T == f32 {
-		lapack.sgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
+		lapack.sgbtrs_(&trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
-		lapack.dgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
+		lapack.dgbtrs_(&trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	}
 
 	return info, info == 0
@@ -466,9 +454,9 @@ solve_banded_factored_c64 :: proc(
 	ldab := AB.ld
 	ldb := B.ld
 
-	trans_str := transpose_mode_to_cstring(trans)
+	trans_str := cast(u8)trans
 
-	lapack.cgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
+	lapack.cgbtrs_(&trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 
 	return info, info == 0
 }
@@ -492,9 +480,9 @@ solve_banded_factored_c128 :: proc(
 	ldab := AB.ld
 	ldb := B.ld
 
-	trans_str := transpose_mode_to_cstring(trans)
+	trans_str := cast(u8)trans
 
-	lapack.zgbtrs_(trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info, 1)
+	lapack.zgbtrs_(&trans_str, &n, &kl, &ku, &nrhs, raw_data(AB.data), &ldab, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 
 	return info, info == 0
 }
@@ -674,11 +662,9 @@ solve_banded_expert_real :: proc(
 	assert(len(work) >= 3 * int(n), "Work array too small")
 	assert(len(iwork) >= int(n), "Integer work array too small")
 
-	fact_c := _factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(trans)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)trans
 
-	// Convert equilibration enum to byte for LAPACK
-	equed_byte := equilibration_request_to_char(equed^)
 
 	when T == f32 {
 		lapack.sgbsvx_(
@@ -693,7 +679,7 @@ solve_banded_expert_real :: proc(
 			raw_data(AFB.data),
 			&ldafb,
 			raw_data(ipiv),
-			&equed_byte,
+			equed,
 			raw_data(R),
 			raw_data(C),
 			raw_data(B.data),
@@ -706,9 +692,6 @@ solve_banded_expert_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	} else when T == f64 {
 		lapack.dgbsvx_(
@@ -723,7 +706,7 @@ solve_banded_expert_real :: proc(
 			raw_data(AFB.data),
 			&ldafb,
 			raw_data(ipiv),
-			&equed_byte,
+			equed,
 			raw_data(R),
 			raw_data(C),
 			raw_data(B.data),
@@ -736,14 +719,8 @@ solve_banded_expert_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	}
-
-	// Convert byte back to equilibration enum
-	equed^ = equilibration_request_from_char(equed_byte)
 
 	return info, info == 0
 }
@@ -790,15 +767,13 @@ solve_banded_expert_c64 :: proc(
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= int(n), "Real work array too small")
 
-	fact_c := factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(trans)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)trans
 
-	// Convert equilibration enum to byte for LAPACK
-	equed_byte := equilibration_request_to_char(equed^)
 
 	lapack.cgbsvx_(
 		&fact_c,
-		trans_c,
+		&trans_c,
 		&n,
 		&kl,
 		&ku,
@@ -808,7 +783,7 @@ solve_banded_expert_c64 :: proc(
 		raw_data(AFB.data),
 		&ldafb,
 		raw_data(ipiv),
-		&equed_byte,
+		cast(^u8)equed,
 		raw_data(R),
 		raw_data(C),
 		raw_data(B.data),
@@ -821,13 +796,7 @@ solve_banded_expert_c64 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		1,
-		len(trans_c),
-		1,
 	)
-
-	// Convert byte back to equilibration enum
-	equed^ = equilibration_request_from_char(equed_byte)
 
 	return info, info == 0
 }
@@ -874,15 +843,14 @@ solve_banded_expert_c128 :: proc(
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= int(n), "Real work array too small")
 
-	fact_c := factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(trans)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)trans
 
 	// Convert equilibration enum to byte for LAPACK
-	equed_byte := equilibration_request_to_char(equed^)
 
 	lapack.zgbsvx_(
 		&fact_c,
-		trans_c,
+		&trans_c,
 		&n,
 		&kl,
 		&ku,
@@ -892,7 +860,7 @@ solve_banded_expert_c128 :: proc(
 		raw_data(AFB.data),
 		&ldafb,
 		raw_data(ipiv),
-		&equed_byte,
+		cast(^u8)equed,
 		raw_data(R),
 		raw_data(C),
 		raw_data(B.data),
@@ -905,13 +873,7 @@ solve_banded_expert_c128 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		1,
-		len(trans_c),
-		1,
 	)
-
-	// Convert byte back to equilibration enum
-	equed^ = equilibration_request_from_char(equed_byte)
 
 	return info, info == 0
 }
@@ -1004,19 +966,16 @@ solve_banded_expert_extended_real :: proc(
 	assert(len(work) >= 4 * int(n), "Work array too small")
 	assert(len(iwork) >= int(n), "Integer work array too small")
 
-	fact_c := _factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(trans)
-
-	// Convert equilibration enum to byte for LAPACK
-	equed_byte := equilibration_request_to_char(equed^)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)trans
 
 	// Set nparams
 	nparams := Blas_Int(len(params))
 
 	when T == f32 {
 		lapack.sgbsvxx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n,
 			&kl,
 			&ku,
@@ -1026,7 +985,7 @@ solve_banded_expert_extended_real :: proc(
 			raw_data(AFB.data),
 			&ldafb,
 			raw_data(ipiv),
-			&equed_byte,
+			cast(^u8)equed,
 			raw_data(R),
 			raw_data(C),
 			raw_data(B.data),
@@ -1044,14 +1003,11 @@ solve_banded_expert_extended_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	} else when T == f64 {
 		lapack.dgbsvxx_(
-			fact_c,
-			trans_c,
+			&fact_c,
+			&trans_c,
 			&n,
 			&kl,
 			&ku,
@@ -1061,7 +1017,7 @@ solve_banded_expert_extended_real :: proc(
 			raw_data(AFB.data),
 			&ldafb,
 			raw_data(ipiv),
-			&equed_byte,
+			cast(^u8)equed,
 			raw_data(R),
 			raw_data(C),
 			raw_data(B.data),
@@ -1079,14 +1035,8 @@ solve_banded_expert_extended_real :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(fact_c),
-			len(trans_c),
-			1,
 		)
 	}
-
-	// Convert byte back to equilibration enum
-	equed^ = equilibration_request_from_char(equed_byte)
 
 	return info, info == 0
 }
@@ -1140,18 +1090,16 @@ solve_banded_expert_extended_c64 :: proc(
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= 2 * int(n), "Real work array too small")
 
-	fact_c := factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(trans)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)trans
 
-	// Convert equilibration enum to byte for LAPACK
-	equed_byte := equilibration_request_to_char(equed^)
 
 	// Set nparams
 	nparams := Blas_Int(len(params))
 
 	lapack.cgbsvxx_(
 		&fact_c,
-		trans_c,
+		&trans_c,
 		&n,
 		&kl,
 		&ku,
@@ -1161,7 +1109,7 @@ solve_banded_expert_extended_c64 :: proc(
 		raw_data(AFB.data),
 		&ldafb,
 		raw_data(ipiv),
-		&equed_byte,
+		cast(^u8)equed,
 		raw_data(R),
 		raw_data(C),
 		raw_data(B.data),
@@ -1179,13 +1127,7 @@ solve_banded_expert_extended_c64 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		1,
-		len(trans_c),
-		1,
 	)
-
-	// Convert byte back to equilibration enum
-	equed^ = equilibration_request_from_char(equed_byte)
 
 	return info, info == 0
 }
@@ -1239,18 +1181,15 @@ solve_banded_expert_extended_c128 :: proc(
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= 2 * int(n), "Real work array too small")
 
-	fact_c := factorization_to_char(fact)
-	trans_c := transpose_mode_to_cstring(trans)
-
-	// Convert equilibration enum to byte for LAPACK
-	equed_byte := equilibration_request_to_char(equed^)
+	fact_c := cast(u8)fact
+	trans_c := cast(u8)trans
 
 	// Set nparams
 	nparams := Blas_Int(len(params))
 
 	lapack.zgbsvxx_(
 		&fact_c,
-		trans_c,
+		&trans_c,
 		&n,
 		&kl,
 		&ku,
@@ -1260,7 +1199,7 @@ solve_banded_expert_extended_c128 :: proc(
 		raw_data(AFB.data),
 		&ldafb,
 		raw_data(ipiv),
-		&equed_byte,
+		cast(^u8)equed,
 		raw_data(R),
 		raw_data(C),
 		raw_data(B.data),
@@ -1278,13 +1217,7 @@ solve_banded_expert_extended_c128 :: proc(
 		raw_data(work),
 		raw_data(rwork),
 		&info,
-		1,
-		len(trans_c),
-		1,
 	)
-
-	// Convert byte back to equilibration enum
-	equed^ = equilibration_request_from_char(equed_byte)
 
 	return info, info == 0
 }

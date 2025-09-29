@@ -50,9 +50,9 @@ m_solve_tridiagonal_pd_expert_f32_c64 :: proc(
 
 	n_val := Blas_Int(n)
 	nrhs_val := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
-	ldx := Blas_Int(X.ld)
-	fact_c := factorization_to_char(fact)
+	ldb := B.ld
+	ldx := X.ld
+	fact_c := cast(u8)fact
 
 	// If computing factorization, copy D and E to DF and EF
 	if fact == .Equilibrate {
@@ -124,9 +124,9 @@ m_solve_tridiagonal_pd_expert_f64_c128 :: proc(
 
 	n_val := Blas_Int(n)
 	nrhs_val := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
-	ldx := Blas_Int(X.ld)
-	fact_c := factorization_to_char(fact)
+	ldb := B.ld
+	ldx := X.ld
+	fact_c := cast(u8)fact
 
 	// If computing factorization, copy D and E to DF and EF
 	if fact == .Equilibrate {

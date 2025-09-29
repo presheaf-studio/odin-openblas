@@ -21,8 +21,8 @@ m_compute_tridiagonal_extended_mrrr :: proc {
 query_workspace_extended_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int, iwork_size: int) {
 	// Query LAPACK for optimal workspace sizes
 	n_int := Blas_Int(n)
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(.ALL)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)EigenRangeOption.ALL
 
 	// Dummy values for workspace query
 	dummy_d := [1]f64{}
@@ -37,8 +37,8 @@ query_workspace_extended_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption) 
 	tryrac_int: Blas_Int = 1
 	ldz: Blas_Int = 1
 
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -67,8 +67,6 @@ query_workspace_extended_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption) 
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 
 		work_size = int(work_query)
@@ -99,8 +97,6 @@ query_workspace_extended_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption) 
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 
 		work_size = int(work_query)
@@ -131,8 +127,6 @@ query_workspace_extended_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption) 
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 
 		work_size = int(work_query)
@@ -163,8 +157,6 @@ query_workspace_extended_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption) 
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 
 		work_size = int(work_query)
@@ -202,8 +194,8 @@ m_compute_tridiagonal_extended_mrrr_f32_c64 :: proc(
 	assert(len(w) >= n, "Eigenvalue array too small")
 
 	n_int := Blas_Int(n)
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)EigenRangeOption.ALL
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu)
@@ -216,16 +208,16 @@ m_compute_tridiagonal_extended_mrrr_f32_c64 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		max_cols := nzc > 0 ? nzc : n
 		assert(Z.rows >= n && Z.cols >= max_cols, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	// Support array pointer
 	isuppz_ptr: ^Blas_Int = nil
-	if jobz == .VALUES_VECTORS && isuppz != nil {
+	if jobz == .VALUES_AND_VECTORS && isuppz != nil {
 		isuppz_ptr = raw_data(isuppz)
 	}
 
@@ -252,8 +244,6 @@ m_compute_tridiagonal_extended_mrrr_f32_c64 :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex64 {
 		lapack.cstemr_(
@@ -278,8 +268,6 @@ m_compute_tridiagonal_extended_mrrr_f32_c64 :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -316,8 +304,8 @@ m_compute_tridiagonal_extended_mrrr_f64_c128 :: proc(
 	assert(len(w) >= n, "Eigenvalue array too small")
 
 	n_int := Blas_Int(n)
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)EigenRangeOption.ALL
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu)
@@ -330,16 +318,16 @@ m_compute_tridiagonal_extended_mrrr_f64_c128 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		max_cols := nzc > 0 ? nzc : n
 		assert(Z.rows >= n && Z.cols >= max_cols, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	// Support array pointer
 	isuppz_ptr: ^Blas_Int = nil
-	if jobz == .VALUES_VECTORS && isuppz != nil {
+	if jobz == .VALUES_AND_VECTORS && isuppz != nil {
 		isuppz_ptr = raw_data(isuppz)
 	}
 
@@ -366,8 +354,6 @@ m_compute_tridiagonal_extended_mrrr_f64_c128 :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		lapack.zstemr_(
@@ -392,8 +378,6 @@ m_compute_tridiagonal_extended_mrrr_f64_c128 :: proc(
 			raw_data(iwork),
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -437,7 +421,7 @@ m_compute_tridiagonal_qr_f32_c64 :: proc(
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	compz_c := compz_to_char(compz)
+	compz_c := cast(u8)compz
 	n_int := Blas_Int(n)
 
 	// Handle eigenvector matrix
@@ -445,7 +429,7 @@ m_compute_tridiagonal_qr_f32_c64 :: proc(
 	z_ptr: rawptr = nil
 	if compz != .None && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -455,13 +439,12 @@ m_compute_tridiagonal_qr_f32_c64 :: proc(
 	}
 
 	when T == f32 {
-		lapack.ssteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info, 1)
+		lapack.ssteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info)
 	} else when T == complex64 {
-		lapack.csteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info, 1)
+		lapack.csteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Compute QR iteration for f64/c128
@@ -478,7 +461,7 @@ m_compute_tridiagonal_qr_f64_c128 :: proc(
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	compz_c := compz_to_char(compz)
+	compz_c := cast(u8)compz
 	n_int := Blas_Int(n)
 
 	// Handle eigenvector matrix
@@ -486,7 +469,7 @@ m_compute_tridiagonal_qr_f64_c128 :: proc(
 	z_ptr: rawptr = nil
 	if compz != .None && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -496,11 +479,10 @@ m_compute_tridiagonal_qr_f64_c128 :: proc(
 	}
 
 	when T == f64 {
-		lapack.dsteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info, 1)
+		lapack.dsteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info)
 	} else when T == complex128 {
-		lapack.zsteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info, 1)
+		lapack.zsteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work) if work != nil else nil, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }

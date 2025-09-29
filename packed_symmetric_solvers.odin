@@ -24,25 +24,24 @@ m_solve_packed_symmetric_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := b.rows
 	nrhs := b.cols
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(b.ld)
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.sspsv_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.sspsv_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dspsv_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.dspsv_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), b.data, &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Solve packed symmetric system for complex64/complex128
@@ -54,25 +53,24 @@ m_solve_packed_symmetric_c64_c128 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128 {
+) where is_complex(T) {
 	n := b.rows
 	nrhs := b.cols
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(b.ld)
+	ldb := b.ld
 
 	when T == complex64 {
-		lapack.cspsv_(&uplo_c, &n_int, &nrhs_int, cast(^lapack.complex)raw_data(ap), raw_data(ipiv), cast(^lapack.complex)b.data, &ldb, &info, 1)
+		lapack.cspsv_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex128 {
-		lapack.zspsv_(&uplo_c, &n_int, &nrhs_int, cast(^lapack.doublecomplex)raw_data(ap), raw_data(ipiv), cast(^lapack.doublecomplex)b.data, &ldb, &info, 1)
+		lapack.zspsv_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), b.data, &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Procedure group for packed symmetric solver
@@ -86,8 +84,8 @@ m_solve_packed_symmetric :: proc {
 // ============================================================================
 
 // Query workspace for expert packed symmetric solver
-query_workspace_solve_packed_symmetric_expert :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
-	when T == f32 || T == f64 {
+query_workspace_solve_packed_symmetric_expert :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		// Real types: work = 3*n, iwork = n, no rwork
 		work_size = 3 * n
 		iwork_size = n
@@ -118,7 +116,7 @@ m_solve_packed_symmetric_expert_f32_f64 :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := b.rows
 	nrhs := b.cols
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
@@ -130,21 +128,20 @@ m_solve_packed_symmetric_expert_f32_f64 :: proc(
 	assert(len(work) >= 3 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
-	fact_c := factorization_to_char(fact)
-	uplo_c := matrix_region_to_char(uplo)
+	fact_c := cast(u8)fact
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(b.ld)
+	ldb := b.ld
 	ldx := Blas_Int(x.ld)
 
 	when T == f32 {
-		lapack.sspsvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1, 1)
+		lapack.sspsvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dspsvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1, 1)
+		lapack.dspsvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	}
 
-	ok = info == 0
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // Expert solve packed symmetric system for complex64/complex128
@@ -164,8 +161,7 @@ m_solve_packed_symmetric_expert_c64_c128 :: proc(
 	rcond: R,
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	n := b.rows
 	nrhs := b.cols
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
@@ -177,61 +173,20 @@ m_solve_packed_symmetric_expert_c64_c128 :: proc(
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(rwork) >= n, "Real workspace too small")
 
-	fact_c := factorization_to_char(fact)
-	uplo_c := matrix_region_to_char(uplo)
+	fact_c := cast(u8)fact
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(b.ld)
+	ldb := b.ld
 	ldx := Blas_Int(x.ld)
 
 	when T == complex64 {
-		lapack.cspsvx_(
-			&fact_c,
-			&uplo_c,
-			&n_int,
-			&nrhs_int,
-			cast(^lapack.complex)raw_data(ap),
-			cast(^lapack.complex)raw_data(afp),
-			raw_data(ipiv),
-			cast(^lapack.complex)b.data,
-			&ldb,
-			cast(^lapack.complex)x.data,
-			&ldx,
-			&rcond,
-			raw_data(ferr),
-			raw_data(berr),
-			cast(^lapack.complex)raw_data(work),
-			raw_data(rwork),
-			&info,
-			1,
-			1,
-		)
+		lapack.cspsvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	} else when T == complex128 {
-		lapack.zspsvx_(
-			&fact_c,
-			&uplo_c,
-			&n_int,
-			&nrhs_int,
-			cast(^lapack.doublecomplex)raw_data(ap),
-			cast(^lapack.doublecomplex)raw_data(afp),
-			raw_data(ipiv),
-			cast(^lapack.doublecomplex)b.data,
-			&ldb,
-			cast(^lapack.doublecomplex)x.data,
-			&ldx,
-			&rcond,
-			raw_data(ferr),
-			raw_data(berr),
-			cast(^lapack.doublecomplex)raw_data(work),
-			raw_data(rwork),
-			&info,
-			1,
-			1,
-		)
+		lapack.zspsvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(afp), raw_data(ipiv), b.data, &ldb, x.data, &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = info == 0
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // Procedure group for expert packed symmetric solver

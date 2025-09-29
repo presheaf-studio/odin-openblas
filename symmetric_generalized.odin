@@ -11,7 +11,7 @@ import "core:slice"
 // ============================================================================
 
 // Problem type for generalized eigenvalue problems
-GeneralizedProblemType :: enum {
+GeneralizedProblemType :: enum Blas_Int {
 	AX_LBX = 1, // A*x = λ*B*x
 	ABX_LX = 2, // A*B*x = λ*x
 	BAX_LX = 3, // B*A*x = λ*x
@@ -36,19 +36,18 @@ m_reduce_symmetric_generalized :: proc(
 	assert(b.rows >= n && b.cols >= n, "Matrix B too small")
 
 	itype_int := Blas_Int(itype)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.ssygst_(&itype_int, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, &info, 1)
+		lapack.ssygst_(&itype_int, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dsygst_(&itype_int, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, &info, 1)
+		lapack.dsygst_(&itype_int, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 
@@ -60,20 +59,20 @@ m_reduce_symmetric_generalized :: proc(
 query_workspace_solve_symmetric_generalized :: proc($T: typeid, n: int, itype := GeneralizedProblemType.AX_LBX, jobz := EigenJobOption.VALUES_ONLY, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) {
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
 	ldb := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssygv_(&itype_int, &jobz_c, &uplo_c, &n_int, nil, &lda, nil, &ldb, nil, &work_query, &lwork, &info, 1, 1)
+		lapack.ssygv_(&itype_int, &jobz_c, &uplo_c, &n_int, nil, &lda, nil, &ldb, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsygv_(&itype_int, &jobz_c, &uplo_c, &n_int, nil, &lda, nil, &ldb, nil, &work_query, &lwork, &info, 1, 1)
+		lapack.dsygv_(&itype_int, &jobz_c, &uplo_c, &n_int, nil, &lda, nil, &ldb, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	}
 
@@ -101,16 +100,16 @@ m_solve_symmetric_generalized :: proc(
 
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssygv_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.ssygv_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsygv_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.dsygv_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -129,11 +128,11 @@ query_workspace_solve_symmetric_generalized_2stage :: proc(
 ) where is_float(T) {
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
 	ldb := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -151,8 +150,6 @@ query_workspace_solve_symmetric_generalized_2stage :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
@@ -170,8 +167,6 @@ query_workspace_solve_symmetric_generalized_2stage :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	}
@@ -200,16 +195,16 @@ m_solve_symmetric_generalized_2stage :: proc(
 
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssygv_2stage_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.ssygv_2stage_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsygv_2stage_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info, 1, 1)
+		lapack.dsygv_2stage_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -233,12 +228,12 @@ query_workspace_solve_symmetric_generalized_divide_conquer :: proc(
 ) where is_float(T) {
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
 	ldb := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -259,8 +254,6 @@ query_workspace_solve_symmetric_generalized_divide_conquer :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -282,8 +275,6 @@ query_workspace_solve_symmetric_generalized_divide_conquer :: proc(
 			&iwork_query,
 			&liwork,
 			&info,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
@@ -315,17 +306,17 @@ m_solve_symmetric_generalized_divide_conquer :: proc(
 
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	uplo_c := matrix_region_to_char(uplo)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
 
 	when T == f32 {
-		lapack.ssygvd_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.ssygvd_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == f64 {
-		lapack.dsygvd_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info, 1, 1)
+		lapack.dsygvd_(&itype_int, &jobz_c, &uplo_c, &n_int, a.data, &lda, b.data, &ldb, raw_data(w), raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	}
 
 	return info, info == 0
@@ -349,13 +340,13 @@ query_workspace_solve_symmetric_generalized_selective :: proc(
 ) where is_float(T) {
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
 	ldb := Blas_Int(max(1, n))
 	ldz := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 	m: Blas_Int
 
@@ -391,9 +382,6 @@ query_workspace_solve_symmetric_generalized_selective :: proc(
 			nil, // iwork
 			nil, // ifail
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
@@ -422,9 +410,6 @@ query_workspace_solve_symmetric_generalized_selective :: proc(
 			nil, // iwork
 			nil, // ifail
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	}
@@ -465,11 +450,11 @@ m_solve_symmetric_generalized_selective :: proc(
 
 	n_int := Blas_Int(n)
 	itype_int := Blas_Int(itype)
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
+	lda := a.ld
+	ldb := b.ld
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu)
 	m_int: Blas_Int
@@ -480,7 +465,7 @@ m_solve_symmetric_generalized_selective :: proc(
 	z_ptr: rawptr = nil
 	if jobz == .VALUES_VECTORS && z != nil {
 		assert(z.rows >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(z.ld)
+		ldz = z.ld
 		z_ptr = raw_data(z.data)
 	}
 
@@ -509,9 +494,6 @@ m_solve_symmetric_generalized_selective :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsygvx_(
@@ -538,9 +520,6 @@ m_solve_symmetric_generalized_selective :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 

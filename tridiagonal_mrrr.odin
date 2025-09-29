@@ -21,8 +21,8 @@ m_compute_eigenvectors_inverse_iter :: proc {
 query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: EigenRangeOption) -> (work_size: int, iwork_size: int, isuppz_size: int) {
 	// Query LAPACK for optimal workspace sizes
 	n_int := Blas_Int(n)
-	jobz_c := eigen_job_to_cstring(jobz)
-	range_c := eigen_range_to_cstring(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
 
 	// Dummy values for workspace query
 	dummy_d := [1]f64{}
@@ -36,8 +36,8 @@ query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: Ei
 	m_int: Blas_Int
 	ldz: Blas_Int = 1
 
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	liwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -48,8 +48,8 @@ query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: Ei
 		abstol_f32 := f32(abstol)
 
 		lapack.sstegr_(
-			jobz_c,
-			range_c,
+			&jobz_c,
+			&range_c,
 			&n_int,
 			cast(^f32)&dummy_d[0],
 			cast(^f32)&dummy_e[0],
@@ -77,8 +77,8 @@ query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: Ei
 		iwork_query: Blas_Int
 
 		lapack.dstegr_(
-			jobz_c,
-			range_c,
+			&jobz_c,
+			&range_c,
 			&n_int,
 			&dummy_d[0],
 			&dummy_e[0],
@@ -109,8 +109,8 @@ query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: Ei
 		abstol_f32 := f32(abstol)
 
 		lapack.cstegr_(
-			jobz_c,
-			range_c,
+			&jobz_c,
+			&range_c,
 			&n_int,
 			cast(^f32)&dummy_d[0],
 			cast(^f32)&dummy_e[0],
@@ -138,8 +138,8 @@ query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: Ei
 		iwork_query: Blas_Int
 
 		lapack.zstegr_(
-			jobz_c,
-			range_c,
+			&jobz_c,
+			&range_c,
 			&n_int,
 			&dummy_d[0],
 			&dummy_e[0],
@@ -165,7 +165,7 @@ query_workspace_mrrr :: proc($T: typeid, n: int, jobz: EigenJobOption, range: Ei
 	}
 
 	// Support array is 2*m where m is number of eigenvalues found
-	if jobz == .VALUES_VECTORS {
+	if jobz == .VALUES_AND_VECTORS {
 		isuppz_size = 2 * n // Maximum possible
 	} else {
 		isuppz_size = 0
@@ -200,8 +200,8 @@ m_compute_tridiagonal_mrrr_f32_c64 :: proc(
 	assert(len(w) >= n, "Eigenvalue array too small")
 
 	n_int := Blas_Int(n)
-	jobz_c := eigen_job_to_cstring(jobz)
-	range_c := eigen_range_to_cstring(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu)
@@ -212,15 +212,15 @@ m_compute_tridiagonal_mrrr_f32_c64 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		assert(Z.rows >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	// Support array pointer
 	isuppz_ptr: ^Blas_Int = nil
-	if jobz == .VALUES_VECTORS && isuppz != nil {
+	if jobz == .VALUES_AND_VECTORS && isuppz != nil {
 		isuppz_ptr = raw_data(isuppz)
 	}
 
@@ -231,8 +231,7 @@ m_compute_tridiagonal_mrrr_f32_c64 :: proc(
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }
 
 // Compute eigenvalues/eigenvectors using MRRR for f64/c128
@@ -261,8 +260,8 @@ m_compute_tridiagonal_mrrr_f64_c128 :: proc(
 	assert(len(w) >= n, "Eigenvalue array too small")
 
 	n_int := Blas_Int(n)
-	jobz_c := eigen_job_to_cstring(jobz)
-	range_c := eigen_range_to_cstring(range)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
 
 	il_int := Blas_Int(il)
 	iu_int := Blas_Int(iu)
@@ -273,15 +272,15 @@ m_compute_tridiagonal_mrrr_f64_c128 :: proc(
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
-	if jobz == .VALUES_VECTORS && Z != nil {
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
 		assert(Z.rows >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	// Support array pointer
 	isuppz_ptr: ^Blas_Int = nil
-	if jobz == .VALUES_VECTORS && isuppz != nil {
+	if jobz == .VALUES_AND_VECTORS && isuppz != nil {
 		isuppz_ptr = raw_data(isuppz)
 	}
 
@@ -292,8 +291,7 @@ m_compute_tridiagonal_mrrr_f64_c128 :: proc(
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }
 
 // Proc group for MRRR algorithm
@@ -354,7 +352,7 @@ m_compute_eigenvectors_inverse_iter_f32_c64 :: proc(
 
 	n_int := Blas_Int(n)
 	m_int := Blas_Int(m)
-	ldz := Blas_Int(Z.ld)
+	ldz := Z.ld
 
 	when T == f32 {
 		lapack.sstein_(&n_int, raw_data(d), raw_data(e), &m_int, raw_data(w), raw_data(iblock), raw_data(isplit), raw_data(Z.data), &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
@@ -363,8 +361,7 @@ m_compute_eigenvectors_inverse_iter_f32_c64 :: proc(
 	}
 
 	nfailed = int(info)
-	ok = info == 0
-	return nfailed, info, ok
+	return nfailed, info, info == 0
 }
 
 // Compute eigenvectors using inverse iteration for f64/c128
@@ -395,7 +392,7 @@ m_compute_eigenvectors_inverse_iter_f64_c128 :: proc(
 
 	n_int := Blas_Int(n)
 	m_int := Blas_Int(m)
-	ldz := Blas_Int(Z.ld)
+	ldz := Z.ld
 
 	when T == f64 {
 		lapack.dstein_(&n_int, raw_data(d), raw_data(e), &m_int, raw_data(w), raw_data(iblock), raw_data(isplit), raw_data(Z.data), &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
@@ -404,6 +401,5 @@ m_compute_eigenvectors_inverse_iter_f64_c128 :: proc(
 	}
 
 	nfailed = int(info)
-	ok = info == 0
-	return nfailed, info, ok
+	return nfailed, info, info == 0
 }

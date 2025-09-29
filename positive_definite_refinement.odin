@@ -89,13 +89,13 @@ m_refine_positive_definite_f32_c64 :: proc(
 	assert(B.cols == X.cols, "RHS and solution must have same number of columns")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldaf := Blas_Int(AF.stride)
-	ldb := Blas_Int(B.stride)
-	ldx := Blas_Int(X.stride)
-	uplo_c := matrix_region_to_cstring(uplo)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
+	uplo_c := cast(u8)uplo
 
 	// Validate workspace sizes
 	assert(len(ferr) >= int(nrhs), "Insufficient ferr space")
@@ -105,52 +105,15 @@ m_refine_positive_definite_f32_c64 :: proc(
 		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
 
-		lapack.sporfs_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(AF.data),
-			&ldaf,
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.sporfs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	} else when T == complex64 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
 
-		lapack.cporfs_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(AF.data),
-			&ldaf,
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			raw_data(work),
-			raw_data(rwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.cporfs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Iterative refinement for positive definite system (f64/complex128)
@@ -176,13 +139,13 @@ m_refine_positive_definite_f64_c128 :: proc(
 	assert(B.cols == X.cols, "RHS and solution must have same number of columns")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldaf := Blas_Int(AF.stride)
-	ldb := Blas_Int(B.stride)
-	ldx := Blas_Int(X.stride)
-	uplo_c := matrix_region_to_cstring(uplo)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
+	uplo_c := cast(u8)uplo
 
 	// Validate workspace sizes
 	assert(len(ferr) >= int(nrhs), "Insufficient ferr space")
@@ -192,52 +155,15 @@ m_refine_positive_definite_f64_c128 :: proc(
 		assert(len(work) >= 3 * int(n), "Insufficient work space")
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
 
-		lapack.dporfs_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(AF.data),
-			&ldaf,
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.dporfs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	} else when T == complex128 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= int(n), "Insufficient rwork space")
 
-		lapack.zporfs_(
-			uplo_c,
-			&n,
-			&nrhs,
-			raw_data(A.data),
-			&lda,
-			raw_data(AF.data),
-			&ldaf,
-			raw_data(B.data),
-			&ldb,
-			raw_data(X.data),
-			&ldx,
-			raw_data(ferr),
-			raw_data(berr),
-			raw_data(work),
-			raw_data(rwork),
-			&info,
-			len(uplo_c),
-		)
+		lapack.zporfs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(B.data), &ldb, raw_data(X.data), &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -273,16 +199,16 @@ m_refine_positive_definite_extended_f32_c64 :: proc(
 	assert(B.cols == X.cols, "RHS and solution must have same number of columns")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldaf := Blas_Int(AF.stride)
-	ldb := Blas_Int(B.stride)
-	ldx := Blas_Int(X.stride)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
 	n_err_bnds: Blas_Int = 3
 
-	uplo_c := matrix_region_to_cstring(uplo)
-	equed_c := equilibration_state_to_cstring(equed)
+	uplo_c := cast(u8)uplo
+	equed_c := cast(u8)equed
 
 	// Validate workspace sizes
 	assert(len(berr) >= int(nrhs), "Insufficient berr space")
@@ -306,8 +232,8 @@ m_refine_positive_definite_extended_f32_c64 :: proc(
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
 
 		lapack.sporfsx_(
-			uplo_c,
-			equed_c,
+			&uplo_c,
+			&equed_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
@@ -329,16 +255,14 @@ m_refine_positive_definite_extended_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(uplo_c),
-			len(equed_c),
 		)
 	} else when T == complex64 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= 3 * int(n), "Insufficient rwork space")
 
 		lapack.cporfsx_(
-			uplo_c,
-			equed_c,
+			&uplo_c,
+			&equed_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
@@ -360,13 +284,10 @@ m_refine_positive_definite_extended_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(uplo_c),
-			len(equed_c),
 		)
 	}
 
-	ok = info == 0
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // Extended iterative refinement for positive definite system (f64/complex128)
@@ -398,16 +319,16 @@ m_refine_positive_definite_extended_f64_c128 :: proc(
 	assert(B.cols == X.cols, "RHS and solution must have same number of columns")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldaf := Blas_Int(AF.stride)
-	ldb := Blas_Int(B.stride)
-	ldx := Blas_Int(X.stride)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
 	n_err_bnds: Blas_Int = 3
 
-	uplo_c := matrix_region_to_cstring(uplo)
-	equed_c := equilibration_state_to_cstring(equed)
+	uplo_c := cast(u8)uplo
+	equed_c := cast(u8)equed
 
 	// Validate workspace sizes
 	assert(len(berr) >= int(nrhs), "Insufficient berr space")
@@ -431,8 +352,8 @@ m_refine_positive_definite_extended_f64_c128 :: proc(
 		assert(len(iwork) >= int(n), "Insufficient iwork space")
 
 		lapack.dporfsx_(
-			uplo_c,
-			equed_c,
+			&uplo_c,
+			&equed_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
@@ -454,16 +375,14 @@ m_refine_positive_definite_extended_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(uplo_c),
-			len(equed_c),
 		)
 	} else when T == complex128 {
 		assert(len(work) >= 2 * int(n), "Insufficient work space")
 		assert(len(rwork) >= 3 * int(n), "Insufficient rwork space")
 
 		lapack.zporfsx_(
-			uplo_c,
-			equed_c,
+			&uplo_c,
+			&equed_c,
 			&n,
 			&nrhs,
 			raw_data(A.data),
@@ -485,13 +404,10 @@ m_refine_positive_definite_extended_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(uplo_c),
-			len(equed_c),
 		)
 	}
 
-	ok = info == 0
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // ===================================================================================
@@ -513,20 +429,19 @@ m_solve_positive_definite_simple_f32_c64 :: proc(
 	assert(B.rows == A.rows, "RHS dimension mismatch")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldb := Blas_Int(B.stride)
-	uplo_c := matrix_region_to_cstring(uplo)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldb := B.ld
+	uplo_c := cast(u8)uplo
 
 	when T == f32 {
-		lapack.sposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.sposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == complex64 {
-		lapack.cposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.cposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Simple solver for positive definite system (f64/complex128)
@@ -544,18 +459,17 @@ m_solve_positive_definite_simple_f64_c128 :: proc(
 	assert(B.rows == A.rows, "RHS dimension mismatch")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	nrhs := Blas_Int(B.cols)
-	lda := Blas_Int(A.stride)
-	ldb := Blas_Int(B.stride)
-	uplo_c := matrix_region_to_cstring(uplo)
+	n := A.rows
+	nrhs := B.cols
+	lda := A.ld
+	ldb := B.ld
+	uplo_c := cast(u8)uplo
 
 	when T == f64 {
-		lapack.dposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.dposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
-		lapack.zposv_(uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.zposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }

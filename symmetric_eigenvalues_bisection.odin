@@ -13,7 +13,7 @@ import "core:slice"
 // Query workspace for symmetric eigenvalue computation (bisection/inverse iteration)
 query_workspace_compute_symmetric_eigenvalues_bisection :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int) where T == f32 || T == f64 {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	range_c: u8 = 'A' // Default to ALL
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
@@ -25,7 +25,7 @@ query_workspace_compute_symmetric_eigenvalues_bisection :: proc($T: typeid, n: i
 	abstol: T = 0
 	m: Blas_Int
 	ldz := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -51,9 +51,6 @@ query_workspace_compute_symmetric_eigenvalues_bisection :: proc($T: typeid, n: i
 			nil, // iwork
 			nil, // ifail
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
@@ -79,9 +76,6 @@ query_workspace_compute_symmetric_eigenvalues_bisection :: proc($T: typeid, n: i
 			nil, // iwork
 			nil, // ifail
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	}
@@ -122,11 +116,11 @@ m_compute_symmetric_eigenvalues_bisection :: proc(
 	assert(len(iwork) >= 5 * n, "Integer workspace too small")
 	assert(len(ifail) >= n, "Failure array too small")
 
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	// Range parameters
 	vl_val := vl
@@ -141,7 +135,7 @@ m_compute_symmetric_eigenvalues_bisection :: proc(
 	z_ptr: rawptr = nil
 	if jobz == .VALUES_VECTORS && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -169,9 +163,6 @@ m_compute_symmetric_eigenvalues_bisection :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsyevx_(
@@ -195,21 +186,17 @@ m_compute_symmetric_eigenvalues_bisection :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }
 
 // Query workspace for 2-stage symmetric eigenvalue computation (bisection/inverse iteration)
 query_workspace_compute_symmetric_eigenvalues_bisection_2stage :: proc($T: typeid, n: int, jobz: EigenJobOption) -> (work_size: int) where T == f32 || T == f64 {
 	// Query LAPACK for optimal workspace size
-	jobz_c := eigen_job_to_char(jobz)
+	jobz_c := cast(u8)jobz
 	range_c: u8 = 'A' // Default to ALL
 	uplo_c: u8 = 'U' // Default to upper
 	n_int := Blas_Int(n)
@@ -221,7 +208,7 @@ query_workspace_compute_symmetric_eigenvalues_bisection_2stage :: proc($T: typei
 	abstol: T = 0
 	m: Blas_Int
 	ldz := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -247,9 +234,6 @@ query_workspace_compute_symmetric_eigenvalues_bisection_2stage :: proc($T: typei
 			nil, // iwork
 			nil, // ifail
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
@@ -275,9 +259,6 @@ query_workspace_compute_symmetric_eigenvalues_bisection_2stage :: proc($T: typei
 			nil, // iwork
 			nil, // ifail
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 	}
@@ -313,11 +294,11 @@ m_compute_symmetric_eigenvalues_bisection_2stage :: proc(
 	assert(len(iwork) >= 5 * n, "Integer workspace too small")
 	assert(len(ifail) >= n, "Failure array too small")
 
-	jobz_c := eigen_job_to_char(jobz)
-	range_c := eigen_range_to_char(range)
-	uplo_c := matrix_region_to_char(uplo)
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	// Range parameters
 	vl_val := vl
@@ -332,7 +313,7 @@ m_compute_symmetric_eigenvalues_bisection_2stage :: proc(
 	z_ptr: rawptr = nil
 	if jobz == .VALUES_VECTORS && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -360,9 +341,6 @@ m_compute_symmetric_eigenvalues_bisection_2stage :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dsyevx_2stage_(
@@ -386,13 +364,9 @@ m_compute_symmetric_eigenvalues_bisection_2stage :: proc(
 			raw_data(iwork),
 			raw_data(ifail),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	m = int(m_int)
-	ok = info == 0
-	return m, info, ok
+	return m, info, info == 0
 }

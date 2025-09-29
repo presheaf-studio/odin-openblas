@@ -121,7 +121,7 @@ norm_banded_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = nil)
 	kl := A.storage.banded.kl
 	ku := A.storage.banded.ku
 	ldab := A.storage.banded.ldab
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Validate workspace
 	if norm == .OneNorm || norm == .InfinityNorm {
@@ -132,9 +132,9 @@ norm_banded_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = nil)
 	work_len := len(work) if len(work) > 0 else 0
 
 	when T == f32 {
-		result = lapack.slangb_(norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
+		result = lapack.slangb_(&norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
 	} else when T == complex64 {
-		result = lapack.clangb_(norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
+		result = lapack.clangb_(&norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
 	}
 
 	return result
@@ -149,7 +149,7 @@ norm_banded_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 = nil
 	kl := A.storage.banded.kl
 	ku := A.storage.banded.ku
 	ldab := A.storage.banded.ldab
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Validate workspace
 	if norm == .OneNorm || norm == .InfinityNorm {
@@ -160,9 +160,9 @@ norm_banded_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 = nil
 	work_len := len(work) if len(work) > 0 else 0
 
 	when T == f64 {
-		result = lapack.dlangb_(norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
+		result = lapack.dlangb_(&norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
 	} else when T == complex128 {
-		result = lapack.zlangb_(norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
+		result = lapack.zlangb_(&norm_c, &n, &kl, &ku, raw_data(A.data), &ldab, work_ptr, c.size_t(work_len))
 	}
 
 	return result
@@ -191,7 +191,7 @@ norm_general_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = nil
 	m := A.rows
 	n := A.cols
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Validate workspace
 	if norm == .OneNorm {
@@ -204,9 +204,9 @@ norm_general_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = nil
 	work_len := len(work) if len(work) > 0 else 0
 
 	when T == f32 {
-		result = lapack.slange_(norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
+		result = lapack.slange_(&norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
 	} else when T == complex64 {
-		result = lapack.clange_(norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
+		result = lapack.clange_(&norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
 	}
 
 	return result
@@ -220,7 +220,7 @@ norm_general_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 = ni
 	m := A.rows
 	n := A.cols
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Validate workspace
 	if norm == .OneNorm {
@@ -233,9 +233,9 @@ norm_general_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 = ni
 	work_len := len(work) if len(work) > 0 else 0
 
 	when T == f64 {
-		result = lapack.dlange_(norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
+		result = lapack.dlange_(&norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
 	} else when T == complex128 {
-		result = lapack.zlange_(norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
+		result = lapack.zlange_(&norm_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(work_len))
 	}
 
 	return result
@@ -251,7 +251,7 @@ norm_tridiagonal_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm) -> (result: f
 	assert(A.format == .Tridiagonal, "Matrix must be in tridiagonal format")
 
 	n := A.rows
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Extract tridiagonal diagonals
 	dl_offset := A.storage.tridiagonal.dl_offset
@@ -263,9 +263,9 @@ norm_tridiagonal_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm) -> (result: f
 	du_ptr := &A.data[du_offset] if du_offset >= 0 && du_offset < len(A.data) else nil
 
 	when T == f32 {
-		result = lapack.slangt_(norm_c, &n, dl_ptr, d_ptr, du_ptr, c.size_t(len(norm_c)))
+		result = lapack.slangt_(&norm_c, &n, dl_ptr, d_ptr, du_ptr)
 	} else when T == complex64 {
-		result = lapack.clangt_(norm_c, &n, dl_ptr, d_ptr, du_ptr, c.size_t(len(norm_c)))
+		result = lapack.clangt_(&norm_c, &n, dl_ptr, d_ptr, du_ptr)
 	}
 
 	return result
@@ -277,7 +277,7 @@ norm_tridiagonal_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm) -> (result: 
 	assert(A.format == .Tridiagonal, "Matrix must be in tridiagonal format")
 
 	n := A.rows
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Extract tridiagonal diagonals
 	dl_offset := A.storage.tridiagonal.dl_offset
@@ -289,9 +289,9 @@ norm_tridiagonal_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm) -> (result: 
 	du_ptr := &A.data[du_offset] if du_offset >= 0 && du_offset < len(A.data) else nil
 
 	when T == f64 {
-		result = lapack.dlangt_(norm_c, &n, dl_ptr, d_ptr, du_ptr, c.size_t(len(norm_c)))
+		result = lapack.dlangt_(&norm_c, &n, dl_ptr, d_ptr, du_ptr)
 	} else when T == complex128 {
-		result = lapack.zlangt_(norm_c, &n, dl_ptr, d_ptr, du_ptr, c.size_t(len(norm_c)))
+		result = lapack.zlangt_(&norm_c, &n, dl_ptr, d_ptr, du_ptr)
 	}
 
 	return result
@@ -317,7 +317,7 @@ norm_banded_hermitian_c64 :: proc(A: ^Matrix(complex64), norm: MatrixNorm, work:
 	n := A.rows
 	k := A.storage.banded.ku // For Hermitian, kl = ku
 	ldab := A.storage.banded.ldab
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.hermitian.uplo != nil {
 		uplo_c = A.storage.hermitian.uplo
@@ -330,7 +330,7 @@ norm_banded_hermitian_c64 :: proc(A: ^Matrix(complex64), norm: MatrixNorm, work:
 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
-	result = lapack.clanhb_(norm_c, uplo_c, &n, &k, raw_data(A.data), &ldab, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+	result = lapack.clanhb_(&norm_c, &uplo_c, &n, &k, raw_data(A.data), &ldab, work_ptr)
 
 	return result
 }
@@ -343,7 +343,7 @@ norm_banded_hermitian_c128 :: proc(A: ^Matrix(complex128), norm: MatrixNorm, wor
 	n := A.rows
 	k := A.storage.banded.ku // For Hermitian, kl = ku
 	ldab := A.storage.banded.ldab
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.hermitian.uplo != nil {
 		uplo_c = A.storage.hermitian.uplo
@@ -356,7 +356,7 @@ norm_banded_hermitian_c128 :: proc(A: ^Matrix(complex128), norm: MatrixNorm, wor
 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
-	result = lapack.zlanhb_(norm_c, uplo_c, &n, &k, raw_data(A.data), &ldab, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+	result = lapack.zlanhb_(&norm_c, &uplo_c, &n, &k, raw_data(A.data), &ldab, work_ptr)
 
 	return result
 }
@@ -380,7 +380,7 @@ norm_hermitian_c64 :: proc(A: ^Matrix(complex64), norm: MatrixNorm, work: []f32 
 
 	n := A.rows
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.hermitian.uplo != nil {
 		uplo_c = A.storage.hermitian.uplo
@@ -393,7 +393,7 @@ norm_hermitian_c64 :: proc(A: ^Matrix(complex64), norm: MatrixNorm, work: []f32 
 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
-	result = lapack.clanhe_(norm_c, uplo_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+	result = lapack.clanhe_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, work_ptr)
 
 	return result
 }
@@ -405,7 +405,7 @@ norm_hermitian_c128 :: proc(A: ^Matrix(complex128), norm: MatrixNorm, work: []f6
 
 	n := A.rows
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.hermitian.uplo != nil {
 		uplo_c = A.storage.hermitian.uplo
@@ -418,7 +418,7 @@ norm_hermitian_c128 :: proc(A: ^Matrix(complex128), norm: MatrixNorm, work: []f6
 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
-	result = lapack.zlanhe_(norm_c, uplo_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+	result = lapack.zlanhe_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, work_ptr)
 
 	return result
 }
@@ -441,7 +441,7 @@ norm_hermitian_packed_c64 :: proc(A: ^Matrix(complex64), norm: MatrixNorm, work:
 	assert(A.format == .Packed, "Matrix must be in packed format")
 
 	n := A.rows
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.packed.uplo != nil {
 		uplo_c = A.storage.packed.uplo
@@ -454,7 +454,7 @@ norm_hermitian_packed_c64 :: proc(A: ^Matrix(complex64), norm: MatrixNorm, work:
 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
-	result = lapack.clanhp_(norm_c, uplo_c, &n, raw_data(A.data), work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+	result = lapack.clanhp_(&norm_c, &uplo_c, &n, raw_data(A.data), work_ptr)
 
 	return result
 }
@@ -465,7 +465,7 @@ norm_hermitian_packed_c128 :: proc(A: ^Matrix(complex128), norm: MatrixNorm, wor
 	assert(A.format == .Packed, "Matrix must be in packed format")
 
 	n := A.rows
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.packed.uplo != nil {
 		uplo_c = A.storage.packed.uplo
@@ -478,7 +478,7 @@ norm_hermitian_packed_c128 :: proc(A: ^Matrix(complex128), norm: MatrixNorm, wor
 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
-	result = lapack.zlanhp_(norm_c, uplo_c, &n, raw_data(A.data), work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+	result = lapack.zlanhp_(&norm_c, &uplo_c, &n, raw_data(A.data), work_ptr)
 
 	return result
 }
@@ -504,7 +504,7 @@ norm_hessenberg_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = 
 
 	n := A.rows
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Validate workspace
 	if norm == .OneNorm || norm == .InfinityNorm {
@@ -514,9 +514,9 @@ norm_hessenberg_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f32 {
-		result = lapack.slanhs_(norm_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)))
+		result = lapack.slanhs_(&norm_c, &n, raw_data(A.data), &lda, work_ptr)
 	} else when T == complex64 {
-		result = lapack.clanhs_(norm_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)))
+		result = lapack.clanhs_(&norm_c, &n, raw_data(A.data), &lda, work_ptr)
 	}
 
 	return result
@@ -530,7 +530,7 @@ norm_hessenberg_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 =
 
 	n := A.rows
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	// Validate workspace
 	if norm == .OneNorm || norm == .InfinityNorm {
@@ -540,9 +540,9 @@ norm_hessenberg_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 =
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f64 {
-		result = lapack.dlanhs_(norm_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)))
+		result = lapack.dlanhs_(&norm_c, &n, raw_data(A.data), &lda, work_ptr)
 	} else when T == complex128 {
-		result = lapack.zlanhs_(norm_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)))
+		result = lapack.zlanhs_(&norm_c, &n, raw_data(A.data), &lda, work_ptr)
 	}
 
 	return result
@@ -565,12 +565,12 @@ norm_symmetric_tridiagonal :: proc(
 	assert(len(E) == len(D) - 1 || len(E) == len(D), "Off-diagonal array must have length n-1 or n")
 
 	n := Blas_Int(len(D))
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 
 	when T == f32 {
-		result = lapack.slanst_(norm_c, &n, raw_data(D), raw_data(E), c.size_t(len(norm_c)))
+		result = lapack.slanst_(&norm_c, &n, raw_data(D), raw_data(E))
 	} else when T == f64 {
-		result = lapack.dlanst_(norm_c, &n, raw_data(D), raw_data(E), c.size_t(len(norm_c)))
+		result = lapack.dlanst_(&norm_c, &n, raw_data(D), raw_data(E))
 	}
 
 	return result
@@ -597,7 +597,7 @@ norm_symmetric_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = n
 
 	n := A.rows
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.symmetric.uplo != nil {
 		uplo_c = A.storage.symmetric.uplo
@@ -611,9 +611,9 @@ norm_symmetric_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f32 = n
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f32 {
-		result = lapack.slansy_(norm_c, uplo_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+		result = lapack.slansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, work_ptr)
 	} else when T == complex64 {
-		result = lapack.clansy_(norm_c, uplo_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+		result = lapack.clansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, work_ptr)
 	}
 
 	return result
@@ -627,7 +627,7 @@ norm_symmetric_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 = 
 
 	n := A.rows
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c: cstring = "U"
 	if A.storage.symmetric.uplo != nil {
 		uplo_c = A.storage.symmetric.uplo
@@ -641,9 +641,9 @@ norm_symmetric_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: []f64 = 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f64 {
-		result = lapack.dlansy_(norm_c, uplo_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+		result = lapack.dlansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, work_ptr)
 	} else when T == complex128 {
-		result = lapack.zlansy_(norm_c, uplo_c, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)))
+		result = lapack.zlansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, work_ptr)
 	}
 
 	return result
@@ -671,7 +671,7 @@ norm_triangular_banded_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: [
 	n := A.rows
 	k := A.storage.banded.ku // bandwidth
 	ldab := A.storage.banded.ldab
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c := matrix_region_to_cstring(region)
 	diag_c: cstring = "U" if unit_diagonal else "N"
 
@@ -691,9 +691,9 @@ norm_triangular_banded_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: [
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f32 {
-		result = lapack.slantb_(norm_c, uplo_c, diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.slantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr)
 	} else when T == complex64 {
-		result = lapack.clantb_(norm_c, uplo_c, diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.clantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr)
 	}
 
 	return result
@@ -708,7 +708,7 @@ norm_triangular_banded_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: 
 	n := A.rows
 	k := A.storage.banded.ku // bandwidth
 	ldab := A.storage.banded.ldab
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c := matrix_region_to_cstring(region)
 	diag_c: cstring = "U" if unit_diagonal else "N"
 
@@ -728,9 +728,9 @@ norm_triangular_banded_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f64 {
-		result = lapack.dlantb_(norm_c, uplo_c, diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.dlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr)
 	} else when T == complex128 {
-		result = lapack.zlantb_(norm_c, uplo_c, diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.zlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(A.data), &ldab, work_ptr)
 	}
 
 	return result
@@ -756,7 +756,7 @@ norm_triangular_packed_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: [
 	assert(region != .Full, "Triangular matrix cannot use Full region")
 
 	n := A.rows
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c := matrix_region_to_cstring(region)
 	diag_c: cstring = "U" if unit_diagonal else "N"
 
@@ -773,9 +773,9 @@ norm_triangular_packed_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: [
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f32 {
-		result = lapack.slantp_(norm_c, uplo_c, diag_c, &n, raw_data(A.data), work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.slantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(A.data), work_ptr)
 	} else when T == complex64 {
-		result = lapack.clantp_(norm_c, uplo_c, diag_c, &n, raw_data(A.data), work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.clantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(A.data), work_ptr)
 	}
 
 	return result
@@ -788,7 +788,7 @@ norm_triangular_packed_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: 
 	assert(region != .Full, "Triangular matrix cannot use Full region")
 
 	n := A.rows
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c := matrix_region_to_cstring(region)
 	diag_c: cstring = "U" if unit_diagonal else "N"
 
@@ -805,9 +805,9 @@ norm_triangular_packed_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f64 {
-		result = lapack.dlantp_(norm_c, uplo_c, diag_c, &n, raw_data(A.data), work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.dlantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(A.data), work_ptr)
 	} else when T == complex128 {
-		result = lapack.zlantp_(norm_c, uplo_c, diag_c, &n, raw_data(A.data), work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.zlantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(A.data), work_ptr)
 	}
 
 	return result
@@ -835,7 +835,7 @@ norm_triangular_general_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: 
 	m := A.rows
 	n := A.cols
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c := matrix_region_to_cstring(region)
 	diag_c: cstring = "U" if unit_diagonal else "N"
 
@@ -857,9 +857,9 @@ norm_triangular_general_f32_c64 :: proc(A: ^Matrix($T), norm: MatrixNorm, work: 
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f32 {
-		result = lapack.slantr_(norm_c, uplo_c, diag_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.slantr_(&norm_c, &uplo_c, &diag_c, &m, &n, raw_data(A.data), &lda, work_ptr)
 	} else when T == complex64 {
-		result = lapack.clantr_(norm_c, uplo_c, diag_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.clantr_(&norm_c, &uplo_c, &diag_c, &m, &n, raw_data(A.data), &lda, work_ptr)
 	}
 
 	return result
@@ -874,7 +874,7 @@ norm_triangular_general_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work:
 	m := A.rows
 	n := A.cols
 	lda := A.ld
-	norm_c := norm_to_cstring(norm)
+	norm_c := cast(u8)norm
 	uplo_c := matrix_region_to_cstring(region)
 	diag_c: cstring = "U" if unit_diagonal else "N"
 
@@ -896,9 +896,9 @@ norm_triangular_general_f64_c128 :: proc(A: ^Matrix($T), norm: MatrixNorm, work:
 	work_ptr := raw_data(work) if len(work) > 0 else nil
 
 	when T == f64 {
-		result = lapack.dlantr_(norm_c, uplo_c, diag_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.dlantr_(&norm_c, &uplo_c, &diag_c, &m, &n, raw_data(A.data), &lda, work_ptr)
 	} else when T == complex128 {
-		result = lapack.zlantr_(norm_c, uplo_c, diag_c, &m, &n, raw_data(A.data), &lda, work_ptr, c.size_t(len(norm_c)), c.size_t(len(uplo_c)), c.size_t(len(diag_c)))
+		result = lapack.zlantr_(&norm_c, &uplo_c, &diag_c, &m, &n, raw_data(A.data), &lda, work_ptr)
 	}
 
 	return result

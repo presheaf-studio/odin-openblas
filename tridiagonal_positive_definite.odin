@@ -32,21 +32,21 @@ m_compute_tridiagonal_pteqr_f32_c64 :: proc(
 	assert(len(work) >= 4 * n, "Insufficient workspace")
 
 	n_val := Blas_Int(n)
-	compz_c := compz_to_char(mode)
+	compz_c := cast(u8)mode
 
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
 	if mode != .None && Z != nil {
 		assert(Z.rows == n && Z.cols == n, "Z matrix must be n×n")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	when T == f32 {
-		lapack.spteqr_(compz_c, &n_val, raw_data(D), raw_data(E), cast(^f32)z_ptr, &ldz, raw_data(work), &info, len(compz_c))
+		lapack.spteqr_(&compz_c, &n_val, raw_data(D), raw_data(E), cast(^f32)z_ptr, &ldz, raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.cpteqr_(compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info, len(compz_c))
+		lapack.cpteqr_(&compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info)
 	}
 
 
@@ -69,21 +69,21 @@ m_compute_tridiagonal_pteqr_f64_c128 :: proc(
 	assert(len(work) >= 4 * n, "Insufficient workspace")
 
 	n_val := Blas_Int(n)
-	compz_c := compz_to_char(mode)
+	compz_c := cast(u8)mode
 
 	// Handle eigenvector matrix
 	ldz: Blas_Int = 1
 	z_ptr: rawptr = nil
 	if mode != .None && Z != nil {
 		assert(Z.rows == n && Z.cols == n, "Z matrix must be n×n")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
 	when T == f64 {
-		lapack.dpteqr_(compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info, len(compz_c))
+		lapack.dpteqr_(&compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zpteqr_(compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info, len(compz_c))
+		lapack.zpteqr_(&compz_c, &n_val, raw_data(D), raw_data(E), z_ptr, &ldz, raw_data(work), &info)
 	}
 
 
@@ -142,8 +142,8 @@ m_refine_tridiagonal_pd_f32_c64 :: proc(
 
 	n_val := Blas_Int(n)
 	nrhs_val := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
-	ldx := Blas_Int(X.ld)
+	ldb := B.ld
+	ldx := X.ld
 
 	when T == f32 {
 		// Real case: no uplo parameter
@@ -158,7 +158,7 @@ m_refine_tridiagonal_pd_f32_c64 :: proc(
 		uplo_c := matrix_region_to_cstring(uplo)
 
 		lapack.cptrfs_(
-			uplo_c,
+			&uplo_c,
 			&n_val,
 			&nrhs_val,
 			raw_data(D),
@@ -174,12 +174,10 @@ m_refine_tridiagonal_pd_f32_c64 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(uplo_c),
 		)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Refactor tridiagonal positive definite refinement for f64/c128
@@ -209,8 +207,8 @@ m_refine_tridiagonal_pd_f64_c128 :: proc(
 
 	n_val := Blas_Int(n)
 	nrhs_val := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
-	ldx := Blas_Int(X.ld)
+	ldb := B.ld
+	ldx := X.ld
 
 	when T == f64 {
 		// Real case: no uplo parameter
@@ -225,7 +223,7 @@ m_refine_tridiagonal_pd_f64_c128 :: proc(
 		uplo_c := matrix_region_to_cstring(uplo)
 
 		lapack.zptrfs_(
-			uplo_c,
+			&uplo_c,
 			&n_val,
 			&nrhs_val,
 			raw_data(D),
@@ -241,12 +239,10 @@ m_refine_tridiagonal_pd_f64_c128 :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			len(uplo_c),
 		)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Proc group for tridiagonal positive definite refinement
@@ -282,8 +278,8 @@ m_solve_tridiagonal_pd_f32_c64 :: proc(
 	assert(B.rows == n, "RHS dimension mismatch")
 
 	n_int := Blas_Int(n)
-	nrhs := Blas_Int(B.cols)
-	ldb := Blas_Int(B.ld)
+	nrhs := B.cols
+	ldb := B.ld
 
 	when T == f32 {
 		lapack.sptsv_(&n_int, &nrhs, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
@@ -291,8 +287,7 @@ m_solve_tridiagonal_pd_f32_c64 :: proc(
 		lapack.cptsv_(&n_int, &nrhs, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Solve tridiagonal positive definite system (f64/complex128)
@@ -311,8 +306,8 @@ m_solve_tridiagonal_pd_f64_c128 :: proc(
 	assert(B.rows == n, "RHS dimension mismatch")
 
 	n_int := Blas_Int(n)
-	nrhs := Blas_Int(B.cols)
-	ldb := Blas_Int(B.ld)
+	nrhs := B.cols
+	ldb := B.ld
 
 	when T == f64 {
 		lapack.dptsv_(&n_int, &nrhs, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
@@ -320,8 +315,7 @@ m_solve_tridiagonal_pd_f64_c128 :: proc(
 		lapack.zptsv_(&n_int, &nrhs, raw_data(D), raw_data(E), raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Proc group for tridiagonal positive definite solver

@@ -36,19 +36,19 @@ m_solve_packed_symmetric_factorized_f32_c64 :: proc(
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
+	ldb := B.ld
 
 	when T == f32 {
-		lapack.ssptrs_(uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.ssptrs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == complex64 {
-		lapack.csptrs_(uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.csptrs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+
+	return info, info == 0
 }
 
 // Solve packed symmetric system using factorization for f64/c128
@@ -66,19 +66,19 @@ m_solve_packed_symmetric_factorized_f64_c128 :: proc(
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_cstring(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	ldb := Blas_Int(B.ld)
+	ldb := B.ld
 
 	when T == f64 {
-		lapack.dsptrs_(uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.dsptrs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
-		lapack.zsptrs_(uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info, len(uplo_c))
+		lapack.zsptrs_(&uplo_c, &n_int, &nrhs_int, raw_data(ap), raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+
+	return info, info == 0
 }
 
 // ============================================================================
@@ -87,9 +87,9 @@ m_solve_packed_symmetric_factorized_f64_c128 :: proc(
 // Computes selected eigenvalues of a tridiagonal matrix using bisection
 
 // Eigenvalue ordering option
-EigenvalueOrder :: enum {
-	BLOCKS, // 'B' - Eigenvalues ordered by blocks
-	ENTIRE, // 'E' - Entire matrix eigenvalues in order
+EigenvalueOrder :: enum u8 {
+	BLOCKS = 'B', // 'B' - Eigenvalues ordered by blocks
+	ENTIRE = 'E', // 'E' - Entire matrix eigenvalues in order
 }
 
 // Query workspace for bisection eigenvalue computation (STEBZ)
@@ -129,8 +129,8 @@ m_compute_eigenvalues_tridiagonal_eigenvalues_bisection :: proc(
 	assert(len(work) >= 4 * n, "Insufficient workspace")
 	assert(len(iwork) >= 3 * n, "Insufficient integer workspace")
 
-	range_c := eigen_range_to_cstring(range)
-	order_c := order == .ENTIRE ? cstring("E") : cstring("B")
+	range_c := cast(u8)range
+	order_c := cast(u8)order
 
 	n_int := Blas_Int(n)
 	vl_val := vl
@@ -144,8 +144,8 @@ m_compute_eigenvalues_tridiagonal_eigenvalues_bisection :: proc(
 	// Call LAPACK
 	when T == f32 {
 		lapack.sstebz_(
-			range_c,
-			order_c,
+			&range_c,
+			&order_c,
 			&n_int,
 			&vl_val,
 			&vu_val,
@@ -162,13 +162,11 @@ m_compute_eigenvalues_tridiagonal_eigenvalues_bisection :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(range_c),
-			len(order_c),
 		)
 	} else when T == f64 {
 		lapack.dstebz_(
-			range_c,
-			order_c,
+			&range_c,
+			&order_c,
 			&n_int,
 			&vl_val,
 			&vu_val,
@@ -185,15 +183,12 @@ m_compute_eigenvalues_tridiagonal_eigenvalues_bisection :: proc(
 			raw_data(work),
 			raw_data(iwork),
 			&info,
-			len(range_c),
-			len(order_c),
 		)
 	}
 
 	num_found = int(m)
 	num_splits = int(nsplit)
-	ok = info == 0
-	return num_found, num_splits, info, ok
+	return num_found, num_splits, info, info == 0
 }
 
 
@@ -204,7 +199,7 @@ m_compute_eigenvalues_tridiagonal_eigenvalues_bisection :: proc(
 // Query workspace for divide-and-conquer eigenvalue computation (STEDC)
 query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: CompzOption) -> (work_size: int, rwork_size: int, iwork_size: int) {
 	n_int := Blas_Int(n)
-	compz_c := compz_to_char(compz)
+	compz_c := cast(u8)compz
 
 	when T == f32 {
 		work_query: f32
@@ -214,7 +209,7 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 		info: Info
 
 		lapack.sstedc_(
-			compz_c,
+			&compz_c,
 			&n_int,
 			nil, // d
 			nil, // e
@@ -225,7 +220,6 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 			&iwork_query,
 			&liwork,
 			&info,
-			len(compz_c),
 		)
 
 		return int(work_query), 0, int(iwork_query)
@@ -237,7 +231,7 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 		info: Info
 
 		lapack.dstedc_(
-			compz_c,
+			&compz_c,
 			&n_int,
 			nil, // d
 			nil, // e
@@ -248,7 +242,6 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 			&iwork_query,
 			&liwork,
 			&info,
-			len(compz_c),
 		)
 
 		return int(work_query), 0, int(iwork_query)
@@ -262,7 +255,7 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 		info: Info
 
 		lapack.cstedc_(
-			compz_c,
+			&compz_c,
 			&n_int,
 			nil, // d
 			nil, // e
@@ -275,7 +268,6 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 			&iwork_query,
 			&liwork,
 			&info,
-			len(compz_c),
 		)
 
 		return int(real(work_query)), int(rwork_query), int(iwork_query)
@@ -289,7 +281,7 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 		info: Info
 
 		lapack.zstedc_(
-			compz_c,
+			&compz_c,
 			&n_int,
 			nil, // d
 			nil, // e
@@ -302,7 +294,6 @@ query_workspace_tridiagonal_eigenvalues_dc :: proc($T: typeid, n: int, compz: Co
 			&iwork_query,
 			&liwork,
 			&info,
-			len(compz_c),
 		)
 
 		return int(real(work_query)), int(rwork_query), int(iwork_query)
@@ -325,7 +316,7 @@ m_compute_tridiagonal_eigenvalues_dc_f32_c64 :: proc(
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	compz_c := compz_to_char(compz)
+	compz_c := cast(u8)compz
 	n_int := Blas_Int(n)
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
@@ -335,7 +326,7 @@ m_compute_tridiagonal_eigenvalues_dc_f32_c64 :: proc(
 	z_ptr: rawptr = nil
 	if compz != .None && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -343,7 +334,7 @@ m_compute_tridiagonal_eigenvalues_dc_f32_c64 :: proc(
 		assert(len(work) > 0, "Workspace required")
 		assert(len(iwork) > 0, "Integer workspace required")
 
-		lapack.sstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info, len(compz_c))
+		lapack.sstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == complex64 {
 		assert(len(work) > 0, "Workspace required")
 		assert(len(rwork) > 0, "Real workspace required")
@@ -351,11 +342,11 @@ m_compute_tridiagonal_eigenvalues_dc_f32_c64 :: proc(
 
 		lrwork := Blas_Int(len(rwork))
 
-		lapack.cstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info, len(compz_c))
+		lapack.cstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+
+	return info, info == 0
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for f64/c128
@@ -374,7 +365,7 @@ m_compute_tridiagonal_eigenvalues_dc_f64_c128 :: proc(
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	compz_c := compz_to_char(compz)
+	compz_c := cast(u8)compz
 	n_int := Blas_Int(n)
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
@@ -384,7 +375,7 @@ m_compute_tridiagonal_eigenvalues_dc_f64_c128 :: proc(
 	z_ptr: rawptr = nil
 	if compz != .None && Z != nil {
 		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Blas_Int(Z.ld)
+		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
@@ -392,7 +383,7 @@ m_compute_tridiagonal_eigenvalues_dc_f64_c128 :: proc(
 		assert(len(work) > 0, "Workspace required")
 		assert(len(iwork) > 0, "Integer workspace required")
 
-		lapack.dstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info, len(compz_c))
+		lapack.dstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == complex128 {
 		assert(len(work) > 0, "Workspace required")
 		assert(len(rwork) > 0, "Real workspace required")
@@ -400,9 +391,9 @@ m_compute_tridiagonal_eigenvalues_dc_f64_c128 :: proc(
 
 		lrwork := Blas_Int(len(rwork))
 
-		lapack.zstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info, len(compz_c))
+		lapack.zstedc_(compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
 	}
 
-	ok = info == 0
-	return info, ok
+
+	return info, info == 0
 }

@@ -46,24 +46,24 @@ m_cholesky_pivoted_f32_c64 :: proc(
 	assert(len(work) >= 2 * A.rows, "Insufficient work space")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	lda := Blas_Int(A.stride)
-	uplo_c := matrix_region_to_cstring(uplo)
+	n := A.rows
+	lda := A.ld
+	uplo_c := cast(u8)uplo
 
 	rank_val: Blas_Int
 	tol := tolerance
 
 	when T == f32 {
-		lapack.spstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
+		lapack.spstrf_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.cpstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
+		lapack.cpstrf_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info)
 	}
 
 	rank = int(rank_val)
 	tolerance_used = tol
-	ok = info >= 0 // info > 0 indicates rank deficiency, not an error
+	// info > 0 indicates rank deficiency, not an error
 
-	return rank, tolerance_used, info, ok
+	return rank, tolerance_used, info, info >= 0
 }
 
 // Cholesky factorization with pivoting for f64/complex128
@@ -86,22 +86,22 @@ m_cholesky_pivoted_f64_c128 :: proc(
 	assert(len(work) >= 2 * A.rows, "Insufficient work space")
 	assert(uplo == .Upper || uplo == .Lower, "uplo must be Upper or Lower")
 
-	n := Blas_Int(A.rows)
-	lda := Blas_Int(A.stride)
-	uplo_c := matrix_region_to_cstring(uplo)
+	n := A.rows
+	lda := A.ld
+	uplo_c := cast(u8)uplo
 
 	rank_val: Blas_Int
 	tol := tolerance
 
 	when T == f64 {
-		lapack.dpstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
+		lapack.dpstrf_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zpstrf_(uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info, len(uplo_c))
+		lapack.zpstrf_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(pivot), &rank_val, &tol, raw_data(work), &info)
 	}
 
 	rank = int(rank_val)
 	tolerance_used = tol
-	ok = info >= 0 // info > 0 indicates rank deficiency, not an error
+	// info > 0 indicates rank deficiency, not an error
 
-	return rank, tolerance_used, info, ok
+	return rank, tolerance_used, info, info >= 0
 }

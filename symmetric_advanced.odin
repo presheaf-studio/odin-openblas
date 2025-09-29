@@ -12,8 +12,8 @@ import "core:slice"
 // Uses the factorization with block diagonal matrix E from sytrf_rk
 
 // Query workspace for symmetric condition estimation with E factor
-query_workspace_condition_symmetric_e :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
-	when T == complex64 || T == complex128 {
+query_workspace_condition_symmetric_e :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	when is_complex(T) {
 		// Complex types only need work array (2*n)
 		work_size = 2 * n
 		iwork_size = 0
@@ -38,7 +38,7 @@ m_condition_symmetric_e_f32_f64 :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(e) >= n, "E array too small")
@@ -46,19 +46,18 @@ m_condition_symmetric_e_f32_f64 :: proc(
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	anorm_val := anorm
 
 	when T == f32 {
-		lapack.ssycon_3_(&uplo_c, &n_int, raw_data(a.data), &lda, raw_data(e), raw_data(ipiv), &anorm_val, &rcond, raw_data(work), raw_data(iwork), &info, 1)
+		lapack.ssycon_3_(&uplo_c, &n_int, raw_data(a.data), &lda, raw_data(e), raw_data(ipiv), &anorm_val, &rcond, raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dsycon_3_(&uplo_c, &n_int, raw_data(a.data), &lda, raw_data(e), raw_data(ipiv), &anorm_val, &rcond, raw_data(work), raw_data(iwork), &info, 1)
+		lapack.dsycon_3_(&uplo_c, &n_int, raw_data(a.data), &lda, raw_data(e), raw_data(ipiv), &anorm_val, &rcond, raw_data(work), raw_data(iwork), &info)
 	}
 
-	ok = info == 0
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // Estimate condition number with E factor for complex64/complex128
@@ -73,27 +72,25 @@ m_condition_symmetric_e_c64_c128 :: proc(
 	rcond: R,
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(e) >= n, "E array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) >= 2 * n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	anorm_val := anorm
 
 	when T == complex64 {
-		lapack.csycon_3_(&uplo_c, &n_int, cast(^lapack.complex)raw_data(a.data), &lda, cast(^lapack.complex)raw_data(e), raw_data(ipiv), &anorm_val, &rcond, cast(^lapack.complex)raw_data(work), &info, 1)
+		lapack.csycon_3_(&uplo_c, &n_int, raw_data(a.data), &lda, raw_data(e), raw_data(ipiv), &anorm_val, &rcond, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zsycon_3_(&uplo_c, &n_int, cast(^lapack.complex16)raw_data(a.data), &lda, cast(^lapack.complex16)raw_data(e), raw_data(ipiv), &anorm_val, &rcond, cast(^lapack.complex16)raw_data(work), &info, 1)
+		lapack.zsycon_3_(&uplo_c, &n_int, raw_data(a.data), &lda, raw_data(e), raw_data(ipiv), &anorm_val, &rcond, raw_data(work), &info)
 	}
 
-	ok = info == 0
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // Procedure group for symmetric condition estimation with E factor
@@ -109,20 +106,9 @@ m_condition_symmetric_e :: proc {
 // Convert between different storage formats for symmetric matrices
 
 // Conversion direction
-ConversionWay :: enum {
-	CONVERT, // 'C' - Convert from standard to split format
-	REVERT, // 'R' - Revert from split format to standard
-}
-
-// Helper to convert ConversionWay to char
-conversion_way_to_char :: proc(way: ConversionWay) -> u8 {
-	switch way {
-	case .CONVERT:
-		return 'C'
-	case .REVERT:
-		return 'R'
-	}
-	return 'C'
+ConversionWay :: enum u8 {
+	CONVERT = 'C', // 'C' - Convert from standard to split format
+	REVERT  = 'R', // 'R' - Revert from split format to standard
 }
 
 // Convert symmetric matrix storage format for all types
@@ -135,35 +121,28 @@ m_convert_symmetric :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(e) >= n, "E array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	way_c := conversion_way_to_char(way)
+	uplo_c := cast(u8)uplo
+	way_c := cast(u8)way
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	when T == f32 {
-		lapack.ssyconv_(&uplo_c, &way_c, &n_int, raw_data(a.data), &lda, raw_data(ipiv), raw_data(e), &info, 1, 1)
+		lapack.ssyconv_(&uplo_c, &way_c, &n_int, raw_data(a.data), &lda, raw_data(ipiv), raw_data(e), &info)
 	} else when T == f64 {
-		lapack.dsyconv_(&uplo_c, &way_c, &n_int, raw_data(a.data), &lda, raw_data(ipiv), raw_data(e), &info, 1, 1)
+		lapack.dsyconv_(&uplo_c, &way_c, &n_int, raw_data(a.data), &lda, raw_data(ipiv), raw_data(e), &info)
 	} else when T == complex64 {
-		lapack.csyconv_(&uplo_c, &way_c, &n_int, cast(^lapack.complex)raw_data(a.data), &lda, raw_data(ipiv), cast(^lapack.complex)raw_data(e), &info, 1, 1)
+		lapack.csyconv_(&uplo_c, &way_c, &n_int, raw_data(a.data), &lda, raw_data(ipiv), raw_data(e), &info)
 	} else when T == complex128 {
-		lapack.zsyconv_(&uplo_c, &way_c, &n_int, cast(^lapack.complex16)raw_data(a.data), &lda, raw_data(ipiv), cast(^lapack.complex16)raw_data(e), &info, 1, 1)
+		lapack.zsyconv_(&uplo_c, &way_c, &n_int, raw_data(a.data), &lda, raw_data(ipiv), raw_data(e), &info)
 	}
 
-	ok = info == 0
-	return info, ok
-}
-
-// Conversion result
-ConversionResult :: struct {
-	conversion_complete: bool, // True if conversion was successful
-	format_changed:      bool, // True if format actually changed
+	return info, info == 0
 }
 
 
@@ -183,20 +162,20 @@ m_equilibrate_symmetric_f32_f64 :: proc(
 	amax: T,
 	info: Info,
 	ok: bool, // Ratio of smallest to largest scale factor// Absolute maximum element
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(s) >= n, "Scale factors array too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	when T == f32 {
-		lapack.ssyequb_(&uplo_c, &n_int, a.data, &lda, raw_data(s), &scond, &amax, raw_data(work), &info, 1)
+		lapack.ssyequb_(&uplo_c, &n_int, a.data, &lda, raw_data(s), &scond, &amax, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsyequb_(&uplo_c, &n_int, a.data, &lda, raw_data(s), &scond, &amax, raw_data(work), &info, 1)
+		lapack.dsyequb_(&uplo_c, &n_int, a.data, &lda, raw_data(s), &scond, &amax, raw_data(work), &info)
 	}
 
 	ok = info == 0
@@ -214,21 +193,20 @@ m_equilibrate_symmetric_c64_c128 :: proc(
 	amax: R,
 	info: Info,
 	ok: bool, // Ratio of smallest to largest scale factor// Absolute maximum element
-) where T == complex64 || T == complex128,
-	R == real_type_of(T) {
+) where is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(s) >= n, "Scale factors array too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	when T == complex64 {
-		lapack.csyequb_(&uplo_c, &n_int, cast(^lapack.complex)a.data, &lda, raw_data(s), &scond, &amax, cast(^lapack.complex)raw_data(work), &info, 1)
+		lapack.csyequb_(&uplo_c, &n_int, a.data, &lda, raw_data(s), &scond, &amax, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zsyequb_(&uplo_c, &n_int, cast(^lapack.doublecomplex)a.data, &lda, raw_data(s), &scond, &amax, cast(^lapack.doublecomplex)raw_data(work), &info, 1)
+		lapack.zsyequb_(&uplo_c, &n_int, a.data, &lda, raw_data(s), &scond, &amax, raw_data(work), &info)
 	}
 
 	ok = info == 0

@@ -36,13 +36,13 @@ m_reduce_packed_symmetric_tridiagonal_f32_f64 :: proc(
 		assert(len(tau) >= n - 1, "Tau array too small")
 	}
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	when T == f32 {
-		lapack.ssptrd_(&uplo_c, &n_int, raw_data(ap), raw_data(d), raw_data(e), raw_data(tau), &info, 1)
+		lapack.ssptrd_(&uplo_c, &n_int, raw_data(ap), raw_data(d), raw_data(e), raw_data(tau), &info)
 	} else when T == f64 {
-		lapack.dsptrd_(&uplo_c, &n_int, raw_data(ap), raw_data(d), raw_data(e), raw_data(tau), &info, 1)
+		lapack.dsptrd_(&uplo_c, &n_int, raw_data(ap), raw_data(d), raw_data(e), raw_data(tau), &info)
 	}
 
 	ok = info == 0
@@ -69,13 +69,13 @@ m_reduce_packed_hermitian_tridiagonal_c64_c128 :: proc(
 		assert(len(tau) >= n - 1, "Tau array too small")
 	}
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	when T == complex64 {
-		lapack.chptrd_(&uplo_c, &n_int, cast(^lapack.complex)raw_data(ap), raw_data(d), raw_data(e), cast(^lapack.complex)raw_data(tau), &info, 1)
+		lapack.chptrd_(&uplo_c, &n_int, raw_data(ap), raw_data(d), raw_data(e), raw_data(tau), &info)
 	} else when T == complex128 {
-		lapack.zhptrd_(&uplo_c, &n_int, cast(^lapack.doublecomplex)raw_data(ap), raw_data(d), raw_data(e), cast(^lapack.doublecomplex)raw_data(tau), &info, 1)
+		lapack.zhptrd_(&uplo_c, &n_int, raw_data(ap), raw_data(d), raw_data(e), raw_data(tau), &info)
 	}
 
 	ok = info == 0
@@ -106,13 +106,13 @@ m_factor_packed_symmetric_f32_f64 :: proc(
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	when T == f32 {
-		lapack.ssptrf_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), &info, 1)
+		lapack.ssptrf_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), &info)
 	} else when T == f64 {
-		lapack.dsptrf_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), &info, 1)
+		lapack.dsptrf_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), &info)
 	}
 
 	ok = info == 0
@@ -132,13 +132,13 @@ m_factor_packed_symmetric_c64_c128 :: proc(
 	assert(len(ap) >= n * (n + 1) / 2, "Packed array too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	when T == complex64 {
-		lapack.csptrf_(&uplo_c, &n_int, cast(^lapack.complex)raw_data(ap), raw_data(ipiv), &info, 1)
+		lapack.csptrf_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), &info)
 	} else when T == complex128 {
-		lapack.zsptrf_(&uplo_c, &n_int, cast(^lapack.doublecomplex)raw_data(ap), raw_data(ipiv), &info, 1)
+		lapack.zsptrf_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), &info)
 	}
 
 	ok = info == 0
@@ -171,13 +171,13 @@ m_invert_packed_symmetric_f32_f64 :: proc(
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) >= n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	when T == f32 {
-		lapack.ssptri_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), raw_data(work), &info, 1)
+		lapack.ssptri_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsptri_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), raw_data(work), &info, 1)
+		lapack.dsptri_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), raw_data(work), &info)
 	}
 
 	ok = info == 0
@@ -199,13 +199,13 @@ m_invert_packed_symmetric_c64_c128 :: proc(
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) >= n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 
 	when T == complex64 {
-		lapack.csptri_(&uplo_c, &n_int, cast(^lapack.complex)raw_data(ap), raw_data(ipiv), cast(^lapack.complex)raw_data(work), &info, 1)
+		lapack.csptri_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zsptri_(&uplo_c, &n_int, cast(^lapack.doublecomplex)raw_data(ap), raw_data(ipiv), cast(^lapack.doublecomplex)raw_data(work), &info, 1)
+		lapack.zsptri_(&uplo_c, &n_int, raw_data(ap), raw_data(ipiv), raw_data(work), &info)
 	}
 
 	ok = info == 0

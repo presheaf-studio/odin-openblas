@@ -108,26 +108,26 @@ query_workspace_svd :: proc(A: ^Matrix($T), compute_u: bool = true, compute_vt: 
 
 	when T == f32 {
 		work_query: f32
-		lapack.sgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info, 1, 1)
+		lapack.sgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info)
 		work_size = int(work_query)
 		rwork_size = 0 // Not used for real types
 	} else when T == f64 {
 		work_query: f64
-		lapack.dgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info, 1, 1)
+		lapack.dgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info)
 		work_size = int(work_query)
 		rwork_size = 0 // Not used for real types
 	} else when T == complex64 {
 		work_query: complex64
 		dummy_rwork := [1]f32{}
 
-		lapack.cgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info, 1, 1)
+		lapack.cgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info)
 		work_size = int(real(work_query))
 		rwork_size = 5 * int(min_mn) // Complex types need real workspace
 	} else when T == complex128 {
 		work_query: complex128
 		dummy_rwork := [1]f64{}
 
-		lapack.zgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info, 1, 1)
+		lapack.zgesvd_(jobu_c, jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info)
 		work_size = int(real(work_query))
 		rwork_size = 5 * int(min_mn) // Complex types need real workspace
 	}
@@ -185,7 +185,7 @@ svd_f32_c64 :: proc(
 		ldu = U.ld
 		// Verify U dimensions
 		u_cols := full_matrices && m > min_mn ? int(m) : int(min_mn)
-		assert(U.rows == m && U.cols >= Blas_Int(u_cols), "U matrix dimensions incorrect")
+		assert(U.rows == Blas_Int(m) && U.cols >= Blas_Int(u_cols), "U matrix dimensions incorrect")
 	}
 
 	ldvt: Blas_Int = 1
@@ -203,8 +203,8 @@ svd_f32_c64 :: proc(
 	when T == f32 {
 		// Compute SVD - real version doesn't need rwork
 		lapack.sgesvd_(
-			jobu_c,
-			jobvt_c,
+			&jobu_c,
+			&jobvt_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -217,8 +217,6 @@ svd_f32_c64 :: proc(
 			raw_data(work),
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex64 {
 		// Complex versions need real workspace
@@ -226,8 +224,8 @@ svd_f32_c64 :: proc(
 
 		// Compute SVD
 		lapack.cgesvd_(
-			jobu_c,
-			jobvt_c,
+			&jobu_c,
+			&jobvt_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -241,13 +239,10 @@ svd_f32_c64 :: proc(
 			&lwork,
 			raw_data(rwork),
 			&info,
-			1,
-			1,
 		)
 	}
 
-	ok := info == 0
-	return info, ok
+	return info, info == 0
 }
 
 // Combined f64 real and complex128 SVD (pre-allocated arrays)
@@ -317,8 +312,8 @@ svd_f64_c128 :: proc(
 	when T == f64 {
 		// Compute SVD - real version doesn't need rwork
 		lapack.dgesvd_(
-			jobu_c,
-			jobvt_c,
+			&jobu_c,
+			&jobvt_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -331,8 +326,6 @@ svd_f64_c128 :: proc(
 			raw_data(work),
 			&lwork,
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		// Complex versions need real workspace
@@ -340,8 +333,8 @@ svd_f64_c128 :: proc(
 
 		// Compute SVD
 		lapack.zgesvd_(
-			jobu_c,
-			jobvt_c,
+			&jobu_c,
+			&jobvt_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -355,8 +348,6 @@ svd_f64_c128 :: proc(
 			&lwork,
 			raw_data(rwork),
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -404,10 +395,8 @@ query_workspace_svd_qr :: proc(
 	rwork_size: int,
 	iwork_size: int,
 	info: Info,
-) where T == f32 ||
-	T == f64 ||
-	T == complex64 ||
-	T == complex128 {
+) where is_float(T) ||
+	is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -438,35 +427,7 @@ query_workspace_svd_qr :: proc(
 		rwork_query: f32
 		dummy_s := [1]f32{}
 
-		lapack.sgesvdq_(
-			joba_c,
-			jobp_c,
-			jobr_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldv,
-			&numrank,
-			&iwork_query,
-			&liwork,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-		)
+		lapack.sgesvdq_(joba_c, jobp_c, jobr_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldv, &numrank, &iwork_query, &liwork, &work_query, &lwork, &rwork_query, &lrwork, &info)
 
 		work_size = int(work_query)
 		rwork_size = int(rwork_query)
@@ -476,35 +437,7 @@ query_workspace_svd_qr :: proc(
 		rwork_query: f64
 		dummy_s := [1]f64{}
 
-		lapack.dgesvdq_(
-			joba_c,
-			jobp_c,
-			jobr_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldv,
-			&numrank,
-			&iwork_query,
-			&liwork,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-		)
+		lapack.dgesvdq_(joba_c, jobp_c, jobr_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldv, &numrank, &iwork_query, &liwork, &work_query, &lwork, &rwork_query, &lrwork, &info)
 
 		work_size = int(work_query)
 		rwork_size = int(rwork_query)
@@ -514,35 +447,7 @@ query_workspace_svd_qr :: proc(
 		rwork_query: f32
 		dummy_s := [1]f32{}
 
-		lapack.cgesvdq_(
-			joba_c,
-			jobp_c,
-			jobr_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldv,
-			&numrank,
-			&iwork_query,
-			&liwork,
-			&cwork_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-		)
+		lapack.cgesvdq_(joba_c, jobp_c, jobr_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldv, &numrank, &iwork_query, &liwork, &cwork_query, &lwork, &rwork_query, &lrwork, &info)
 
 		work_size = int(real(cwork_query))
 		rwork_size = int(rwork_query)
@@ -552,35 +457,7 @@ query_workspace_svd_qr :: proc(
 		rwork_query: f64
 		dummy_s := [1]f64{}
 
-		lapack.zgesvdq_(
-			joba_c,
-			jobp_c,
-			jobr_c,
-			jobu_c,
-			jobv_c,
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&dummy_s[0],
-			nil,
-			&ldu,
-			nil,
-			&ldv,
-			&numrank,
-			&iwork_query,
-			&liwork,
-			&zwork_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-		)
+		lapack.zgesvdq_(joba_c, jobp_c, jobr_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldv, &numrank, &iwork_query, &liwork, &zwork_query, &lwork, &rwork_query, &lrwork, &info)
 
 		work_size = int(real(zwork_query))
 		rwork_size = int(rwork_query)
@@ -679,11 +556,6 @@ svd_qr_f32_c64 :: proc(
 			raw_data(rwork),
 			&lrwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	} else when T == complex64 {
 		// Compute SVD
@@ -710,11 +582,6 @@ svd_qr_f32_c64 :: proc(
 			raw_data(rwork),
 			&lrwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	}
 
@@ -805,11 +672,6 @@ svd_qr_f64_c128 :: proc(
 			raw_data(rwork),
 			&lrwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		// Compute SVD
@@ -836,11 +698,6 @@ svd_qr_f64_c128 :: proc(
 			raw_data(rwork),
 			&lrwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	}
 
@@ -923,7 +780,7 @@ query_workspace_svd_select :: proc(
 	min_mn := min(m, n)
 
 	// Set range parameter
-	range_c := svd_range_to_cstring(range_mode)
+	range_c := cast(u8)range_mode
 
 	// Set job parameters
 	jobu_c := compute_u ? cstring("V") : cstring("N")
@@ -972,9 +829,9 @@ query_workspace_svd_select :: proc(
 		vu_f32 := f32(vu)
 
 		lapack.sgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -993,9 +850,6 @@ query_workspace_svd_select :: proc(
 			&lwork,
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0 // Real version doesn't need rwork
@@ -1007,9 +861,9 @@ query_workspace_svd_select :: proc(
 		vu_f64 := f64(vu)
 
 		lapack.dgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1028,9 +882,6 @@ query_workspace_svd_select :: proc(
 			&lwork,
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0 // Real version doesn't need rwork
@@ -1043,9 +894,9 @@ query_workspace_svd_select :: proc(
 		vu_f32 := f32(vu)
 
 		lapack.cgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1065,9 +916,6 @@ query_workspace_svd_select :: proc(
 			&dummy_rwork[0],
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(cwork_query))
 		// Complex version needs real workspace
@@ -1081,9 +929,9 @@ query_workspace_svd_select :: proc(
 		vu_f64 := f64(vu)
 
 		lapack.zgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1103,9 +951,6 @@ query_workspace_svd_select :: proc(
 			&dummy_rwork[0],
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(zwork_query))
 		// Complex version needs real workspace
@@ -1143,7 +988,7 @@ svd_select_f32_c64 :: proc(
 	min_mn := min(m, n)
 
 	// Set range parameter
-	range_c := svd_range_to_cstring(range_mode)
+	range_c := cast(u8)range_mode
 
 	// Set job parameters
 	jobu_c := compute_u ? cstring("V") : cstring("N")
@@ -1193,9 +1038,9 @@ svd_select_f32_c64 :: proc(
 		// Real version doesn't need rwork
 		// Compute SVD
 		lapack.sgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1214,9 +1059,6 @@ svd_select_f32_c64 :: proc(
 			&lwork,
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == complex64 {
 		// Complex version needs real workspace
@@ -1225,9 +1067,9 @@ svd_select_f32_c64 :: proc(
 
 		// Compute SVD
 		lapack.cgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1247,16 +1089,12 @@ svd_select_f32_c64 :: proc(
 			raw_data(rwork),
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	// Note: Caller should resize S, U.cols, VT.rows based on ns if needed
 
-	ok = info == 0
-	return ns, info, ok
+	return ns, info, info == 0
 }
 
 // Combined f64 real and complex128 selective SVD
@@ -1286,7 +1124,7 @@ svd_select_f64_c128 :: proc(
 	min_mn := min(m, n)
 
 	// Set range parameter
-	range_c := svd_range_to_cstring(range_mode)
+	range_c := cast(u8)range_mode
 
 	// Set job parameters
 	jobu_c := compute_u ? cstring("V") : cstring("N")
@@ -1336,9 +1174,9 @@ svd_select_f64_c128 :: proc(
 		// Real version doesn't need rwork
 		// Compute SVD
 		lapack.dgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1357,9 +1195,6 @@ svd_select_f64_c128 :: proc(
 			&lwork,
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		// Complex version needs real workspace
@@ -1368,9 +1203,9 @@ svd_select_f64_c128 :: proc(
 
 		// Compute SVD
 		lapack.zgesvdx_(
-			jobu_c,
-			jobvt_c,
-			range_c,
+			&jobu_c,
+			&jobvt_c,
+			&range_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -1390,16 +1225,12 @@ svd_select_f64_c128 :: proc(
 			raw_data(rwork),
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
 		)
 	}
 
 	// Note: Caller should resize S, U.cols, VT.rows based on ns if needed
 
-	ok = info == 0
-	return ns, info, ok
+	return ns, info, info == 0
 }
 
 // DIVIDE-AND-CONQUER SVD
@@ -1490,7 +1321,6 @@ query_workspace_svd_divide :: proc(
 			&lwork,
 			&dummy_iwork[0],
 			&info,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0 // Real version doesn't need rwork
@@ -1514,7 +1344,6 @@ query_workspace_svd_divide :: proc(
 			&lwork,
 			&dummy_iwork[0],
 			&info,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0 // Real version doesn't need rwork
@@ -1540,7 +1369,6 @@ query_workspace_svd_divide :: proc(
 			&dummy_rwork[0],
 			&dummy_iwork[0],
 			&info,
-			1,
 		)
 		work_size = int(real(cwork_query))
 		// Complex version needs real workspace
@@ -1570,7 +1398,6 @@ query_workspace_svd_divide :: proc(
 			&dummy_rwork[0],
 			&dummy_iwork[0],
 			&info,
-			1,
 		)
 		work_size = int(real(zwork_query))
 		// Complex version needs real workspace
@@ -1659,7 +1486,6 @@ svd_divide_f32_c64 :: proc(
 			&lwork,
 			raw_data(iwork),
 			&info,
-			1,
 		)
 	} else when T == complex64 {
 		// Complex version needs real workspace
@@ -1686,7 +1512,6 @@ svd_divide_f32_c64 :: proc(
 			raw_data(rwork),
 			raw_data(iwork),
 			&info,
-			1,
 		)
 	}
 
@@ -1767,7 +1592,6 @@ svd_divide_f64_c128 :: proc(
 			&lwork,
 			raw_data(iwork),
 			&info,
-			1,
 		)
 	} else when T == complex128 {
 		// Complex version needs real workspace
@@ -1794,7 +1618,6 @@ svd_divide_f64_c128 :: proc(
 			raw_data(rwork),
 			raw_data(iwork),
 			&info,
-			1,
 		)
 	}
 
@@ -1914,10 +1737,8 @@ query_workspace_cs_decomp :: proc(
 	work_size: int,
 	rwork_size: int,
 	info: Info,
-) where T == f32 ||
-	T == f64 ||
-	T == complex64 ||
-	T == complex128 {
+) where is_float(T) ||
+	is_complex(T) {
 	// Prepare parameters
 	U1_shape := [2]Blas_Int{U1.rows, U1.cols}
 	U2_shape := [2]Blas_Int{U2.rows, U2.cols}
@@ -1944,11 +1765,11 @@ query_workspace_cs_decomp :: proc(
 	when T == f32 {
 		work_query: f32
 		lapack.sbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -1973,11 +1794,6 @@ query_workspace_cs_decomp :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0
@@ -1985,11 +1801,11 @@ query_workspace_cs_decomp :: proc(
 	} else when T == f64 {
 		work_query: f64
 		lapack.dbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2014,11 +1830,6 @@ query_workspace_cs_decomp :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0
@@ -2026,11 +1837,11 @@ query_workspace_cs_decomp :: proc(
 	} else when T == complex64 {
 		work_query: complex64
 		lapack.cbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2057,11 +1868,6 @@ query_workspace_cs_decomp :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 		rwork_size = int(trans ? 8 * r : 7 * r)
@@ -2069,11 +1875,11 @@ query_workspace_cs_decomp :: proc(
 	} else when T == complex128 {
 		work_query: complex128
 		lapack.zbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2100,11 +1906,6 @@ query_workspace_cs_decomp :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 		rwork_size = int(trans ? 8 * r : 7 * r)
@@ -2170,11 +1971,11 @@ cs_decomp_f32_f64 :: proc(
 
 	when T == f32 {
 		lapack.sbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2199,20 +2000,15 @@ cs_decomp_f32_f64 :: proc(
 			raw_data(work),
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 
 	} else when T == f64 {
 		lapack.dbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2237,11 +2033,6 @@ cs_decomp_f32_f64 :: proc(
 			raw_data(work),
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	}
 
@@ -2308,11 +2099,11 @@ cs_decomp_c64_c128 :: proc(
 	when T == complex64 {
 		// For complex64, theta and phi are f32 arrays
 		lapack.cbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2339,21 +2130,16 @@ cs_decomp_c64_c128 :: proc(
 			raw_data(work),
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		// For complex128, theta and phi are f64 arrays
 
 		lapack.zbbcsd_(
-			jobu1_c,
-			jobu2_c,
-			jobv1t_c,
-			jobv2t_c,
-			trans_c,
+			&jobu1_c,
+			&jobu2_c,
+			&jobv1t_c,
+			&jobv2t_c,
+			&trans_c,
 			&m,
 			&p,
 			&q,
@@ -2380,11 +2166,6 @@ cs_decomp_c64_c128 :: proc(
 			raw_data(work),
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 	}
 
@@ -2437,12 +2218,12 @@ query_workspace_svd_jacobi :: proc(
 		work_query: f32
 
 		lapack.sgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2456,12 +2237,6 @@ query_workspace_svd_jacobi :: proc(
 			&lwork,
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0
@@ -2470,12 +2245,12 @@ query_workspace_svd_jacobi :: proc(
 		work_query: f64
 
 		lapack.dgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2489,12 +2264,6 @@ query_workspace_svd_jacobi :: proc(
 			&lwork,
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0
@@ -2505,12 +2274,12 @@ query_workspace_svd_jacobi :: proc(
 		lrwork: Blas_Int = -1
 
 		lapack.cgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2526,12 +2295,6 @@ query_workspace_svd_jacobi :: proc(
 			&lrwork,
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 		rwork_size = int(rwork_query)
@@ -2542,12 +2305,12 @@ query_workspace_svd_jacobi :: proc(
 		lrwork: Blas_Int = -1
 
 		lapack.zgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2563,12 +2326,6 @@ query_workspace_svd_jacobi :: proc(
 			&lrwork,
 			&dummy_iwork[0],
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 		rwork_size = int(rwork_query)
@@ -2671,12 +2428,12 @@ svd_jacobi_f32_c64 :: proc(
 	when T == f32 {
 		// Perform SVD
 		lapack.sgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -2690,12 +2447,6 @@ svd_jacobi_f32_c64 :: proc(
 			&lwork,
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 
 		// Extract statistics from work array
@@ -2708,12 +2459,12 @@ svd_jacobi_f32_c64 :: proc(
 
 		// Perform SVD
 		lapack.cgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -2729,12 +2480,6 @@ svd_jacobi_f32_c64 :: proc(
 			&lrwork,
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 
 		// Extract statistics from rwork array
@@ -2800,12 +2545,12 @@ svd_jacobi_f64_c128 :: proc(
 	when T == f64 {
 		// Perform SVD
 		lapack.dgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -2819,12 +2564,6 @@ svd_jacobi_f64_c128 :: proc(
 			&lwork,
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 
 		// Extract statistics
@@ -2836,12 +2575,12 @@ svd_jacobi_f64_c128 :: proc(
 
 		// Perform SVD
 		lapack.zgejsv_(
-			joba_c,
-			jobu_c,
-			jobv_c,
-			jobr_c,
-			jobt_c,
-			jobp_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
+			&jobr_c,
+			&jobt_c,
+			&jobp_c,
 			&m,
 			&n,
 			raw_data(A.data),
@@ -2857,12 +2596,6 @@ svd_jacobi_f64_c128 :: proc(
 			&lrwork,
 			raw_data(iwork),
 			&info,
-			1,
-			1,
-			1,
-			1,
-			1,
-			1,
 		)
 
 		// Extract statistics from rwork array
@@ -2915,9 +2648,9 @@ query_workspace_svd_jacobi_variant :: proc(
 		work_query: f32
 
 		lapack.sgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2929,9 +2662,6 @@ query_workspace_svd_jacobi_variant :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0
@@ -2940,9 +2670,9 @@ query_workspace_svd_jacobi_variant :: proc(
 		work_query: f64
 
 		lapack.dgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2954,9 +2684,6 @@ query_workspace_svd_jacobi_variant :: proc(
 			&work_query,
 			&lwork,
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(work_query)
 		rwork_size = 0
@@ -2966,9 +2693,9 @@ query_workspace_svd_jacobi_variant :: proc(
 		rwork_size = max(6, int(m + n)) // Real workspace for complex variant
 
 		lapack.cgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
 			&m,
 			&n,
 			nil, // A data
@@ -2981,9 +2708,6 @@ query_workspace_svd_jacobi_variant :: proc(
 			&lwork,
 			nil, // rwork dummy
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 
@@ -2992,9 +2716,9 @@ query_workspace_svd_jacobi_variant :: proc(
 		rwork_size = max(6, int(m + n)) // Real workspace for complex variant
 
 		lapack.zgesvj_(
-			joba_c,
-			jobu_c,
-			jobv_c,
+			&joba_c,
+			&jobu_c,
+			&jobv_c,
 			&m,
 			&n,
 			nil, // A data
@@ -3007,9 +2731,6 @@ query_workspace_svd_jacobi_variant :: proc(
 			&lwork,
 			nil, // rwork dummy
 			&info,
-			1,
-			1,
-			1,
 		)
 		work_size = int(real(work_query))
 	}
@@ -3097,14 +2818,14 @@ svd_jacobi_variant_f32_c64 :: proc(
 
 	when T == f32 {
 		// Perform SVD
-		lapack.sgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, &info, 1, 1, 1)
+		lapack.sgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
 		// Complex version requires rwork
 		assert(len(rwork) > 0, "rwork array must be provided for complex types")
 		lrwork := Blas_Int(len(rwork))
 
 		// Perform SVD
-		lapack.cgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info, 1, 1, 1)
+		lapack.cgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info)
 	}
 
 	// Extract U from modified A if requested
@@ -3165,14 +2886,14 @@ svd_jacobi_variant_f64_c128 :: proc(
 
 	when T == f64 {
 		// Perform SVD
-		lapack.dgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, &info, 1, 1, 1)
+		lapack.dgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
 		// Complex version requires rwork
 		assert(len(rwork) > 0, "rwork array must be provided for complex types")
 		lrwork := Blas_Int(len(rwork))
 
 		// Perform SVD
-		lapack.zgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info, 1, 1, 1)
+		lapack.zgesvj_(joba_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, (compute_v && V != nil) ? raw_data(V.data) : nil, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info)
 	}
 
 	// Extract U from modified A if requested

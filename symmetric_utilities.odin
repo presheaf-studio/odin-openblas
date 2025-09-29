@@ -30,20 +30,20 @@ m_swap_symmetric_rows :: proc(
 	assert(i1 >= 0 && i1 < n, "First index out of range")
 	assert(i2 >= 0 && i2 < n, "Second index out of range")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	i1_int := Blas_Int(i1 + 1)
 	i2_int := Blas_Int(i2 + 1)
 
 	when T == f32 {
-		lapack.ssyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int, 1)
+		lapack.ssyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int)
 	} else when T == f64 {
-		lapack.dsyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int, 1)
+		lapack.dsyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int)
 	} else when T == complex64 {
-		lapack.csyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int, 1)
+		lapack.csyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int)
 	} else when T == complex128 {
-		lapack.zsyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int, 1)
+		lapack.zsyswapr_(&uplo_c, &n_int, a.data, &lda, &i1_int, &i2_int)
 	}
 
 	return true
@@ -55,26 +55,26 @@ m_swap_symmetric_rows :: proc(
 // Reduces symmetric matrices to tridiagonal form
 
 // Transformation type for 2-stage algorithms
-TransformationType :: enum {
-	NO_VECTORS, // 'N' - Do not compute transformation matrix
-	VECTORS, // 'V' - Compute transformation matrix
+TransformationType :: enum u8 {
+	NO_VECTORS = 'N', // 'N' - Do not compute transformation matrix
+	VECTORS    = 'V', // 'V' - Compute transformation matrix
 }
 
 // Query workspace for symmetric tridiagonalization
 query_workspace_tridiagonalize_symmetric :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) {
 	n_int := Blas_Int(n)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrd_(&uplo_c, &n_int, nil, &lda, nil, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytrd_(&uplo_c, &n_int, nil, &lda, nil, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrd_(&uplo_c, &n_int, nil, &lda, nil, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytrd_(&uplo_c, &n_int, nil, &lda, nil, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	}
 
@@ -100,40 +100,40 @@ m_tridiagonalize_symmetric :: proc(
 	assert(len(tau) >= n - 1, "Tau array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrd_(&uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(work), &lwork, &info, 1)
+		lapack.ssytrd_(&uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrd_(&uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(work), &lwork, &info, 1)
+		lapack.dsytrd_(&uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
 }
 
 // Query workspace for 2-stage symmetric tridiagonalization
-query_workspace_tridiagonalize_symmetric_2stage :: proc($T: typeid, n: int, vect := TransformationType.NO_VECTORS, uplo := MatrixRegion.Upper) -> (work_size: int, hous2_size: int) where T == f32 || T == f64 {
+query_workspace_tridiagonalize_symmetric_2stage :: proc($T: typeid, n: int, vect := TransformationType.NO_VECTORS, uplo := MatrixRegion.Upper) -> (work_size: int, hous2_size: int) where is_float(T) {
 	n_int := Blas_Int(n)
-	vect_c := transformation_type_to_char(vect)
-	uplo_c := matrix_region_to_char(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
-	lhous2 := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
+	lhous2 := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
 		hous2_query: f32
-		lapack.ssytrd_2stage_(&vect_c, &uplo_c, &n_int, nil, &lda, nil, nil, nil, &hous2_query, &lhous2, &work_query, &lwork, &info, 1, 1)
+		lapack.ssytrd_2stage_(&vect_c, &uplo_c, &n_int, nil, &lda, nil, nil, nil, &hous2_query, &lhous2, &work_query, &lwork, &info)
 		work_size = int(work_query)
 		hous2_size = int(hous2_query)
 	} else when T == f64 {
 		work_query: f64
 		hous2_query: f64
-		lapack.dsytrd_2stage_(&vect_c, &uplo_c, &n_int, nil, &lda, nil, nil, nil, &hous2_query, &lhous2, &work_query, &lwork, &info, 1, 1)
+		lapack.dsytrd_2stage_(&vect_c, &uplo_c, &n_int, nil, &lda, nil, nil, nil, &hous2_query, &lhous2, &work_query, &lwork, &info)
 		work_size = int(work_query)
 		hous2_size = int(hous2_query)
 	}
@@ -154,7 +154,7 @@ m_tridiagonalize_symmetric_2stage :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(d) >= n, "Diagonal array too small")
@@ -163,17 +163,17 @@ m_tridiagonalize_symmetric_2stage :: proc(
 	assert(len(hous2) > 0, "HOUS2 array required")
 	assert(len(work) > 0, "Workspace required")
 
-	vect_c := transformation_type_to_char(vect)
-	uplo_c := matrix_region_to_char(uplo)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lhous2 := Blas_Int(len(hous2))
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrd_2stage_(&vect_c, &uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(hous2), &lhous2, raw_data(work), &lwork, &info, 1, 1)
+		lapack.ssytrd_2stage_(&vect_c, &uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(hous2), &lhous2, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrd_2stage_(&vect_c, &uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(hous2), &lhous2, raw_data(work), &lwork, &info, 1, 1)
+		lapack.dsytrd_2stage_(&vect_c, &uplo_c, &n_int, a.data, &lda, raw_data(d), raw_data(e), raw_data(tau), raw_data(hous2), &lhous2, raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -185,28 +185,28 @@ m_tridiagonalize_symmetric_2stage :: proc(
 // Bunch-Kaufman factorization of symmetric indefinite matrices
 
 // Query workspace for symmetric factorization (Bunch-Kaufman)
-query_workspace_factorize_symmetric :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_factorize_symmetric :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n_int := Blas_Int(n)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.csytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytrf_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -222,25 +222,25 @@ m_factorize_symmetric :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.ssytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.dsytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.csytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.zsytrf_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -252,28 +252,28 @@ m_factorize_symmetric :: proc(
 // Aasen's algorithm for symmetric indefinite matrices
 
 // Query workspace for Aasen symmetric factorization
-query_workspace_factorize_symmetric_aasen :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_factorize_symmetric_aasen :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n_int := Blas_Int(n)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.csytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytrf_aa_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -289,25 +289,25 @@ m_factorize_symmetric_aasen :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.ssytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.dsytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.csytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.zsytrf_aa_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -326,29 +326,29 @@ query_workspace_factorize_symmetric_aasen_2stage :: proc(
 	uplo := MatrixRegion.Upper,
 ) -> (
 	work_size: int,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n_int := Blas_Int(n)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
 	ltb := Blas_Int(max(1, 4 * n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.csytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytrf_aa_2stage_(&uplo_c, &n_int, nil, &lda, nil, &ltb, nil, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -366,7 +366,7 @@ m_factorize_symmetric_aasen_2stage :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(tb.rows >= 4 * n, "Band matrix too small")
@@ -374,20 +374,20 @@ m_factorize_symmetric_aasen_2stage :: proc(
 	assert(len(ipiv2) >= n, "Second pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
-	ltb := Blas_Int(tb.ld)
+	lda := a.ld
+	ltb := tb.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info, 1)
+		lapack.ssytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info, 1)
+		lapack.dsytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info, 1)
+		lapack.csytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info, 1)
+		lapack.zsytrf_aa_2stage_(&uplo_c, &n_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -399,28 +399,28 @@ m_factorize_symmetric_aasen_2stage :: proc(
 // Bounded Bunch-Kaufman factorization with additional E factor
 
 // Query workspace for RK (bounded Bunch-Kaufman) symmetric factorization
-query_workspace_factorize_symmetric_rk :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_factorize_symmetric_rk :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n_int := Blas_Int(n)
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	lda := Blas_Int(max(1, n))
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.csytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytrf_rk_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -437,26 +437,26 @@ m_factorize_symmetric_rk :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(e) >= n, "E vector too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.ssytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.dsytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.csytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.zsytrf_rk_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -468,29 +468,29 @@ m_factorize_symmetric_rk :: proc(
 // Rook pivoting factorization for enhanced numerical stability
 
 // Query workspace for symmetric matrix factorization using rook pivoting
-query_workspace_factorize_symmetric_rook :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_factorize_symmetric_rook :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// Query LAPACK for optimal workspace size
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	lda := Blas_Int(n)
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.csytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytrf_rook_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -506,25 +506,25 @@ m_factorize_symmetric_rook :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.ssytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.dsytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.csytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.zsytrf_rook_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -542,7 +542,7 @@ m_factorize_symmetric_rook :: proc(
 // Standard inversion using Bunch-Kaufman factorization
 
 // Query workspace for symmetric matrix inversion
-query_workspace_invert_symmetric :: proc($T: typeid, n: int) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_invert_symmetric :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// SYTRI requires workspace of size n
 	work_size = n
 	if work_size < 1 {
@@ -560,24 +560,24 @@ m_invert_symmetric :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) >= n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	when T == f32 {
-		lapack.ssytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info, 1)
+		lapack.ssytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info, 1)
+		lapack.dsytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.csytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info, 1)
+		lapack.csytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zsytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info, 1)
+		lapack.zsytri_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -590,29 +590,29 @@ m_invert_symmetric :: proc(
 // Improved inversion algorithm with better cache efficiency
 
 // Query workspace for improved symmetric matrix inversion
-query_workspace_invert_symmetric_improved :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_invert_symmetric_improved :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// Query LAPACK for optimal workspace size
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	lda := Blas_Int(n)
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.csytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytri2_(&uplo_c, &n_int, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -628,25 +628,25 @@ m_invert_symmetric_improved :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.ssytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.dsytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.csytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.zsytri2_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -658,7 +658,7 @@ m_invert_symmetric_improved :: proc(
 // Block-based inversion algorithm for improved performance
 
 // Query workspace for block-based symmetric matrix inversion
-query_workspace_invert_symmetric_blocked :: proc($T: typeid, n: int, nb: int = 64) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_invert_symmetric_blocked :: proc($T: typeid, n: int, nb: int = 64) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// SYTRI2X requires workspace of size nb*(n+nb)
 	effective_nb := nb
 	if effective_nb <= 0 {
@@ -681,25 +681,25 @@ m_invert_symmetric_blocked :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) >= nb * (n + nb), "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	nb_int := Blas_Int(nb)
 
 	when T == f32 {
-		lapack.ssytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info, 1)
+		lapack.ssytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info)
 	} else when T == f64 {
-		lapack.dsytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info, 1)
+		lapack.dsytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info)
 	} else when T == complex64 {
-		lapack.csytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info, 1)
+		lapack.csytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info)
 	} else when T == complex128 {
-		lapack.zsytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info, 1)
+		lapack.zsytri2x_(&uplo_c, &n_int, a.data, &lda, raw_data(ipiv), raw_data(work), &nb_int, &info)
 	}
 
 	return info, info == 0
@@ -712,29 +712,29 @@ m_invert_symmetric_blocked :: proc(
 // Inversion using RK factorization with E factor
 
 // Query workspace for RK inversion with E factor
-query_workspace_invert_symmetric_rk :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_invert_symmetric_rk :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// Query LAPACK for optimal workspace size
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	lda := Blas_Int(n)
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.ssytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.dsytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.csytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info, 1)
+		lapack.zsytri_3_(&uplo_c, &n_int, nil, &lda, nil, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -751,42 +751,31 @@ m_invert_symmetric_rk :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Matrix too small")
 	assert(len(e) >= n, "E vector too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.ssytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.dsytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.csytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info, 1)
+		lapack.zsytri_3_(&uplo_c, &n_int, a.data, &lda, raw_data(e), raw_data(ipiv), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
 }
 
-
-// ============================================================================
-// SYMMETRIC SYSTEM SOLUTION
-// ============================================================================
-// Solving symmetric systems using factorizations
-
-// System solution result structure
-SolutionResult :: struct($T: typeid) {
-	solution_successful: bool,
-	is_singular:         bool,
-}
 
 // ============================================================================
 // STANDARD SYMMETRIC SYSTEM SOLUTION (SYTRS)
@@ -802,27 +791,27 @@ m_solve_symmetric_sytrs :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Matrix A too small")
 	assert(b.rows >= n, "Matrix B too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.ssytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.ssytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dsytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.dsytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex64 {
-		lapack.csytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.csytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex128 {
-		lapack.zsytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.zsytrs_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	}
 
 	return info, info == 0
@@ -835,7 +824,7 @@ m_solve_symmetric_sytrs :: proc(
 // Improved solution algorithm with workspace usage
 
 // Query workspace for improved symmetric system solution
-query_workspace_solve_symmetric_improved :: proc($T: typeid, n: int) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_solve_symmetric_improved :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// SYTRS2 requires workspace of size n
 	work_size = n
 	if work_size < 1 {
@@ -854,7 +843,7 @@ m_solve_symmetric_improved :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Matrix A too small")
@@ -862,20 +851,20 @@ m_solve_symmetric_improved :: proc(
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(work) >= n, "Workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.ssytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info, 1)
+		lapack.ssytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info, 1)
+		lapack.dsytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.csytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info, 1)
+		lapack.csytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zsytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info, 1)
+		lapack.zsytrs2_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -897,7 +886,7 @@ m_solve_symmetric_rk_sytrs3 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Matrix A too small")
@@ -905,20 +894,20 @@ m_solve_symmetric_rk_sytrs3 :: proc(
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(b.rows >= n, "Matrix B too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.ssytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.ssytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dsytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.dsytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex64 {
-		lapack.csytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.csytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex128 {
-		lapack.zsytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.zsytrs_3_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(e), raw_data(ipiv), b.data, &ldb, &info)
 	}
 
 	return info, info == 0
@@ -931,31 +920,31 @@ m_solve_symmetric_rk_sytrs3 :: proc(
 // System solution using Aasen factorization
 
 // Query workspace for Aasen system solution
-query_workspace_solve_symmetric_aasen_sytrs_aa :: proc($T: typeid, n: int, nrhs: int, uplo := MatrixRegion.Upper) -> (work_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_solve_symmetric_aasen_sytrs_aa :: proc($T: typeid, n: int, nrhs: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// Query LAPACK for optimal workspace size
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
 	lda := Blas_Int(n)
 	ldb := Blas_Int(n)
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.ssytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info, 1)
+		lapack.ssytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dsytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info, 1)
+		lapack.dsytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.csytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info, 1)
+		lapack.csytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.zsytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info, 1)
+		lapack.zsytrs_aa_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -972,7 +961,7 @@ m_solve_symmetric_aasen_sytrs_aa :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Matrix A too small")
@@ -980,21 +969,21 @@ m_solve_symmetric_aasen_sytrs_aa :: proc(
 	assert(b.rows >= n, "Matrix B too small")
 	assert(len(work) > 0, "Workspace required")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.ssytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.dsytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.csytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info, 1)
+		lapack.zsytrs_aa_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -1016,7 +1005,7 @@ m_solve_symmetric_aasen_2stage_sytrs_aa_2stage :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Matrix A too small")
@@ -1025,21 +1014,21 @@ m_solve_symmetric_aasen_2stage_sytrs_aa_2stage :: proc(
 	assert(len(ipiv2) >= n, "Second pivot array too small")
 	assert(b.rows >= n, "Matrix B too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ltb := Blas_Int(tb.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ltb := tb.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.ssytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info, 1)
+		lapack.ssytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dsytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info, 1)
+		lapack.dsytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info)
 	} else when T == complex64 {
-		lapack.csytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info, 1)
+		lapack.csytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info)
 	} else when T == complex128 {
-		lapack.zsytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info, 1)
+		lapack.zsytrs_aa_2stage_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, tb.data, &ltb, raw_data(ipiv), raw_data(ipiv2), b.data, &ldb, &info)
 	}
 
 	return info, info == 0
@@ -1060,27 +1049,27 @@ m_solve_symmetric_rook_sytrs :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	nrhs := b.cols
 	assert(a.rows >= n, "Matrix A too small")
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(b.rows >= n, "Matrix B too small")
 
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
 	nrhs_int := Blas_Int(nrhs)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.ssytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.ssytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dsytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.dsytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex64 {
-		lapack.csytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.csytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	} else when T == complex128 {
-		lapack.zsytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info, 1)
+		lapack.zsytrs_rook_(&uplo_c, &n_int, &nrhs_int, a.data, &lda, raw_data(ipiv), b.data, &ldb, &info)
 	}
 
 	return info, info == 0
@@ -1093,50 +1082,14 @@ m_solve_symmetric_rook_sytrs :: proc(
 // Condition number estimation for triangular band matrices
 
 // Diagonal type for triangular matrices
-DiagonalType :: enum {
-	NON_UNIT, // 'N' - non-unit diagonal
-	UNIT, // 'U' - unit diagonal
+DiagonalType :: enum u8 {
+	NON_UNIT = 'N', // 'N' - non-unit diagonal
+	UNIT     = 'U', // 'U' - unit diagonal
 }
 
-// Convert diagonal type to character
-diagonal_type_to_char :: proc(diag: DiagonalType) -> u8 {
-	switch diag {
-	case .NON_UNIT:
-		return 'N'
-	case .UNIT:
-		return 'U'
-	}
-	return 'N'
-}
-
-// Helper function to convert TransposeMode to char
-transpose_mode_to_char :: proc(t: TransposeMode) -> u8 {
-	switch t {
-	case .None:
-		return 'N'
-	case .Transpose:
-		return 'T'
-	case .ConjugateTranspose:
-		return 'C'
-	}
-	return 'N'
-}
-
-// Helper function to convert RFPTranspose to char
-rfp_transpose_to_char :: proc(trans: RFPTranspose) -> u8 {
-	switch trans {
-	case .NORMAL:
-		return 'N'
-	case .TRANSPOSE:
-		return 'T'
-	case .CONJUGATE:
-		return 'C'
-	}
-	return 'N'
-}
 
 // Query workspace for triangular band condition number - real types
-query_workspace_condition_triangular_band_real :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 {
+query_workspace_condition_triangular_band_real :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where is_float(T) {
 	// Real types need: work = 3*n, iwork = n
 	work_size = 3 * n
 	iwork_size = n
@@ -1150,7 +1103,7 @@ query_workspace_condition_triangular_band_real :: proc($T: typeid, n: int) -> (w
 }
 
 // Query workspace for triangular band condition number - complex types
-query_workspace_condition_triangular_band_complex :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where T == complex64 || T == complex128 {
+query_workspace_condition_triangular_band_complex :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where is_complex(T) {
 	// Complex types need: work = 2*n, rwork = n
 	work_size = 2 * n
 	rwork_size = n
@@ -1176,23 +1129,23 @@ m_condition_triangular_band_f32_f64 :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := ab.cols
 	assert(ab.rows >= kd + 1, "Band matrix too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
 	norm_c: c.char = norm == .ONE_NORM ? '1' : 'I'
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	diag_c: c.char = diag == .UNIT ? 'U' : 'N'
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
-	ldab := Blas_Int(ab.ld)
+	ldab := ab.ld
 
 	when T == f32 {
-		lapack.stbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(iwork), &info, 1, 1, 1)
+		lapack.stbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dtbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(iwork), &info, 1, 1, 1)
+		lapack.dtbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(iwork), &info)
 	}
 
 	return rcond, info, info == 0
@@ -1211,7 +1164,7 @@ m_condition_triangular_band_c64_c128 :: proc(
 	rcond: R,
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
+) where is_complex(T),
 	R == real_type_of(T) {
 	n := ab.cols
 	assert(ab.rows >= kd + 1, "Band matrix too small")
@@ -1219,16 +1172,16 @@ m_condition_triangular_band_c64_c128 :: proc(
 	assert(len(rwork) >= n, "Real workspace too small")
 
 	norm_c: c.char = norm == .ONE_NORM ? '1' : 'I'
-	uplo_c := matrix_region_to_char(uplo)
+	uplo_c := cast(u8)uplo
 	diag_c: c.char = diag == .UNIT ? 'U' : 'N'
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
-	ldab := Blas_Int(ab.ld)
+	ldab := ab.ld
 
 	when T == complex64 {
-		lapack.ctbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(rwork), &info, 1, 1, 1)
+		lapack.ctbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(rwork), &info)
 	} else when T == complex128 {
-		lapack.ztbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(rwork), &info, 1, 1, 1)
+		lapack.ztbcon_(&norm_c, &uplo_c, &diag_c, &n_int, &kd_int, ab.data, &ldab, &rcond, raw_data(work), raw_data(rwork), &info)
 	}
 
 	return rcond, info, info == 0
@@ -1246,7 +1199,7 @@ m_condition_triangular_band :: proc {
 // Error bounds and iterative refinement for triangular band systems
 
 // Query workspace for triangular band error bounds - real types
-query_workspace_refine_triangular_band_real :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 {
+query_workspace_refine_triangular_band_real :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where is_float(T) {
 	// Real types need: work = 3*n, iwork = n
 	work_size = 3 * n
 	iwork_size = n
@@ -1260,7 +1213,7 @@ query_workspace_refine_triangular_band_real :: proc($T: typeid, n: int) -> (work
 }
 
 // Query workspace for triangular band error bounds - complex types
-query_workspace_refine_triangular_band_complex :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where T == complex64 || T == complex128 {
+query_workspace_refine_triangular_band_complex :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where is_complex(T) {
 	// Complex types need: work = 2*n, rwork = n
 	work_size = 2 * n
 	rwork_size = n
@@ -1294,7 +1247,7 @@ m_refine_triangular_band_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := ab.cols
 	nrhs := b.cols
 	assert(ab.rows >= kd + 1, "Band matrix too small")
@@ -1305,20 +1258,20 @@ m_refine_triangular_band_f32_f64 :: proc(
 	assert(len(work) >= 3 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	trans_c := transpose_mode_to_char(trans)
+	uplo_c := cast(u8)uplo
+	trans_c := cast(u8)trans
 	diag_c: c.char = diag == .UNIT ? 'U' : 'N'
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	nrhs_int := Blas_Int(nrhs)
-	ldab := Blas_Int(ab.ld)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	ldab := ab.ld
+	ldb := b.ld
+	ldx := x.ld
 
 	when T == f32 {
-		lapack.stbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1, 1, 1)
+		lapack.stbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dtbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info, 1, 1, 1)
+		lapack.dtbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	}
 
 	return info, info == 0
@@ -1340,7 +1293,7 @@ m_refine_triangular_band_c64_c128 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128,
+) where is_complex(T),
 	R == real_type_of(T) {
 	n := ab.cols
 	nrhs := b.cols
@@ -1352,20 +1305,20 @@ m_refine_triangular_band_c64_c128 :: proc(
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(rwork) >= n, "Real workspace too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	trans_c := transpose_mode_to_char(trans)
+	uplo_c := cast(u8)uplo
+	trans_c := cast(u8)trans
 	diag_c: c.char = diag == .UNIT ? 'U' : 'N'
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	nrhs_int := Blas_Int(nrhs)
-	ldab := Blas_Int(ab.ld)
-	ldb := Blas_Int(b.ld)
-	ldx := Blas_Int(x.ld)
+	ldab := ab.ld
+	ldb := b.ld
+	ldx := x.ld
 
 	when T == complex64 {
-		lapack.ctbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info, 1, 1, 1)
+		lapack.ctbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	} else when T == complex128 {
-		lapack.ztbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info, 1, 1, 1)
+		lapack.ztbrfs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, x.data, &ldx, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
 	return info, info == 0
@@ -1409,29 +1362,29 @@ m_solve_triangular_band :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := ab.cols
 	nrhs := b.cols
 	assert(ab.rows >= kd + 1, "Band matrix storage too small")
 	assert(b.rows >= n, "B matrix too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	trans_c := transpose_mode_to_char(trans)
-	diag_c := diagonal_type_to_char(diag)
+	uplo_c := cast(u8)uplo
+	trans_c := cast(u8)trans
+	diag_c := cast(u8)diag
 	n_int := Blas_Int(n)
 	kd_int := Blas_Int(kd)
 	nrhs_int := Blas_Int(nrhs)
-	ldab := Blas_Int(ab.ld)
-	ldb := Blas_Int(b.ld)
+	ldab := ab.ld
+	ldb := b.ld
 
 	when T == f32 {
-		lapack.stbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info, 1, 1, 1)
+		lapack.stbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info)
 	} else when T == f64 {
-		lapack.dtbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info, 1, 1, 1)
+		lapack.dtbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info)
 	} else when T == complex64 {
-		lapack.ctbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info, 1, 1, 1)
+		lapack.ctbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info)
 	} else when T == complex128 {
-		lapack.ztbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info, 1, 1, 1)
+		lapack.ztbtrs_(&uplo_c, &trans_c, &diag_c, &n_int, &kd_int, &nrhs_int, ab.data, &ldab, b.data, &ldb, &info)
 	}
 
 	return info, info == 0
@@ -1463,7 +1416,7 @@ m_solve_triangular_rfp :: proc(
 	transr := RFPTranspose.NORMAL,
 ) -> (
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	m := b.rows
 	n := b.cols
 
@@ -1473,24 +1426,24 @@ m_solve_triangular_rfp :: proc(
 	assert(b.rows >= m && b.cols >= n, "B matrix too small")
 
 	side_c := side == .Left ? u8('L') : u8('R')
-	uplo_c := matrix_region_to_char(uplo)
-	trans_c := transpose_mode_to_char(trans)
-	diag_c := diagonal_type_to_char(diag)
-	transr_c := rfp_transpose_to_char(transr)
+	uplo_c := cast(u8)uplo
+	trans_c := cast(u8)trans
+	diag_c := cast(u8)diag
+	transr_c := cast(u8)transr
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	ldb := Blas_Int(b.ld)
+	ldb := b.ld
 	alpha_copy := alpha
 
 	when T == f32 {
-		lapack.stfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb, 1, 1, 1, 1, 1)
+		lapack.stfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb)
 	} else when T == f64 {
-		lapack.dtfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb, 1, 1, 1, 1, 1)
+		lapack.dtfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb)
 	} else when T == complex64 {
-		lapack.ctfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb, 1, 1, 1, 1, 1)
+		lapack.ctfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb)
 	} else when T == complex128 {
-		lapack.ztfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb, 1, 1, 1, 1, 1)
+		lapack.ztfsm_(&transr_c, &side_c, &uplo_c, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(a_rfp), b.data, &ldb)
 	}
 
 	return true
@@ -1513,24 +1466,24 @@ m_invert_triangular_rfp :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	// Check that RFP array has correct size
 	rfp_size := n * (n + 1) / 2
 	assert(len(a_rfp) >= rfp_size, "RFP array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	diag_c := diagonal_type_to_char(diag)
-	transr_c := rfp_transpose_to_char(transr)
+	uplo_c := cast(u8)uplo
+	diag_c := cast(u8)diag
+	transr_c := cast(u8)transr
 	n_int := Blas_Int(n)
 
 	when T == f32 {
-		lapack.stftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info, 1, 1, 1)
+		lapack.stftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info)
 	} else when T == f64 {
-		lapack.dtftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info, 1, 1, 1)
+		lapack.dtftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info)
 	} else when T == complex64 {
-		lapack.ctftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info, 1, 1, 1)
+		lapack.ctftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info)
 	} else when T == complex128 {
-		lapack.ztftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info, 1, 1, 1)
+		lapack.ztftri_(&transr_c, &uplo_c, &diag_c, &n_int, raw_data(a_rfp), &info)
 	}
 
 	return info, info == 0
@@ -1552,25 +1505,25 @@ m_convert_rfp_to_packed :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	// Check that arrays have correct sizes
 	rfp_size := n * (n + 1) / 2
 	packed_size := n * (n + 1) / 2
 	assert(len(a_rfp) >= rfp_size, "RFP array too small")
 	assert(len(a_packed) >= packed_size, "Packed array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	transr_c := rfp_transpose_to_char(transr)
+	uplo_c := cast(u8)uplo
+	transr_c := cast(u8)transr
 	n_int := Blas_Int(n)
 
 	when T == f32 {
-		lapack.stfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info, 1, 1)
+		lapack.stfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info)
 	} else when T == f64 {
-		lapack.dtfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info, 1, 1)
+		lapack.dtfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info)
 	} else when T == complex64 {
-		lapack.ctfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info, 1, 1)
+		lapack.ctfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info)
 	} else when T == complex128 {
-		lapack.ztfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info, 1, 1)
+		lapack.ztfttp_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), raw_data(a_packed), &info)
 	}
 
 	return info, info == 0
@@ -1587,25 +1540,25 @@ m_convert_packed_to_rfp :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	// Check that arrays have correct sizes
 	rfp_size := n * (n + 1) / 2
 	packed_size := n * (n + 1) / 2
 	assert(len(a_packed) >= packed_size, "Packed array too small")
 	assert(len(a_rfp) >= rfp_size, "RFP array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	transr_c := rfp_transpose_to_char(transr)
+	uplo_c := cast(u8)uplo
+	transr_c := cast(u8)transr
 	n_int := Blas_Int(n)
 
 	when T == f32 {
-		lapack.stpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info, 1, 1)
+		lapack.stpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info)
 	} else when T == f64 {
-		lapack.dtpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info, 1, 1)
+		lapack.dtpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info)
 	} else when T == complex64 {
-		lapack.ctpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info, 1, 1)
+		lapack.ctpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info)
 	} else when T == complex128 {
-		lapack.ztpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info, 1, 1)
+		lapack.ztpttf_(&transr_c, &uplo_c, &n_int, raw_data(a_packed), raw_data(a_rfp), &info)
 	}
 
 	return info, info == 0
@@ -1627,7 +1580,7 @@ m_convert_rfp_to_full :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Output matrix too small")
 
@@ -1635,19 +1588,19 @@ m_convert_rfp_to_full :: proc(
 	rfp_size := n * (n + 1) / 2
 	assert(len(a_rfp) >= rfp_size, "RFP array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	transr_c := rfp_transpose_to_char(transr)
+	uplo_c := cast(u8)uplo
+	transr_c := cast(u8)transr
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	when T == f32 {
-		lapack.stfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info, 1, 1)
+		lapack.stfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info)
 	} else when T == f64 {
-		lapack.dtfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info, 1, 1)
+		lapack.dtfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info)
 	} else when T == complex64 {
-		lapack.ctfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info, 1, 1)
+		lapack.ctfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info)
 	} else when T == complex128 {
-		lapack.ztfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info, 1, 1)
+		lapack.ztfttr_(&transr_c, &uplo_c, &n_int, raw_data(a_rfp), a.data, &lda, &info)
 	}
 
 	return info, info == 0
@@ -1663,7 +1616,7 @@ m_convert_full_to_rfp :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n, "Input matrix too small")
 
@@ -1671,19 +1624,19 @@ m_convert_full_to_rfp :: proc(
 	rfp_size := n * (n + 1) / 2
 	assert(len(a_rfp) >= rfp_size, "RFP array too small")
 
-	uplo_c := matrix_region_to_char(uplo)
-	transr_c := rfp_transpose_to_char(transr)
+	uplo_c := cast(u8)uplo
+	transr_c := cast(u8)transr
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
+	lda := a.ld
 
 	when T == f32 {
-		lapack.strttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info, 1, 1)
+		lapack.strttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info)
 	} else when T == f64 {
-		lapack.dtrttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info, 1, 1)
+		lapack.dtrttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info)
 	} else when T == complex64 {
-		lapack.ctrttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info, 1, 1)
+		lapack.ctrttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info)
 	} else when T == complex128 {
-		lapack.ztrttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info, 1, 1)
+		lapack.ztrttf_(&transr_c, &uplo_c, &n_int, a.data, &lda, raw_data(a_rfp), &info)
 	}
 
 	return info, info == 0
@@ -1697,7 +1650,7 @@ m_convert_full_to_rfp :: proc(
 
 
 // Query workspace for generalized eigenvector computation - complex types
-query_workspace_compute_generalized_eigenvectors_complex :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where T == complex64 || T == complex128 {
+query_workspace_compute_generalized_eigenvectors_complex :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) where is_complex(T) {
 	// Complex types need: work = 2*n, rwork = 2*n
 	work_size = 2 * n
 	rwork_size = 2 * n
@@ -1705,7 +1658,7 @@ query_workspace_compute_generalized_eigenvectors_complex :: proc($T: typeid, n: 
 }
 
 // Query workspace for generalized eigenvector computation - real types
-query_workspace_compute_generalized_eigenvectors_real :: proc($T: typeid, n: int) -> (work_size: int) where T == f32 || T == f64 {
+query_workspace_compute_generalized_eigenvectors_real :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) {
 	// Real types need: work = 6*n
 	work_size = 6 * n
 	return
@@ -1725,23 +1678,23 @@ m_compute_generalized_eigenvectors_real :: proc(
 	m_selected: Blas_Int,
 	info: Info,
 	ok: bool, // Number of eigenvectors computed
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := s.cols
 	assert(s.rows >= n && p.rows >= n && p.cols >= n, "Matrices too small")
 	assert(len(work) >= 6 * n, "Insufficient workspace")
 
-	side_c := eigenvector_side_to_char(side)
-	howmny_c := eigenvector_selection_to_char(selection)
+	side_c := cast(u8)side
+	howmny_c := cast(u8)selection
 	n_int := Blas_Int(n)
-	lds := Blas_Int(s.ld)
-	ldp := Blas_Int(p.ld)
+	lds := s.ld
+	ldp := p.ld
 
 	// Handle eigenvector matrices
 	ldvl: Blas_Int = 1
 	vl_ptr: rawptr = nil
 	if (side == .Left || side == .Both) && vl != nil {
 		assert(vl.rows >= n && vl.cols >= n, "Left eigenvector matrix too small")
-		ldvl = Blas_Int(vl.ld)
+		ldvl = vl.ld
 		vl_ptr = raw_data(vl.data)
 	}
 
@@ -1749,7 +1702,7 @@ m_compute_generalized_eigenvectors_real :: proc(
 	vr_ptr: rawptr = nil
 	if (side == .Right || side == .Both) && vr != nil {
 		assert(vr.rows >= n && vr.cols >= n, "Right eigenvector matrix too small")
-		ldvr = Blas_Int(vr.ld)
+		ldvr = vr.ld
 		vr_ptr = raw_data(vr.data)
 	}
 
@@ -1757,9 +1710,9 @@ m_compute_generalized_eigenvectors_real :: proc(
 	mm := Blas_Int(n)
 
 	when T == f32 {
-		lapack.stgevc_(&side_c, &howmny_c, raw_data(select_mask) if select_mask != nil else nil, &n_int, s.data, &lds, p.data, &ldp, vl_ptr, &ldvl, vr_ptr, &ldvr, &mm, &m_selected, raw_data(work), &info, 1, 1)
+		lapack.stgevc_(&side_c, &howmny_c, raw_data(select_mask) if select_mask != nil else nil, &n_int, s.data, &lds, p.data, &ldp, vl_ptr, &ldvl, vr_ptr, &ldvr, &mm, &m_selected, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dtgevc_(&side_c, &howmny_c, raw_data(select_mask) if select_mask != nil else nil, &n_int, s.data, &lds, p.data, &ldp, vl_ptr, &ldvl, vr_ptr, &ldvr, &mm, &m_selected, raw_data(work), &info, 1, 1)
+		lapack.dtgevc_(&side_c, &howmny_c, raw_data(select_mask) if select_mask != nil else nil, &n_int, s.data, &lds, p.data, &ldp, vl_ptr, &ldvl, vr_ptr, &ldvr, &mm, &m_selected, raw_data(work), &info)
 	}
 
 	return m_selected, info, info == 0
@@ -1780,25 +1733,25 @@ m_compute_generalized_eigenvectors_complex :: proc(
 	m_selected: Blas_Int,
 	info: Info,
 	ok: bool, // Number of eigenvectors computed
-) where T == complex64 || T == complex128,
+) where is_complex(T),
 	R == real_type_of(T) {
 	n := s.cols
 	assert(s.rows >= n && p.rows >= n && p.cols >= n, "Matrices too small")
 	assert(len(work) >= 2 * n, "Insufficient complex workspace")
 	assert(len(rwork) >= 2 * n, "Insufficient real workspace")
 
-	side_c := eigenvector_side_to_char(side)
-	howmny_c := eigenvector_selection_to_char(selection)
+	side_c := cast(u8)side
+	howmny_c := cast(u8)selection
 	n_int := Blas_Int(n)
-	lds := Blas_Int(s.ld)
-	ldp := Blas_Int(p.ld)
+	lds := s.ld
+	ldp := p.ld
 
 	// Handle eigenvector matrices
 	ldvl: Blas_Int = 1
 	vl_ptr: rawptr = nil
 	if (side == .Left || side == .Both) && vl != nil {
 		assert(vl.rows >= n && vl.cols >= n, "Left eigenvector matrix too small")
-		ldvl = Blas_Int(vl.ld)
+		ldvl = vl.ld
 		vl_ptr = raw_data(vl.data)
 	}
 
@@ -1806,7 +1759,7 @@ m_compute_generalized_eigenvectors_complex :: proc(
 	vr_ptr: rawptr = nil
 	if (side == .Right || side == .Both) && vr != nil {
 		assert(vr.rows >= n && vr.cols >= n, "Right eigenvector matrix too small")
-		ldvr = Blas_Int(vr.ld)
+		ldvr = vr.ld
 		vr_ptr = raw_data(vr.data)
 	}
 
@@ -1832,8 +1785,6 @@ m_compute_generalized_eigenvectors_complex :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		lapack.ztgevc_(
@@ -1854,8 +1805,6 @@ m_compute_generalized_eigenvectors_complex :: proc(
 			raw_data(work),
 			raw_data(rwork),
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -1875,7 +1824,7 @@ m_compute_generalized_eigenvectors :: proc {
 // Reorders eigenvalues in the generalized Schur form
 
 // Query workspace for generalized Schur reordering - real types
-query_workspace_reorder_generalized_schur_real :: proc($T: typeid, n: int) -> (work_size: int) where T == f32 || T == f64 {
+query_workspace_reorder_generalized_schur_real :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) {
 	// Query LAPACK for optimal workspace size
 	wantq := Blas_Int(1) // Update Q
 	wantz := Blas_Int(1) // Update Z
@@ -1886,7 +1835,7 @@ query_workspace_reorder_generalized_schur_real :: proc($T: typeid, n: int) -> (w
 	ldz := Blas_Int(max(1, n))
 	ifst := Blas_Int(1)
 	ilst := Blas_Int(n)
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
@@ -1918,7 +1867,7 @@ m_reorder_generalized_schur_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == complex64 || T == complex128 {
+) where is_complex(T) {
 	n := a.cols
 	assert(a.rows >= n && b.rows >= n && b.cols >= n, "Matrices too small")
 	assert(ifst >= 1 && ifst <= n, "ifst out of range")
@@ -1927,15 +1876,15 @@ m_reorder_generalized_schur_complex :: proc(
 	wantq := Blas_Int(update_q ? 1 : 0)
 	wantz := Blas_Int(update_z ? 1 : 0)
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 
 	// Handle Q and Z matrices
 	ldq: Blas_Int = 1
 	q_ptr: rawptr = nil
 	if update_q && q != nil {
 		assert(q.rows >= n && q.cols >= n, "Q matrix too small")
-		ldq = Blas_Int(q.ld)
+		ldq = q.ld
 		q_ptr = raw_data(q.data)
 	}
 
@@ -1943,7 +1892,7 @@ m_reorder_generalized_schur_complex :: proc(
 	z_ptr: rawptr = nil
 	if update_z && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Z matrix too small")
-		ldz = Blas_Int(z.ld)
+		ldz = z.ld
 		z_ptr = raw_data(z.data)
 	}
 
@@ -1973,7 +1922,7 @@ m_reorder_generalized_schur_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n && b.rows >= n && b.cols >= n, "Matrices too small")
 	assert(ifst >= 1 && ifst <= n, "ifst out of range")
@@ -1983,8 +1932,8 @@ m_reorder_generalized_schur_real :: proc(
 	wantq := Blas_Int(update_q ? 1 : 0)
 	wantz := Blas_Int(update_z ? 1 : 0)
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 
 	// Handle Q and Z matrices
@@ -1992,7 +1941,7 @@ m_reorder_generalized_schur_real :: proc(
 	q_ptr: rawptr = nil
 	if update_q && q != nil {
 		assert(q.rows >= n && q.cols >= n, "Q matrix too small")
-		ldq = Blas_Int(q.ld)
+		ldq = q.ld
 		q_ptr = raw_data(q.data)
 	}
 
@@ -2000,7 +1949,7 @@ m_reorder_generalized_schur_real :: proc(
 	z_ptr: rawptr = nil
 	if update_z && z != nil {
 		assert(z.rows >= n && z.cols >= n, "Z matrix too small")
-		ldz = Blas_Int(z.ld)
+		ldz = z.ld
 		z_ptr = raw_data(z.data)
 	}
 
@@ -2027,10 +1976,10 @@ m_reorder_generalized_schur :: proc {
 // ==============================================================================
 
 // Sensitivity analysis job specification
-SensitivityJob :: enum {
-	EigenvaluesOnly, // Compute eigenvalue condition numbers only
-	SubspacesOnly, // Compute invariant subspace condition numbers only
-	Both, // Compute both eigenvalue and subspace condition numbers
+SensitivityJob :: enum u8 {
+	EigenvaluesOnly = 'E', // Compute eigenvalue condition numbers only
+	SubspacesOnly   = 'V', // Compute invariant subspace condition numbers only
+	Both            = 'B', // Compute both eigenvalue and subspace condition numbers
 }
 
 // ============================================================================
@@ -2038,23 +1987,10 @@ SensitivityJob :: enum {
 // ============================================================================
 // Estimates condition numbers for eigenvalues and eigenvectors of generalized eigenvalue problems
 
-// Helper function to convert sensitivity job to char
-sensitivity_job_to_char :: proc(job: SensitivityJob) -> u8 {
-	switch job {
-	case .EigenvaluesOnly:
-		return 'E'
-	case .SubspacesOnly:
-		return 'V'
-	case .Both:
-		return 'B'
-	}
-	return 'B'
-}
-
 // Query workspace for generalized eigenvalue sensitivity - all types
-query_workspace_compute_generalized_sensitivity :: proc($T: typeid, n: int, job: SensitivityJob) -> (work_size: int, iwork_size: int) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+query_workspace_compute_generalized_sensitivity :: proc($T: typeid, n: int, job: SensitivityJob) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	// Query LAPACK for optimal workspace size
-	job_c := sensitivity_job_to_char(job)
+	job_c := cast(u8)job
 	howmny_c := u8('A') // All eigenvalues
 	n_int := Blas_Int(n)
 	lda := Blas_Int(max(1, n))
@@ -2063,24 +1999,24 @@ query_workspace_compute_generalized_sensitivity :: proc($T: typeid, n: int, job:
 	ldvr := Blas_Int(max(1, n))
 	mm := Blas_Int(n)
 	m: Blas_Int
-	lwork := Blas_Int(QUERY_WORKSPACE)
+	lwork := QUERY_WORKSPACE
 	info: Info
 
 	when T == f32 {
 		work_query: f32
-		lapack.stgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info, 1, 1)
+		lapack.stgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
 		work_query: f64
-		lapack.dtgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info, 1, 1)
+		lapack.dtgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
 		work_query: complex64
-		lapack.ctgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info, 1, 1)
+		lapack.ctgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
 		work_query: complex128
-		lapack.ztgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info, 1, 1)
+		lapack.ztgsna_(&job_c, &howmny_c, nil, &n_int, nil, &lda, nil, &ldb, nil, &ldvl, nil, &ldvr, nil, nil, &mm, &m, &work_query, &lwork, nil, &info)
 		work_size = int(real(work_query))
 	}
 
@@ -2111,7 +2047,7 @@ m_compute_generalized_sensitivity_real :: proc(
 	m_computed: Blas_Int,
 	info: Info,
 	ok: bool, // Number of eigenvalues/vectors for which condition numbers computed
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := a.cols
 	assert(a.rows >= n && b.rows >= n && b.cols >= n, "Matrices too small")
 	assert(len(work) > 0, "Workspace required")
@@ -2119,11 +2055,11 @@ m_compute_generalized_sensitivity_real :: proc(
 		assert(len(iwork) >= n + 2, "Integer workspace required for subspace condition numbers")
 	}
 
-	job_c := sensitivity_job_to_char(job)
-	howmny_c := eigenvector_selection_to_char(selection)
+	job_c := cast(u8)job
+	howmny_c := cast(u8)selection
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 
 	// Handle eigenvector matrices
@@ -2131,7 +2067,7 @@ m_compute_generalized_sensitivity_real :: proc(
 	vl_ptr: rawptr = nil
 	if vl != nil {
 		assert(vl.rows >= n && vl.cols >= n, "Left eigenvector matrix too small")
-		ldvl = Blas_Int(vl.ld)
+		ldvl = vl.ld
 		vl_ptr = raw_data(vl.data)
 	}
 
@@ -2139,7 +2075,7 @@ m_compute_generalized_sensitivity_real :: proc(
 	vr_ptr: rawptr = nil
 	if vr != nil {
 		assert(vr.rows >= n && vr.cols >= n, "Right eigenvector matrix too small")
-		ldvr = Blas_Int(vr.ld)
+		ldvr = vr.ld
 		vr_ptr = raw_data(vr.data)
 	}
 
@@ -2168,8 +2104,6 @@ m_compute_generalized_sensitivity_real :: proc(
 			&lwork,
 			raw_data(iwork) if iwork != nil else nil,
 			&info,
-			1,
-			1,
 		)
 	} else when T == f64 {
 		lapack.dtgsna_(
@@ -2193,8 +2127,6 @@ m_compute_generalized_sensitivity_real :: proc(
 			&lwork,
 			raw_data(iwork) if iwork != nil else nil,
 			&info,
-			1,
-			1,
 		)
 	}
 
@@ -2218,7 +2150,7 @@ m_compute_generalized_sensitivity_complex :: proc(
 	m_computed: Blas_Int,
 	info: Info,
 	ok: bool, // Number of eigenvalues/vectors for which condition numbers computed
-) where T == complex64 || T == complex128,
+) where is_complex(T),
 	R == real_type_of(T) {
 	n := a.cols
 	assert(a.rows >= n && b.rows >= n && b.cols >= n, "Matrices too small")
@@ -2227,11 +2159,11 @@ m_compute_generalized_sensitivity_complex :: proc(
 		assert(len(iwork) >= n + 2, "Integer workspace required for subspace condition numbers")
 	}
 
-	job_c := sensitivity_job_to_char(job)
-	howmny_c := eigenvector_selection_to_char(selection)
+	job_c := cast(u8)job
+	howmny_c := cast(u8)selection
 	n_int := Blas_Int(n)
-	lda := Blas_Int(a.ld)
-	ldb := Blas_Int(b.ld)
+	lda := a.ld
+	ldb := b.ld
 	lwork := Blas_Int(len(work))
 
 	// Handle eigenvector matrices
@@ -2239,7 +2171,7 @@ m_compute_generalized_sensitivity_complex :: proc(
 	vl_ptr: rawptr = nil
 	if vl != nil {
 		assert(vl.rows >= n && vl.cols >= n, "Left eigenvector matrix too small")
-		ldvl = Blas_Int(vl.ld)
+		ldvl = vl.ld
 		vl_ptr = raw_data(vl.data)
 	}
 
@@ -2247,7 +2179,7 @@ m_compute_generalized_sensitivity_complex :: proc(
 	vr_ptr: rawptr = nil
 	if vr != nil {
 		assert(vr.rows >= n && vr.cols >= n, "Right eigenvector matrix too small")
-		ldvr = Blas_Int(vr.ld)
+		ldvr = vr.ld
 		vr_ptr = raw_data(vr.data)
 	}
 
@@ -2276,8 +2208,6 @@ m_compute_generalized_sensitivity_complex :: proc(
 			&lwork,
 			raw_data(iwork) if iwork != nil else nil,
 			&info,
-			1,
-			1,
 		)
 	} else when T == complex128 {
 		lapack.ztgsna_(
@@ -2301,8 +2231,6 @@ m_compute_generalized_sensitivity_complex :: proc(
 			&lwork,
 			raw_data(iwork) if iwork != nil else nil,
 			&info,
-			1,
-			1,
 		)
 	}
 

@@ -89,7 +89,7 @@ m_generate_test_matrix_f32_f64 :: proc(A: ^Matrix($T), params: TestMatrixParams,
 	// Prepare parameters
 	m := Blas_Int(params.rows)
 	n := Blas_Int(params.cols)
-	dist_c := distribution_to_cstring(params.distribution)
+	dist_c := cast(u8)params.distribution
 
 	// Setup seed array
 	iseed := make([]Blas_Int, 4, context.temp_allocator)
@@ -97,7 +97,7 @@ m_generate_test_matrix_f32_f64 :: proc(A: ^Matrix($T), params: TestMatrixParams,
 		iseed[i] = Blas_Int(params.seed[i])
 	}
 
-	sym_c := _symmetry_to_char(params.symmetry)
+	sym_c := cast(u8)params.symmetry
 
 	// Setup singular values array
 	D: []T
@@ -119,7 +119,7 @@ m_generate_test_matrix_f32_f64 :: proc(A: ^Matrix($T), params: TestMatrixParams,
 	dmax := T(params.max_element)
 	kl := Blas_Int(params.lower_bandwidth)
 	ku := Blas_Int(params.upper_bandwidth)
-	pack_c := _packing_to_char(params.packing)
+	pack_c := cast(u8)params.packing
 	lda := A.ld
 
 	// Allocate workspace
@@ -127,9 +127,9 @@ m_generate_test_matrix_f32_f64 :: proc(A: ^Matrix($T), params: TestMatrixParams,
 
 	info_val: Info
 	when T == f32 {
-		lapack.slatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
+		lapack.slatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	} else when T == f64 {
-		lapack.dlatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
+		lapack.dlatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	}
 
 	return info_val == 0, info_val
@@ -144,7 +144,7 @@ m_generate_test_matrix_c64_c128 :: proc(A: ^Matrix($T), params: TestMatrixParams
 	// Prepare parameters
 	m := Blas_Int(params.rows)
 	n := Blas_Int(params.cols)
-	dist_c := distribution_to_cstring(params.distribution)
+	dist_c := cast(u8)params.distribution
 
 	// Setup seed array
 	iseed := make([]Blas_Int, 4, context.temp_allocator)
@@ -152,12 +152,12 @@ m_generate_test_matrix_c64_c128 :: proc(A: ^Matrix($T), params: TestMatrixParams
 		iseed[i] = Blas_Int(params.seed[i])
 	}
 
-	sym_c := _symmetry_to_char(params.symmetry)
+	sym_c := cast(u8)params.symmetry
 
 	mode := Blas_Int(params.mode)
 	kl := Blas_Int(params.lower_bandwidth)
 	ku := Blas_Int(params.upper_bandwidth)
-	pack_c := _packing_to_char(params.packing)
+	pack_c := cast(u8)params.packing
 	lda := A.ld
 
 	// Allocate workspace
@@ -179,7 +179,7 @@ m_generate_test_matrix_c64_c128 :: proc(A: ^Matrix($T), params: TestMatrixParams
 		cond := f32(params.condition_number)
 		dmax := f32(params.max_element)
 
-		lapack.clatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
+		lapack.clatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	} else when T == complex128 {
 		// Setup singular values array
 		D := make([]f64, max(params.rows, params.cols), context.temp_allocator)
@@ -195,7 +195,7 @@ m_generate_test_matrix_c64_c128 :: proc(A: ^Matrix($T), params: TestMatrixParams
 		cond := params.condition_number
 		dmax := params.max_element
 
-		lapack.zlatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
+		lapack.zlatms_(&m, &n, dist_c, raw_data(iseed), sym_c, raw_data(D), &mode, &cond, &dmax, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	}
 
 	return info_val == 0, info_val
@@ -271,7 +271,7 @@ m_generate_test_matrix_eigenvalues_f32_f64 :: proc(
 	// Prepare parameters
 	m_val := A.rows
 	n_val := A.cols
-	dist_c := distribution_to_cstring(distribution)
+	dist_c := cast(u8)distribution
 
 	// Setup seed array
 	iseed := [4]Blas_Int{seed[0], seed[1], seed[2], seed[3]}
@@ -292,51 +292,9 @@ m_generate_test_matrix_eigenvalues_f32_f64 :: proc(
 
 	info_val: Info
 	when T == f32 {
-		lapack.slatmt_(
-			&m_val,
-			&n_val,
-			dist_c,
-			&iseed[0],
-			sym_c,
-			raw_data(eigenvalues),
-			&mode,
-			&cond,
-			&dmax,
-			&rank_val,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.slatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(eigenvalues), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	} else when T == f64 {
-		lapack.dlatmt_(
-			&m_val,
-			&n_val,
-			dist_c,
-			&iseed[0],
-			sym_c,
-			raw_data(eigenvalues),
-			&mode,
-			&cond,
-			&dmax,
-			&rank_val,
-			&kl,
-			&ku,
-			pack_c,
-			raw_data(A.data),
-			&lda,
-			raw_data(work),
-			&info_val,
-			len(dist_c),
-			len(sym_c),
-			len(pack_c),
-		)
+		lapack.dlatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(eigenvalues), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	}
 
 	return info_val == 0, info_val
@@ -363,7 +321,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 	// Prepare parameters
 	m_val := A.rows
 	n_val := A.cols
-	dist_c := distribution_to_cstring(distribution)
+	dist_c := cast(u8)distribution
 
 	// Setup seed array
 	iseed := [4]Blas_Int{seed[0], seed[1], seed[2], seed[3]}
@@ -392,7 +350,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 		cond := f32(1.0)
 		dmax := f32(1.0)
 
-		lapack.clatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(D), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
+		lapack.clatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(D), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	} else when T == complex128 {
 		// Convert complex eigenvalues to real array for ZLATMT
 		// (ZLATMT expects real eigenvalues for non-Hermitian matrices)
@@ -404,7 +362,7 @@ m_generate_test_matrix_eigenvalues_c64_c128 :: proc(
 		cond := f64(1.0)
 		dmax := f64(1.0)
 
-		lapack.zlatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(D), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val, len(dist_c), len(sym_c), len(pack_c))
+		lapack.zlatmt_(&m_val, &n_val, dist_c, &iseed[0], sym_c, raw_data(D), &mode, &cond, &dmax, &rank_val, &kl, &ku, pack_c, raw_data(A.data), &lda, raw_data(work), &info_val)
 	}
 
 	return info_val == 0, info_val
