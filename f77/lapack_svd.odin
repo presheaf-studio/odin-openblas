@@ -16,33 +16,33 @@ foreign lib {
 	// Standard SVD driver, A = UΣV^H
 	// https://www.netlib.org/lapack/explore-html/d3/df8/group__svd__driver__grp.html
 	// ===================================================================================
-	// — full —
-
+	// — Full —
+	// Standard
 	cgesvd_ :: proc(jobu: ^char, jobvt: ^char, m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, S: ^f32, U: ^complex64, ldu: ^blasint, VT: ^complex64, ldvt: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, info: ^Info, _: c.size_t = 1, _: c.size_t = 1) ---
 	dgesvd_ :: proc(jobu: ^char, jobvt: ^char, m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, S: ^f64, U: ^f64, ldu: ^blasint, VT: ^f64, ldvt: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1) ---
 	sgesvd_ :: proc(jobu: ^char, jobvt: ^char, m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, S: ^f32, U: ^f32, ldu: ^blasint, VT: ^f32, ldvt: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1) ---
 	zgesvd_ :: proc(jobu: ^char, jobvt: ^char, m: ^blasint, n: ^blasint, A: ^complex128, lda: ^blasint, S: ^f64, U: ^complex128, ldu: ^blasint, VT: ^complex128, ldvt: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, info: ^Info, _: c.size_t = 1, _: c.size_t = 1) ---
-
+	// QR with Pivoting
 	cgesvdq_ :: proc(joba: ^char, jobp: ^char, jobr: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, S: ^f32, U: ^complex64, ldu: ^blasint, V: ^complex64, ldv: ^blasint, numrank: ^blasint, iwork: ^blasint, liwork: ^blasint, cwork: ^complex64, lcwork: ^blasint, rwork: ^f32, lrwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	dgesvdq_ :: proc(joba: ^char, jobp: ^char, jobr: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, S: ^f64, U: ^f64, ldu: ^blasint, V: ^f64, ldv: ^blasint, numrank: ^blasint, iwork: ^blasint, liwork: ^blasint, work: ^f64, lwork: ^blasint, rwork: ^f64, lrwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	sgesvdq_ :: proc(joba: ^char, jobp: ^char, jobr: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, S: ^f32, U: ^f32, ldu: ^blasint, V: ^f32, ldv: ^blasint, numrank: ^blasint, iwork: ^blasint, liwork: ^blasint, work: ^f32, lwork: ^blasint, rwork: ^f32, lrwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	zgesvdq_ :: proc(joba: ^char, jobp: ^char, jobr: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^complex128, lda: ^blasint, S: ^f64, U: ^complex128, ldu: ^blasint, V: ^complex128, ldv: ^blasint, numrank: ^blasint, iwork: ^blasint, liwork: ^blasint, cwork: ^complex128, lcwork: ^blasint, rwork: ^f64, lrwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
-
+	// Divide & Conquer
 	cgesdd_ :: proc(jobz: ^char, m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, S: ^f32, U: ^complex64, ldu: ^blasint, VT: ^complex64, ldvt: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, iwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
 	dgesdd_ :: proc(jobz: ^char, m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, S: ^f64, U: ^f64, ldu: ^blasint, VT: ^f64, ldvt: ^blasint, work: ^f64, lwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
 	sgesdd_ :: proc(jobz: ^char, m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, S: ^f32, U: ^f32, ldu: ^blasint, VT: ^f32, ldvt: ^blasint, work: ^f32, lwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
 	zgesdd_ :: proc(jobz: ^char, m: ^blasint, n: ^blasint, A: ^complex128, lda: ^blasint, S: ^f64, U: ^complex128, ldu: ^blasint, VT: ^complex128, ldvt: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, iwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
-
+	// Selective SVD
 	cgesvdx_ :: proc(jobu: ^char, jobvt: ^char, range: ^char, m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, vl: ^f32, vu: ^f32, il: ^blasint, iu: ^blasint, ns: ^blasint, S: ^f32, U: ^complex64, ldu: ^blasint, VT: ^complex64, ldvt: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	dgesvdx_ :: proc(jobu: ^char, jobvt: ^char, range: ^char, m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, vl: ^f64, vu: ^f64, il: ^blasint, iu: ^blasint, ns: ^blasint, S: ^f64, U: ^f64, ldu: ^blasint, VT: ^f64, ldvt: ^blasint, work: ^f64, lwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	sgesvdx_ :: proc(jobu: ^char, jobvt: ^char, range: ^char, m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, vl: ^f32, vu: ^f32, il: ^blasint, iu: ^blasint, ns: ^blasint, S: ^f32, U: ^f32, ldu: ^blasint, VT: ^f32, ldvt: ^blasint, work: ^f32, lwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	zgesvdx_ :: proc(jobu: ^char, jobvt: ^char, range: ^char, m: ^blasint, n: ^blasint, A: ^complex128, lda: ^blasint, vl: ^f64, vu: ^f64, il: ^blasint, iu: ^blasint, ns: ^blasint, S: ^f64, U: ^complex128, ldu: ^blasint, VT: ^complex128, ldvt: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
-
+	// Jacobi SVD (High Accuracy)
 	cgejsv_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, jobr: ^char, jobt: ^char, jobp: ^char, m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, SVA: ^f32, U: ^complex64, ldu: ^blasint, V: ^complex64, ldv: ^blasint, cwork: ^complex64, lwork: ^blasint, rwork: ^f32, lrwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	dgejsv_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, jobr: ^char, jobt: ^char, jobp: ^char, m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, SVA: ^f64, U: ^f64, ldu: ^blasint, V: ^f64, ldv: ^blasint, work: ^f64, lwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	sgejsv_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, jobr: ^char, jobt: ^char, jobp: ^char, m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, SVA: ^f32, U: ^f32, ldu: ^blasint, V: ^f32, ldv: ^blasint, work: ^f32, lwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	zgejsv_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, jobr: ^char, jobt: ^char, jobp: ^char, m: ^blasint, n: ^blasint, A: ^complex128, lda: ^blasint, SVA: ^f64, U: ^complex128, ldu: ^blasint, V: ^complex128, ldv: ^blasint, cwork: ^complex128, lwork: ^blasint, rwork: ^f64, lrwork: ^blasint, iwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
-
+	// Jacobi SVD Variant
 	cgesvj_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, SVA: ^f32, mv: ^blasint, V: ^complex64, ldv: ^blasint, cwork: ^complex64, lwork: ^blasint, rwork: ^f32, lrwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	dgesvj_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, SVA: ^f64, mv: ^blasint, V: ^f64, ldv: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	sgesvj_ :: proc(joba: ^char, jobu: ^char, jobv: ^char, m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, SVA: ^f32, mv: ^blasint, V: ^f32, ldv: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
@@ -89,6 +89,7 @@ foreign lib {
 	// SVD computational routines
 	// https://www.netlib.org/lapack/explore-html/d8/de0/group__gesvd__comp__grp.html
 	// ===================================================================================
+	// Reduction to Bidiagonal
 	cgebrd_ :: proc(m: ^blasint, n: ^blasint, A: ^complex64, lda: ^blasint, D: ^f32, E: ^f32, tauq: ^complex64, taup: ^complex64, work: ^complex64, lwork: ^blasint, info: ^Info) ---
 	dgebrd_ :: proc(m: ^blasint, n: ^blasint, A: ^f64, lda: ^blasint, D: ^f64, E: ^f64, tauq: ^f64, taup: ^f64, work: ^f64, lwork: ^blasint, info: ^Info) ---
 	sgebrd_ :: proc(m: ^blasint, n: ^blasint, A: ^f32, lda: ^blasint, D: ^f32, E: ^f32, tauq: ^f32, taup: ^f32, work: ^f32, lwork: ^blasint, info: ^Info) ---
@@ -98,20 +99,20 @@ foreign lib {
 
 	// labrd: step in gebrd
 
+	// Banded to Bidiagonal
 	cgbbrd_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, ncc: ^blasint, kl: ^blasint, ku: ^blasint, AB: ^complex64, ldab: ^blasint, D: ^f32, E: ^f32, Q: ^complex64, ldq: ^blasint, PT: ^complex64, ldpt: ^blasint, C: ^complex64, ldc: ^blasint, work: ^complex64, rwork: ^f32, info: ^Info, _: c.size_t = 1) ---
 	dgbbrd_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, ncc: ^blasint, kl: ^blasint, ku: ^blasint, AB: ^f64, ldab: ^blasint, D: ^f64, E: ^f64, Q: ^f64, ldq: ^blasint, PT: ^f64, ldpt: ^blasint, C: ^f64, ldc: ^blasint, work: ^f64, info: ^Info, _: c.size_t = 1) ---
 	sgbbrd_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, ncc: ^blasint, kl: ^blasint, ku: ^blasint, AB: ^f32, ldab: ^blasint, D: ^f32, E: ^f32, Q: ^f32, ldq: ^blasint, PT: ^f32, ldpt: ^blasint, C: ^f32, ldc: ^blasint, work: ^f32, info: ^Info, _: c.size_t = 1) ---
 	zgbbrd_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, ncc: ^blasint, kl: ^blasint, ku: ^blasint, AB: ^complex128, ldab: ^blasint, D: ^f64, E: ^f64, Q: ^complex128, ldq: ^blasint, PT: ^complex128, ldpt: ^blasint, C: ^complex128, ldc: ^blasint, work: ^complex128, rwork: ^f64, info: ^Info, _: c.size_t = 1) ---
-
+	// generate Q, P from gebrd
 	cungbr_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^complex64, lda: ^blasint, tau: ^complex64, work: ^complex64, lwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
 	zungbr_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^complex128, lda: ^blasint, tau: ^complex128, work: ^complex128, lwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
-
 	dorgbr_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^f64, lda: ^blasint, tau: ^f64, work: ^f64, lwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
 	sorgbr_ :: proc(vect: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^f32, lda: ^blasint, tau: ^f32, work: ^f32, lwork: ^blasint, info: ^Info, _: c.size_t = 1) ---
 
+	// multiply by Q, P from gebrd
 	cunmbr_ :: proc(vect: ^char, side: ^char, trans: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^complex64, lda: ^blasint, tau: ^complex64, C: ^complex64, ldc: ^blasint, work: ^complex64, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	zunmbr_ :: proc(vect: ^char, side: ^char, trans: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^complex128, lda: ^blasint, tau: ^complex128, C: ^complex128, ldc: ^blasint, work: ^complex128, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
-
 	dormbr_ :: proc(vect: ^char, side: ^char, trans: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^f64, lda: ^blasint, tau: ^f64, C: ^f64, ldc: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 	sormbr_ :: proc(vect: ^char, side: ^char, trans: ^char, m: ^blasint, n: ^blasint, k: ^blasint, A: ^f32, lda: ^blasint, tau: ^f32, C: ^f32, ldc: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info, _: c.size_t = 1, _: c.size_t = 1, _: c.size_t = 1) ---
 

@@ -64,53 +64,15 @@ m_balance_generalized_real :: proc(
 	defer builtin.delete(work)
 
 	when T == f32 {
-		lapack.sggbal_(
-			job_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			raw_data(work),
-			&info,
-			1,
-		)
+		lapack.sggbal_(job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info, 1)
 	} else {
-		lapack.dggbal_(
-			job_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			raw_data(work),
-			&info,
-			1,
-		)
+		lapack.dggbal_(job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info, 1)
 	}
 
 	return ilo, ihi, lscale, rscale, info
 }
 
-m_balance_generalized_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	permute: bool = true,
-	scale: bool = true,
-	allocator := context.allocator,
-) -> (
-	ilo, ihi: Blas_Int,
-	lscale, rscale: []f32,
-	info: Info,
-) {
+m_balance_generalized_c64 :: proc(A: ^Matrix(complex64), B: ^Matrix(complex64), permute: bool = true, scale: bool = true, allocator := context.allocator) -> (ilo, ihi: Blas_Int, lscale, rscale: []f32, info: Info) {
 	n := Blas_Int(A.rows)
 	lda := Blas_Int(A.ld)
 	ldb := Blas_Int(B.ld)
@@ -135,36 +97,12 @@ m_balance_generalized_c64 :: proc(
 	work := builtin.make([]f32, 6 * n, allocator)
 	defer builtin.delete(work)
 
-	lapack.cggbal_(
-		job_c,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&ilo,
-		&ihi,
-		raw_data(lscale),
-		raw_data(rscale),
-		raw_data(work),
-		&info,
-		1,
-	)
+	lapack.cggbal_(job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info, 1)
 
 	return ilo, ihi, lscale, rscale, info
 }
 
-m_balance_generalized_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	permute: bool = true,
-	scale: bool = true,
-	allocator := context.allocator,
-) -> (
-	ilo, ihi: Blas_Int,
-	lscale, rscale: []f64,
-	info: Info,
-) {
+m_balance_generalized_c128 :: proc(A: ^Matrix(complex128), B: ^Matrix(complex128), permute: bool = true, scale: bool = true, allocator := context.allocator) -> (ilo, ihi: Blas_Int, lscale, rscale: []f64, info: Info) {
 	n := Blas_Int(A.rows)
 	lda := Blas_Int(A.ld)
 	ldb := Blas_Int(B.ld)
@@ -189,21 +127,7 @@ m_balance_generalized_c128 :: proc(
 	work := builtin.make([]f64, 6 * n, allocator)
 	defer builtin.delete(work)
 
-	lapack.zggbal_(
-		job_c,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&ilo,
-		&ihi,
-		raw_data(lscale),
-		raw_data(rscale),
-		raw_data(work),
-		&info,
-		1,
-	)
+	lapack.zggbal_(job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info, 1)
 
 	return ilo, ihi, lscale, rscale, info
 }
@@ -231,50 +155,15 @@ m_balance_generalized_back_real :: proc(
 	side_c := left_eigenvectors ? cstring("L") : cstring("R")
 
 	when T == f32 {
-		lapack.sggbak_(
-			job_c,
-			side_c,
-			&n,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			&m,
-			raw_data(V.data),
-			&ldv,
-			&info,
-			1,
-			1,
-		)
+		lapack.sggbak_(job_c, side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info, 1, 1)
 	} else {
-		lapack.dggbak_(
-			job_c,
-			side_c,
-			&n,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			&m,
-			raw_data(V.data),
-			&ldv,
-			&info,
-			1,
-			1,
-		)
+		lapack.dggbak_(job_c, side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info, 1, 1)
 	}
 
 	return info
 }
 
-m_balance_generalized_back_c64 :: proc(
-	V: ^Matrix(complex64),
-	ilo, ihi: Blas_Int,
-	lscale, rscale: []f32,
-	left_eigenvectors: bool = false,
-) -> (
-	info: Info,
-) {
+m_balance_generalized_back_c64 :: proc(V: ^Matrix(complex64), ilo, ihi: Blas_Int, lscale, rscale: []f32, left_eigenvectors: bool = false) -> (info: Info) {
 	n := Blas_Int(len(lscale))
 	m := Blas_Int(V.cols)
 	ldv := Blas_Int(V.ld)
@@ -282,33 +171,12 @@ m_balance_generalized_back_c64 :: proc(
 	job_c := cstring("B")
 	side_c := left_eigenvectors ? cstring("L") : cstring("R")
 
-	lapack.cggbak_(
-		job_c,
-		side_c,
-		&n,
-		&ilo,
-		&ihi,
-		raw_data(lscale),
-		raw_data(rscale),
-		&m,
-		raw_data(V.data),
-		&ldv,
-		&info,
-		1,
-		1,
-	)
+	lapack.cggbak_(job_c, side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info, 1, 1)
 
 	return info
 }
 
-m_balance_generalized_back_c128 :: proc(
-	V: ^Matrix(complex128),
-	ilo, ihi: Blas_Int,
-	lscale, rscale: []f64,
-	left_eigenvectors: bool = false,
-) -> (
-	info: Info,
-) {
+m_balance_generalized_back_c128 :: proc(V: ^Matrix(complex128), ilo, ihi: Blas_Int, lscale, rscale: []f64, left_eigenvectors: bool = false) -> (info: Info) {
 	n := Blas_Int(len(lscale))
 	m := Blas_Int(V.cols)
 	ldv := Blas_Int(V.ld)
@@ -316,21 +184,7 @@ m_balance_generalized_back_c128 :: proc(
 	job_c := cstring("B")
 	side_c := left_eigenvectors ? cstring("L") : cstring("R")
 
-	lapack.zggbak_(
-		job_c,
-		side_c,
-		&n,
-		&ilo,
-		&ihi,
-		raw_data(lscale),
-		raw_data(rscale),
-		&m,
-		raw_data(V.data),
-		&ldv,
-		&info,
-		1,
-		1,
-	)
+	lapack.zggbak_(job_c, side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info, 1, 1)
 
 	return info
 }
@@ -358,9 +212,9 @@ m_schur_generalized_real :: proc(
 	S, T_mat: Matrix(T),
 	VSL: Matrix(T),
 	VSR: Matrix(T),
-	alphar, alphai, beta: []T,// Selection function for sorting
-	sdim: Blas_Int,// Schur forms (A becomes S, B becomes T)
-	info: Info, // Left Schur vectors (Q)// Right Schur vectors (Z)// Generalized eigenvalues: lambda = (alphar + i*alphai)/beta// Number of eigenvalues selected (if sorting)
+	alphar, alphai, beta: []T,
+	sdim: Blas_Int,
+	info: Info, // Selection function for sorting// Schur forms (A becomes S, B becomes T)// Left Schur vectors (Q)// Right Schur vectors (Z)// Generalized eigenvalues: lambda = (alphar + i*alphai)/beta// Number of eigenvalues selected (if sorting)
 ) where T == f32 || T == f64 {
 	n := Blas_Int(A.rows)
 	lda := Blas_Int(A.ld)
@@ -2719,20 +2573,7 @@ m_eigen_generalized_expert_real :: proc(
 		)
 	}
 
-	return alphar,
-		alphai,
-		beta,
-		VL,
-		VR,
-		ilo,
-		ihi,
-		lscale,
-		rscale,
-		abnrm,
-		bbnrm,
-		rconde,
-		rcondv,
-		info
+	return alphar, alphai, beta, VL, VR, ilo, ihi, lscale, rscale, abnrm, bbnrm, rconde, rcondv, info
 }
 
 m_eigen_generalized_expert_c64 :: proc(
@@ -3060,16 +2901,7 @@ m_glm_generalized :: proc {
 	m_glm_generalized_c128,
 }
 
-m_glm_generalized_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	d: []T,
-	allocator := context.allocator,
-) -> (
-	x, y: []T,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
+m_glm_generalized_real :: proc(A: ^Matrix($T), B: ^Matrix(T), d: []T, allocator := context.allocator) -> (x, y: []T, info: Info) where T == f32 || T == f64 {
 	n := Blas_Int(A.cols) // Number of variables
 	m := Blas_Int(A.rows) // Number of equations
 	p := Blas_Int(B.cols) // Dimension of y
@@ -3091,37 +2923,9 @@ m_glm_generalized_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sggglm_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(d_copy),
-			raw_data(x),
-			raw_data(y),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), &work_query, &lwork, &info)
 	} else {
-		lapack.dggglm_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(d_copy),
-			raw_data(x),
-			raw_data(y),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), &work_query, &lwork, &info)
 	}
 
 	// Allocate workspace
@@ -3131,51 +2935,15 @@ m_glm_generalized_real :: proc(
 
 	// Solve generalized linear model
 	when T == f32 {
-		lapack.sggglm_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(d_copy),
-			raw_data(x),
-			raw_data(y),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), raw_data(work), &lwork, &info)
 	} else {
-		lapack.dggglm_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(d_copy),
-			raw_data(x),
-			raw_data(y),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), raw_data(work), &lwork, &info)
 	}
 
 	return x, y, info
 }
 
-m_glm_generalized_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	d: []complex64,
-	allocator := context.allocator,
-) -> (
-	x, y: []complex64,
-	info: Info,
-) {
+m_glm_generalized_c64 :: proc(A: ^Matrix(complex64), B: ^Matrix(complex64), d: []complex64, allocator := context.allocator) -> (x, y: []complex64, info: Info) {
 	n := Blas_Int(A.cols) // Number of variables
 	m := Blas_Int(A.rows) // Number of equations
 	p := Blas_Int(B.cols) // Dimension of y
@@ -3196,21 +2964,7 @@ m_glm_generalized_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cggglm_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(d_copy),
-		raw_data(x),
-		raw_data(y),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.cggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -3218,34 +2972,12 @@ m_glm_generalized_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Solve generalized linear model
-	lapack.cggglm_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(d_copy),
-		raw_data(x),
-		raw_data(y),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), raw_data(work), &lwork, &info)
 
 	return x, y, info
 }
 
-m_glm_generalized_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	d: []complex128,
-	allocator := context.allocator,
-) -> (
-	x, y: []complex128,
-	info: Info,
-) {
+m_glm_generalized_c128 :: proc(A: ^Matrix(complex128), B: ^Matrix(complex128), d: []complex128, allocator := context.allocator) -> (x, y: []complex128, info: Info) {
 	n := Blas_Int(A.cols) // Number of variables
 	m := Blas_Int(A.rows) // Number of equations
 	p := Blas_Int(B.cols) // Dimension of y
@@ -3266,21 +2998,7 @@ m_glm_generalized_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zggglm_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(d_copy),
-		raw_data(x),
-		raw_data(y),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.zggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -3288,21 +3006,7 @@ m_glm_generalized_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Solve generalized linear model
-	lapack.zggglm_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(d_copy),
-		raw_data(x),
-		raw_data(y),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zggglm_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(d_copy), raw_data(x), raw_data(y), raw_data(work), &lwork, &info)
 
 	return x, y, info
 }
@@ -3372,43 +3076,9 @@ m_hessenberg_generalized_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgghrd_(
-			compq_c,
-			compz_c,
-			&n,
-			&ilo,
-			&ihi_actual,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			compute_left ? raw_data(Q.data) : nil,
-			&ldq,
-			compute_right ? raw_data(Z.data) : nil,
-			&ldz,
-			&info,
-			1,
-			1,
-		)
+		lapack.sgghrd_(compq_c, compz_c, &n, &ilo, &ihi_actual, raw_data(A.data), &lda, raw_data(B.data), &ldb, compute_left ? raw_data(Q.data) : nil, &ldq, compute_right ? raw_data(Z.data) : nil, &ldz, &info, 1, 1)
 	} else {
-		lapack.dgghrd_(
-			compq_c,
-			compz_c,
-			&n,
-			&ilo,
-			&ihi_actual,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			compute_left ? raw_data(Q.data) : nil,
-			&ldq,
-			compute_right ? raw_data(Z.data) : nil,
-			&ldz,
-			&info,
-			1,
-			1,
-		)
+		lapack.dgghrd_(compq_c, compz_c, &n, &ilo, &ihi_actual, raw_data(A.data), &lda, raw_data(B.data), &ldb, compute_left ? raw_data(Q.data) : nil, &ldq, compute_right ? raw_data(Z.data) : nil, &ldz, &info, 1, 1)
 	}
 
 	return Q, Z, tau, info
@@ -3462,24 +3132,7 @@ m_hessenberg_generalized_c64 :: proc(
 	// Allocate tau array
 	tau = builtin.make([]complex64, n - 1, allocator)
 
-	lapack.cgghrd_(
-		compq_c,
-		compz_c,
-		&n,
-		&ilo,
-		&ihi_actual,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		compute_left ? raw_data(Q.data) : nil,
-		&ldq,
-		compute_right ? raw_data(Z.data) : nil,
-		&ldz,
-		&info,
-		1,
-		1,
-	)
+	lapack.cgghrd_(compq_c, compz_c, &n, &ilo, &ihi_actual, raw_data(A.data), &lda, raw_data(B.data), &ldb, compute_left ? raw_data(Q.data) : nil, &ldq, compute_right ? raw_data(Z.data) : nil, &ldz, &info, 1, 1)
 
 	return Q, Z, tau, info
 }
@@ -3532,24 +3185,7 @@ m_hessenberg_generalized_c128 :: proc(
 	// Allocate tau array
 	tau = builtin.make([]complex128, n - 1, allocator)
 
-	lapack.zgghrd_(
-		compq_c,
-		compz_c,
-		&n,
-		&ilo,
-		&ihi_actual,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		compute_left ? raw_data(Q.data) : nil,
-		&ldq,
-		compute_right ? raw_data(Z.data) : nil,
-		&ldz,
-		&info,
-		1,
-		1,
-	)
+	lapack.zgghrd_(compq_c, compz_c, &n, &ilo, &ihi_actual, raw_data(A.data), &lda, raw_data(B.data), &ldb, compute_left ? raw_data(Q.data) : nil, &ldq, compute_right ? raw_data(Z.data) : nil, &ldz, &info, 1, 1)
 
 	return Q, Z, tau, info
 }
@@ -3928,17 +3564,7 @@ m_lse_constrained :: proc {
 	m_lse_constrained_c128,
 }
 
-m_lse_constrained_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	c: []T,
-	d: []T,
-	allocator := context.allocator,
-) -> (
-	x: []T,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
+m_lse_constrained_real :: proc(A: ^Matrix($T), B: ^Matrix(T), c: []T, d: []T, allocator := context.allocator) -> (x: []T, info: Info) where T == f32 || T == f64 {
 	m := Blas_Int(A.rows) // Number of rows in A
 	n := Blas_Int(A.cols) // Number of variables
 	p := Blas_Int(B.rows) // Number of equality constraints
@@ -3962,37 +3588,9 @@ m_lse_constrained_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgglse_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(c_copy),
-			raw_data(d_copy),
-			raw_data(x),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), &work_query, &lwork, &info)
 	} else {
-		lapack.dgglse_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(c_copy),
-			raw_data(d_copy),
-			raw_data(x),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), &work_query, &lwork, &info)
 	}
 
 	// Allocate workspace
@@ -4002,52 +3600,15 @@ m_lse_constrained_real :: proc(
 
 	// Solve constrained least squares
 	when T == f32 {
-		lapack.sgglse_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(c_copy),
-			raw_data(d_copy),
-			raw_data(x),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), raw_data(work), &lwork, &info)
 	} else {
-		lapack.dgglse_(
-			&m,
-			&n,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(c_copy),
-			raw_data(d_copy),
-			raw_data(x),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), raw_data(work), &lwork, &info)
 	}
 
 	return x, info
 }
 
-m_lse_constrained_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	c: []complex64,
-	d: []complex64,
-	allocator := context.allocator,
-) -> (
-	x: []complex64,
-	info: Info,
-) {
+m_lse_constrained_c64 :: proc(A: ^Matrix(complex64), B: ^Matrix(complex64), c: []complex64, d: []complex64, allocator := context.allocator) -> (x: []complex64, info: Info) {
 	m := Blas_Int(A.rows) // Number of rows in A
 	n := Blas_Int(A.cols) // Number of variables
 	p := Blas_Int(B.rows) // Number of equality constraints
@@ -4070,21 +3631,7 @@ m_lse_constrained_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cgglse_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(c_copy),
-		raw_data(d_copy),
-		raw_data(x),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.cgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -4092,35 +3639,12 @@ m_lse_constrained_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Solve constrained least squares
-	lapack.cgglse_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(c_copy),
-		raw_data(d_copy),
-		raw_data(x),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), raw_data(work), &lwork, &info)
 
 	return x, info
 }
 
-m_lse_constrained_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	c: []complex128,
-	d: []complex128,
-	allocator := context.allocator,
-) -> (
-	x: []complex128,
-	info: Info,
-) {
+m_lse_constrained_c128 :: proc(A: ^Matrix(complex128), B: ^Matrix(complex128), c: []complex128, d: []complex128, allocator := context.allocator) -> (x: []complex128, info: Info) {
 	m := Blas_Int(A.rows) // Number of rows in A
 	n := Blas_Int(A.cols) // Number of variables
 	p := Blas_Int(B.rows) // Number of equality constraints
@@ -4143,21 +3667,7 @@ m_lse_constrained_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zgglse_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(c_copy),
-		raw_data(d_copy),
-		raw_data(x),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.zgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -4165,21 +3675,7 @@ m_lse_constrained_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Solve constrained least squares
-	lapack.zgglse_(
-		&m,
-		&n,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(c_copy),
-		raw_data(d_copy),
-		raw_data(x),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zgglse_(&m, &n, &p, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(c_copy), raw_data(d_copy), raw_data(x), raw_data(work), &lwork, &info)
 
 	return x, info
 }
@@ -4195,15 +3691,7 @@ m_qr_generalized :: proc {
 	m_qr_generalized_c128,
 }
 
-m_qr_generalized_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	allocator := context.allocator,
-) -> (
-	taua, taub: []T,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
+m_qr_generalized_real :: proc(A: ^Matrix($T), B: ^Matrix(T), allocator := context.allocator) -> (taua, taub: []T, info: Info) where T == f32 || T == f64 {
 	n := Blas_Int(A.rows)
 	m := Blas_Int(A.cols)
 	p := Blas_Int(B.cols)
@@ -4220,35 +3708,9 @@ m_qr_generalized_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sggqrf_(
-			&n,
-			&m,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 	} else {
-		lapack.dggqrf_(
-			&n,
-			&m,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 	}
 
 	// Allocate workspace
@@ -4258,48 +3720,15 @@ m_qr_generalized_real :: proc(
 
 	// Compute generalized QR factorization
 	when T == f32 {
-		lapack.sggqrf_(
-			&n,
-			&m,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 	} else {
-		lapack.dggqrf_(
-			&n,
-			&m,
-			&p,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 	}
 
 	return taua, taub, info
 }
 
-m_qr_generalized_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	taua, taub: []complex64,
-	info: Info,
-) {
+m_qr_generalized_c64 :: proc(A: ^Matrix(complex64), B: ^Matrix(complex64), allocator := context.allocator) -> (taua, taub: []complex64, info: Info) {
 	n := Blas_Int(A.rows)
 	m := Blas_Int(A.cols)
 	p := Blas_Int(B.cols)
@@ -4315,20 +3744,7 @@ m_qr_generalized_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cggqrf_(
-		&n,
-		&m,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.cggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -4336,32 +3752,12 @@ m_qr_generalized_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Compute generalized QR factorization
-	lapack.cggqrf_(
-		&n,
-		&m,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 
 	return taua, taub, info
 }
 
-m_qr_generalized_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	taua, taub: []complex128,
-	info: Info,
-) {
+m_qr_generalized_c128 :: proc(A: ^Matrix(complex128), B: ^Matrix(complex128), allocator := context.allocator) -> (taua, taub: []complex128, info: Info) {
 	n := Blas_Int(A.rows)
 	m := Blas_Int(A.cols)
 	p := Blas_Int(B.cols)
@@ -4377,20 +3773,7 @@ m_qr_generalized_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zggqrf_(
-		&n,
-		&m,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.zggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -4398,20 +3781,7 @@ m_qr_generalized_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Compute generalized QR factorization
-	lapack.zggqrf_(
-		&n,
-		&m,
-		&p,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zggqrf_(&n, &m, &p, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 
 	return taua, taub, info
 }
@@ -4427,15 +3797,7 @@ m_rq_generalized :: proc {
 	m_rq_generalized_c128,
 }
 
-m_rq_generalized_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	allocator := context.allocator,
-) -> (
-	taua, taub: []T,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
+m_rq_generalized_real :: proc(A: ^Matrix($T), B: ^Matrix(T), allocator := context.allocator) -> (taua, taub: []T, info: Info) where T == f32 || T == f64 {
 	m := Blas_Int(A.rows)
 	p := Blas_Int(A.cols) // This is p in the RQ context
 	n := Blas_Int(B.cols)
@@ -4452,35 +3814,9 @@ m_rq_generalized_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sggrqf_(
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 	} else {
-		lapack.dggrqf_(
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 	}
 
 	// Allocate workspace
@@ -4490,48 +3826,15 @@ m_rq_generalized_real :: proc(
 
 	// Compute generalized RQ factorization
 	when T == f32 {
-		lapack.sggrqf_(
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 	} else {
-		lapack.dggrqf_(
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(taua),
-			raw_data(B.data),
-			&ldb,
-			raw_data(taub),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 	}
 
 	return taua, taub, info
 }
 
-m_rq_generalized_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	taua, taub: []complex64,
-	info: Info,
-) {
+m_rq_generalized_c64 :: proc(A: ^Matrix(complex64), B: ^Matrix(complex64), allocator := context.allocator) -> (taua, taub: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	p := Blas_Int(A.cols) // This is p in the RQ context
 	n := Blas_Int(B.cols)
@@ -4547,20 +3850,7 @@ m_rq_generalized_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cggrqf_(
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.cggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -4568,32 +3858,12 @@ m_rq_generalized_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Compute generalized RQ factorization
-	lapack.cggrqf_(
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 
 	return taua, taub, info
 }
 
-m_rq_generalized_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	taua, taub: []complex128,
-	info: Info,
-) {
+m_rq_generalized_c128 :: proc(A: ^Matrix(complex128), B: ^Matrix(complex128), allocator := context.allocator) -> (taua, taub: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	p := Blas_Int(A.cols) // This is p in the RQ context
 	n := Blas_Int(B.cols)
@@ -4609,20 +3879,7 @@ m_rq_generalized_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zggrqf_(
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.zggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -4630,1608 +3887,7 @@ m_rq_generalized_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Compute generalized RQ factorization
-	lapack.zggrqf_(
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(taua),
-		raw_data(B.data),
-		&ldb,
-		raw_data(taub),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zggrqf_(&m, &p, &n, raw_data(A.data), &lda, raw_data(taua), raw_data(B.data), &ldb, raw_data(taub), raw_data(work), &lwork, &info)
 
 	return taua, taub, info
-}
-
-// ===================================================================================
-// GENERALIZED SINGULAR VALUE DECOMPOSITION
-// ===================================================================================
-
-// Compute generalized SVD: U^H*A*Q = D1*[0 R], V^H*B*Q = D2*[0 R]
-m_gsvd :: proc {
-	m_gsvd_real,
-	m_gsvd_c64,
-	m_gsvd_c128,
-}
-
-m_gsvd_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	alpha, beta: []T,
-	U: Matrix(T),
-	V: Matrix(T),
-	Q: Matrix(T),
-	k, l: Blas_Int,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	p := Blas_Int(B.rows)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Allocate singular value arrays
-	alpha = builtin.make([]T, n, allocator)
-	beta = builtin.make([]T, n, allocator)
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(T, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(T, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(T, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate workspace
-	work := builtin.make([]T, max(3 * n, m, p) + n, allocator)
-	defer builtin.delete(work)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	when T == f32 {
-		lapack.sggsvd_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&n,
-			&p,
-			&k,
-			&l,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			1,
-			1,
-			1,
-		)
-	} else {
-		lapack.dggsvd_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&n,
-			&p,
-			&k,
-			&l,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(work),
-			raw_data(iwork),
-			&info,
-			1,
-			1,
-			1,
-		)
-	}
-
-	return alpha, beta, U, V, Q, k, l, info
-}
-
-m_gsvd_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	alpha, beta: []f32,
-	U: Matrix(complex64),
-	V: Matrix(complex64),
-	Q: Matrix(complex64),
-	k, l: Blas_Int,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	p := Blas_Int(B.rows)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Allocate singular value arrays (real for complex matrices)
-	alpha = builtin.make([]f32, n, allocator)
-	beta = builtin.make([]f32, n, allocator)
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex64, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex64, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex64, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate workspace
-	work := builtin.make([]complex64, max(3 * n, m, p) + n, allocator)
-	defer builtin.delete(work)
-
-	rwork := builtin.make([]f32, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	lapack.cggsvd_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&n,
-		&p,
-		&k,
-		&l,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(alpha),
-		raw_data(beta),
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(work),
-		raw_data(rwork),
-		raw_data(iwork),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return alpha, beta, U, V, Q, k, l, info
-}
-
-m_gsvd_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	alpha, beta: []f64,
-	U: Matrix(complex128),
-	V: Matrix(complex128),
-	Q: Matrix(complex128),
-	k, l: Blas_Int,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	p := Blas_Int(B.rows)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Allocate singular value arrays (real for complex matrices)
-	alpha = builtin.make([]f64, n, allocator)
-	beta = builtin.make([]f64, n, allocator)
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex128, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex128, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex128, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate workspace
-	work := builtin.make([]complex128, max(3 * n, m, p) + n, allocator)
-	defer builtin.delete(work)
-
-	rwork := builtin.make([]f64, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	lapack.zggsvd_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&n,
-		&p,
-		&k,
-		&l,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(alpha),
-		raw_data(beta),
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(work),
-		raw_data(rwork),
-		raw_data(iwork),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return alpha, beta, U, V, Q, k, l, info
-}
-
-// Blocked/improved version of generalized SVD
-m_gsvd_blocked :: proc {
-	m_gsvd_blocked_real,
-	m_gsvd_blocked_c64,
-	m_gsvd_blocked_c128,
-}
-
-m_gsvd_blocked_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	alpha, beta: []T,
-	U: Matrix(T),
-	V: Matrix(T),
-	Q: Matrix(T),
-	k, l: Blas_Int,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	p := Blas_Int(B.rows)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Allocate singular value arrays
-	alpha = builtin.make([]T, n, allocator)
-	beta = builtin.make([]T, n, allocator)
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(T, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(T, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(T, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate integer workspace
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: T
-
-	when T == f32 {
-		lapack.sggsvd3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&n,
-			&p,
-			&k,
-			&l,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			&work_query,
-			&lwork,
-			raw_data(iwork),
-			&info,
-			1,
-			1,
-			1,
-		)
-	} else {
-		lapack.dggsvd3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&n,
-			&p,
-			&k,
-			&l,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			&work_query,
-			&lwork,
-			raw_data(iwork),
-			&info,
-			1,
-			1,
-			1,
-		)
-	}
-
-	// Allocate workspace
-	lwork = Blas_Int(work_query)
-	work := builtin.make([]T, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Compute generalized SVD
-	when T == f32 {
-		lapack.sggsvd3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&n,
-			&p,
-			&k,
-			&l,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&info,
-			1,
-			1,
-			1,
-		)
-	} else {
-		lapack.dggsvd3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&n,
-			&p,
-			&k,
-			&l,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&info,
-			1,
-			1,
-			1,
-		)
-	}
-
-	return alpha, beta, U, V, Q, k, l, info
-}
-
-m_gsvd_blocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	alpha, beta: []f32,
-	U: Matrix(complex64),
-	V: Matrix(complex64),
-	Q: Matrix(complex64),
-	k, l: Blas_Int,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	p := Blas_Int(B.rows)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Allocate singular value arrays (real for complex matrices)
-	alpha = builtin.make([]f32, n, allocator)
-	beta = builtin.make([]f32, n, allocator)
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex64, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex64, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex64, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate real and integer workspace
-	rwork := builtin.make([]f32, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: complex64
-
-	lapack.cggsvd3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&n,
-		&p,
-		&k,
-		&l,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(alpha),
-		raw_data(beta),
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		&work_query,
-		&lwork,
-		raw_data(rwork),
-		raw_data(iwork),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	// Allocate workspace
-	lwork = Blas_Int(real(work_query))
-	work := builtin.make([]complex64, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Compute generalized SVD
-	lapack.cggsvd3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&n,
-		&p,
-		&k,
-		&l,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(alpha),
-		raw_data(beta),
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(work),
-		&lwork,
-		raw_data(rwork),
-		raw_data(iwork),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return alpha, beta, U, V, Q, k, l, info
-}
-
-m_gsvd_blocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	alpha, beta: []f64,
-	U: Matrix(complex128),
-	V: Matrix(complex128),
-	Q: Matrix(complex128),
-	k, l: Blas_Int,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	p := Blas_Int(B.rows)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Allocate singular value arrays (real for complex matrices)
-	alpha = builtin.make([]f64, n, allocator)
-	beta = builtin.make([]f64, n, allocator)
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex128, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex128, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex128, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate real and integer workspace
-	rwork := builtin.make([]f64, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: complex128
-
-	lapack.zggsvd3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&n,
-		&p,
-		&k,
-		&l,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(alpha),
-		raw_data(beta),
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		&work_query,
-		&lwork,
-		raw_data(rwork),
-		raw_data(iwork),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	// Allocate workspace
-	lwork = Blas_Int(real(work_query))
-	work := builtin.make([]complex128, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Compute generalized SVD
-	lapack.zggsvd3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&n,
-		&p,
-		&k,
-		&l,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		raw_data(alpha),
-		raw_data(beta),
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(work),
-		&lwork,
-		raw_data(rwork),
-		raw_data(iwork),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return alpha, beta, U, V, Q, k, l, info
-}
-
-// ===================================================================================
-// GENERALIZED SVD PREPROCESSING
-// ===================================================================================
-
-// Preprocessing for generalized SVD - reduce to standard form
-m_gsvd_preprocess :: proc {
-	m_gsvd_preprocess_real,
-	m_gsvd_preprocess_c64,
-	m_gsvd_preprocess_c128,
-}
-
-m_gsvd_preprocess_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	tola: T = 0,
-	tolb: T = 0,
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	U: Matrix(T),
-	V: Matrix(T),
-	Q: Matrix(T),
-	k, l: Blas_Int,
-	tau: []T,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Use machine precision if tolerances not specified
-	tola_actual := tola == 0 ? T(2.2e-16) : tola // Approximate machine epsilon for f64
-	tolb_actual := tolb == 0 ? T(2.2e-16) : tolb
-	when T == f32 {
-		tola_actual = tola == 0 ? T(1.2e-7) : tola // Approximate machine epsilon for f32
-		tolb_actual = tolb == 0 ? T(1.2e-7) : tolb
-	}
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(T, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(T, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(T, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate tau and workspace
-	tau = builtin.make([]T, n, allocator)
-	work := builtin.make([]T, max(3 * n, m, p), allocator)
-	defer builtin.delete(work)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	when T == f32 {
-		lapack.sggsvp_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&tola_actual,
-			&tolb_actual,
-			&k,
-			&l,
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(iwork),
-			raw_data(tau),
-			raw_data(work),
-			&info,
-			1,
-			1,
-			1,
-		)
-	} else {
-		lapack.dggsvp_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&tola_actual,
-			&tolb_actual,
-			&k,
-			&l,
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(iwork),
-			raw_data(tau),
-			raw_data(work),
-			&info,
-			1,
-			1,
-			1,
-		)
-	}
-
-	return U, V, Q, k, l, tau, info
-}
-
-m_gsvd_preprocess_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	tola: f32 = 0,
-	tolb: f32 = 0,
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	U: Matrix(complex64),
-	V: Matrix(complex64),
-	Q: Matrix(complex64),
-	k, l: Blas_Int,
-	tau: []complex64,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Use machine precision if tolerances not specified
-	tola_actual := tola == 0 ? f32(1.2e-7) : tola // Approximate machine epsilon for f32
-	tolb_actual := tolb == 0 ? f32(1.2e-7) : tolb
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex64, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex64, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex64, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate tau and workspace
-	tau = builtin.make([]complex64, n, allocator)
-	work := builtin.make([]complex64, max(3 * n, m, p), allocator)
-	defer builtin.delete(work)
-
-	rwork := builtin.make([]f32, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	lapack.cggsvp_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&tola_actual,
-		&tolb_actual,
-		&k,
-		&l,
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(iwork),
-		raw_data(rwork),
-		raw_data(tau),
-		raw_data(work),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return U, V, Q, k, l, tau, info
-}
-
-m_gsvd_preprocess_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	tola: f64 = 0,
-	tolb: f64 = 0,
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	U: Matrix(complex128),
-	V: Matrix(complex128),
-	Q: Matrix(complex128),
-	k, l: Blas_Int,
-	tau: []complex128,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Use machine precision if tolerances not specified
-	tola_actual := tola == 0 ? f64(2.2e-16) : tola // Approximate machine epsilon for f64
-	tolb_actual := tolb == 0 ? f64(2.2e-16) : tolb
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex128, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex128, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex128, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate tau and workspace
-	tau = builtin.make([]complex128, n, allocator)
-	work := builtin.make([]complex128, max(3 * n, m, p), allocator)
-	defer builtin.delete(work)
-
-	rwork := builtin.make([]f64, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	lapack.zggsvp_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&tola_actual,
-		&tolb_actual,
-		&k,
-		&l,
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(iwork),
-		raw_data(rwork),
-		raw_data(tau),
-		raw_data(work),
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return U, V, Q, k, l, tau, info
-}
-
-// Improved/blocked version of generalized SVD preprocessing
-m_gsvd_preprocess_blocked :: proc {
-	m_gsvd_preprocess_blocked_real,
-	m_gsvd_preprocess_blocked_c64,
-	m_gsvd_preprocess_blocked_c128,
-}
-
-m_gsvd_preprocess_blocked_real :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	tola: T = 0,
-	tolb: T = 0,
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	U: Matrix(T),
-	V: Matrix(T),
-	Q: Matrix(T),
-	k, l: Blas_Int,
-	tau: []T,
-	info: Info,
-) where T == f32 ||
-	T == f64 {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Use machine precision if tolerances not specified
-	tola_actual := tola == 0 ? T(2.2e-16) : tola // Approximate machine epsilon for f64
-	tolb_actual := tolb == 0 ? T(2.2e-16) : tolb
-	when T == f32 {
-		tola_actual = tola == 0 ? T(1.2e-7) : tola // Approximate machine epsilon for f32
-		tolb_actual = tolb == 0 ? T(1.2e-7) : tolb
-	}
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(T, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(T, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(T, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate tau and integer workspace
-	tau = builtin.make([]T, n, allocator)
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: T
-
-	when T == f32 {
-		lapack.sggsvp3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&tola_actual,
-			&tolb_actual,
-			&k,
-			&l,
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(iwork),
-			raw_data(tau),
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-			1,
-		)
-	} else {
-		lapack.dggsvp3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&tola_actual,
-			&tolb_actual,
-			&k,
-			&l,
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(iwork),
-			raw_data(tau),
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-			1,
-		)
-	}
-
-	// Allocate workspace
-	lwork = Blas_Int(work_query)
-	work := builtin.make([]T, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Perform preprocessing
-	when T == f32 {
-		lapack.sggsvp3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&tola_actual,
-			&tolb_actual,
-			&k,
-			&l,
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(iwork),
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-			1,
-		)
-	} else {
-		lapack.dggsvp3_(
-			jobu_c,
-			jobv_c,
-			jobq_c,
-			&m,
-			&p,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&tola_actual,
-			&tolb_actual,
-			&k,
-			&l,
-			compute_u ? raw_data(U.data) : nil,
-			&ldu,
-			compute_v ? raw_data(V.data) : nil,
-			&ldv,
-			compute_q ? raw_data(Q.data) : nil,
-			&ldq,
-			raw_data(iwork),
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-			1,
-		)
-	}
-
-	return U, V, Q, k, l, tau, info
-}
-
-m_gsvd_preprocess_blocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	B: ^Matrix(complex64),
-	tola: f32 = 0,
-	tolb: f32 = 0,
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	U: Matrix(complex64),
-	V: Matrix(complex64),
-	Q: Matrix(complex64),
-	k, l: Blas_Int,
-	tau: []complex64,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Use machine precision if tolerances not specified
-	tola_actual := tola == 0 ? f32(1.2e-7) : tola // Approximate machine epsilon for f32
-	tolb_actual := tolb == 0 ? f32(1.2e-7) : tolb
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex64, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex64, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex64, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate tau and workspace arrays
-	tau = builtin.make([]complex64, n, allocator)
-	rwork := builtin.make([]f32, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: complex64
-
-	lapack.cggsvp3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&tola_actual,
-		&tolb_actual,
-		&k,
-		&l,
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(iwork),
-		raw_data(rwork),
-		raw_data(tau),
-		&work_query,
-		&lwork,
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	// Allocate workspace
-	lwork = Blas_Int(real(work_query))
-	work := builtin.make([]complex64, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Perform preprocessing
-	lapack.cggsvp3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&tola_actual,
-		&tolb_actual,
-		&k,
-		&l,
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(iwork),
-		raw_data(rwork),
-		raw_data(tau),
-		raw_data(work),
-		&lwork,
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return U, V, Q, k, l, tau, info
-}
-
-m_gsvd_preprocess_blocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	B: ^Matrix(complex128),
-	tola: f64 = 0,
-	tolb: f64 = 0,
-	compute_u: bool = true,
-	compute_v: bool = true,
-	compute_q: bool = true,
-	allocator := context.allocator,
-) -> (
-	U: Matrix(complex128),
-	V: Matrix(complex128),
-	Q: Matrix(complex128),
-	k, l: Blas_Int,
-	tau: []complex128,
-	info: Info,
-) {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
-
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-
-	// Set job parameters
-	jobu_c := compute_u ? cstring("U") : cstring("N")
-	jobv_c := compute_v ? cstring("V") : cstring("N")
-	jobq_c := compute_q ? cstring("Q") : cstring("N")
-
-	// Use machine precision if tolerances not specified
-	tola_actual := tola == 0 ? f64(2.2e-16) : tola // Approximate machine epsilon for f64
-	tolb_actual := tolb == 0 ? f64(2.2e-16) : tolb
-
-	// Allocate transformation matrices
-	ldu := Blas_Int(1)
-	ldv := Blas_Int(1)
-	ldq := Blas_Int(1)
-
-	if compute_u {
-		U = make_matrix(complex128, int(m), int(m), allocator)
-		ldu = Blas_Int(U.ld)
-	}
-	if compute_v {
-		V = make_matrix(complex128, int(p), int(p), allocator)
-		ldv = Blas_Int(V.ld)
-	}
-	if compute_q {
-		Q = make_matrix(complex128, int(n), int(n), allocator)
-		ldq = Blas_Int(Q.ld)
-	}
-
-	// Allocate tau and workspace arrays
-	tau = builtin.make([]complex128, n, allocator)
-	rwork := builtin.make([]f64, 2 * n, allocator)
-	defer builtin.delete(rwork)
-
-	iwork := builtin.make([]i32, n, allocator)
-	defer builtin.delete(iwork)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: complex128
-
-	lapack.zggsvp3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&tola_actual,
-		&tolb_actual,
-		&k,
-		&l,
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(iwork),
-		raw_data(rwork),
-		raw_data(tau),
-		&work_query,
-		&lwork,
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	// Allocate workspace
-	lwork = Blas_Int(real(work_query))
-	work := builtin.make([]complex128, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Perform preprocessing
-	lapack.zggsvp3_(
-		jobu_c,
-		jobv_c,
-		jobq_c,
-		&m,
-		&p,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(B.data),
-		&ldb,
-		&tola_actual,
-		&tolb_actual,
-		&k,
-		&l,
-		compute_u ? raw_data(U.data) : nil,
-		&ldu,
-		compute_v ? raw_data(V.data) : nil,
-		&ldv,
-		compute_q ? raw_data(Q.data) : nil,
-		&ldq,
-		raw_data(iwork),
-		raw_data(rwork),
-		raw_data(tau),
-		raw_data(work),
-		&lwork,
-		&info,
-		1,
-		1,
-		1,
-	)
-
-	return U, V, Q, k, l, tau, info
 }

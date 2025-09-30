@@ -10,6 +10,19 @@ import "core:strings"
 // Helper routines for matrix operations, norms, and utilities
 // ===================================================================================
 
+LapackVersion :: struct {
+	major: int,
+	minor: int,
+	patch: int,
+}
+
+// Get LAPACK version
+get_lapack_version :: proc() -> LapackVersion {
+	major, minor, patch: Blas_Int
+	lapack.ilaver_(&major, &minor, &patch)
+	return LapackVersion{major = int(major), minor = int(minor), patch = int(patch)}
+}
+
 // ===================================================================================
 // CONDITION NUMBER ESTIMATION
 // Estimate reciprocal condition number of factored matrices

@@ -38,23 +38,6 @@ m_cs_decomposition_2x1 :: proc {
 	m_cs_decomposition_2x1_f32,
 }
 
-// ===================================================================================
-// LAPACK VERSION INFORMATION
-// ===================================================================================
-
-// LAPACK version information
-LapackVersion :: struct {
-	major: int,
-	minor: int,
-	patch: int,
-}
-
-// Get LAPACK version
-get_lapack_version :: proc() -> LapackVersion {
-	major, minor, patch: Blas_Int
-	lapack.ilaver_(&major, &minor, &patch)
-	return LapackVersion{major = int(major), minor = int(minor), patch = int(patch)}
-}
 
 // ===================================================================================
 // PACKED ORTHOGONAL MATRIX OPERATIONS
@@ -93,17 +76,7 @@ m_generate_packed_orthogonal_f64 :: proc(
 	work := make([]f64, n - 1, context.temp_allocator)
 
 	info_val: Info
-	lapack.dopgtr_(
-		uplo_c,
-		&n_val,
-		raw_data(AP),
-		raw_data(tau),
-		raw_data(Q.data),
-		&ldq,
-		raw_data(work),
-		&info_val,
-		len(uplo_c),
-	)
+	lapack.dopgtr_(uplo_c, &n_val, raw_data(AP), raw_data(tau), raw_data(Q.data), &ldq, raw_data(work), &info_val, len(uplo_c))
 
 	return info_val == 0, info_val
 }
@@ -141,17 +114,7 @@ m_generate_packed_orthogonal_f32 :: proc(
 	work := make([]f32, n - 1, context.temp_allocator)
 
 	info_val: Info
-	lapack.sopgtr_(
-		uplo_c,
-		&n_val,
-		raw_data(AP),
-		raw_data(tau),
-		raw_data(Q.data),
-		&ldq,
-		raw_data(work),
-		&info_val,
-		len(uplo_c),
-	)
+	lapack.sopgtr_(uplo_c, &n_val, raw_data(AP), raw_data(tau), raw_data(Q.data), &ldq, raw_data(work), &info_val, len(uplo_c))
 
 	return info_val == 0, info_val
 }
@@ -195,22 +158,7 @@ m_multiply_packed_orthogonal_f64 :: proc(
 	work := make([]f64, work_size, context.temp_allocator)
 
 	info_val: Info
-	lapack.dopmtr_(
-		side_c,
-		uplo_c,
-		trans_c,
-		&m_val,
-		&n_val,
-		raw_data(AP),
-		raw_data(tau),
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&info_val,
-		len(side_c),
-		len(uplo_c),
-		len(trans_c),
-	)
+	lapack.dopmtr_(side_c, uplo_c, trans_c, &m_val, &n_val, raw_data(AP), raw_data(tau), raw_data(C.data), &ldc, raw_data(work), &info_val, len(side_c), len(uplo_c), len(trans_c))
 
 	return info_val == 0, info_val
 }
@@ -254,22 +202,7 @@ m_multiply_packed_orthogonal_f32 :: proc(
 	work := make([]f32, work_size, context.temp_allocator)
 
 	info_val: Info
-	lapack.sopmtr_(
-		side_c,
-		uplo_c,
-		trans_c,
-		&m_val,
-		&n_val,
-		raw_data(AP),
-		raw_data(tau),
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&info_val,
-		len(side_c),
-		len(uplo_c),
-		len(trans_c),
-	)
+	lapack.sopmtr_(side_c, uplo_c, trans_c, &m_val, &n_val, raw_data(AP), raw_data(tau), raw_data(C.data), &ldc, raw_data(work), &info_val, len(side_c), len(uplo_c), len(trans_c))
 
 	return info_val == 0, info_val
 }
@@ -1019,11 +952,7 @@ m_cs_decomposition_2x1_f32 :: proc(
 // ===================================================================================
 
 // Create CS decomposition result structure
-create_cs_decomposition_result :: proc(
-	$T: typeid,
-	m, p, q: int,
-	allocator := context.allocator,
-) -> CSDecompositionResult(T) {
+create_cs_decomposition_result :: proc($T: typeid, m, p, q: int, allocator := context.allocator) -> CSDecompositionResult(T) {
 	min_pq := min(p, q)
 	return CSDecompositionResult(T) {
 		theta = make([]T, min_pq, allocator),

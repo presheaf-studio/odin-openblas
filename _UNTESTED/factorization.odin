@@ -9,240 +9,6 @@ import "base:intrinsics"
 // Decompose matrices for solving systems, least squares, and eigenproblems
 // ===================================================================================
 
-// ===================================================================================
-// BIDIAGONAL REDUCTION
-// Reduce general matrix to bidiagonal form for SVD computation
-// ===================================================================================
-
-// Reduce general matrix to bidiagonal form using Householder reflections
-// A = Q * B * P^H where B is bidiagonal
-m_bidiagonalize :: proc {
-	m_bidiagonalize_real,
-	m_bidiagonalize_c64,
-	m_bidiagonalize_c128,
-}
-
-m_bidiagonalize_real :: proc(
-	A: ^Matrix($T), // General matrix (overwritten with bidiagonal form)
-	allocator := context.allocator,
-) -> (
-	D: []T,
-	E: []T,
-	tauq: []T,// Diagonal elements of B
-	taup: []T,// Off-diagonal elements of B
-	info: Info, // Scalar factors for Q// Scalar factors for P
-) where T == f32 || T == f64 {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	lda := Blas_Int(A.ld)
-	min_mn := min(m, n)
-
-	// Allocate output arrays
-	D = builtin.make([]T, min_mn, allocator)
-	E = builtin.make([]T, min_mn - 1, allocator)
-	tauq = builtin.make([]T, min_mn, allocator)
-	taup = builtin.make([]T, min_mn, allocator)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: T
-
-	when T == f32 {
-		lapack.sgebrd_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(D),
-			raw_data(E),
-			raw_data(tauq),
-			raw_data(taup),
-			&work_query,
-			&lwork,
-			&info,
-		)
-
-		// Allocate workspace
-		lwork = Blas_Int(work_query)
-		work := builtin.make([]T, lwork, allocator)
-		defer builtin.delete(work)
-
-		// Perform reduction
-		lapack.sgebrd_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(D),
-			raw_data(E),
-			raw_data(tauq),
-			raw_data(taup),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
-	} else when T == f64 {
-		lapack.dgebrd_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(D),
-			raw_data(E),
-			raw_data(tauq),
-			raw_data(taup),
-			&work_query,
-			&lwork,
-			&info,
-		)
-
-		// Allocate workspace
-		lwork = Blas_Int(work_query)
-		work := builtin.make([]T, lwork, allocator)
-		defer builtin.delete(work)
-
-		// Perform reduction
-		lapack.dgebrd_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(D),
-			raw_data(E),
-			raw_data(tauq),
-			raw_data(taup),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
-	}
-
-	return D, E, tauq, taup, info
-}
-
-m_bidiagonalize_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	D: []f32,
-	E: []f32,
-	tauq: []complex64,// Real diagonal elements
-	taup: []complex64,// Real off-diagonal elements
-	info: Info, // Scalar factors for Q// Scalar factors for P
-) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	lda := Blas_Int(A.ld)
-	min_mn := min(m, n)
-
-	// Allocate output arrays
-	D = builtin.make([]f32, min_mn, allocator)
-	E = builtin.make([]f32, min_mn - 1, allocator)
-	tauq = builtin.make([]complex64, min_mn, allocator)
-	taup = builtin.make([]complex64, min_mn, allocator)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: complex64
-
-	lapack.cgebrd_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(D),
-		raw_data(E),
-		raw_data(tauq),
-		raw_data(taup),
-		&work_query,
-		&lwork,
-		&info,
-	)
-
-	// Allocate workspace
-	lwork = Blas_Int(real(work_query))
-	work := builtin.make([]complex64, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Perform reduction
-	lapack.cgebrd_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(D),
-		raw_data(E),
-		raw_data(tauq),
-		raw_data(taup),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
-
-	return D, E, tauq, taup, info
-}
-
-m_bidiagonalize_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	D: []f64,
-	E: []f64,
-	tauq: []complex128,// Real diagonal elements
-	taup: []complex128,// Real off-diagonal elements
-	info: Info, // Scalar factors for Q// Scalar factors for P
-) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	lda := Blas_Int(A.ld)
-	min_mn := min(m, n)
-
-	// Allocate output arrays
-	D = builtin.make([]f64, min_mn, allocator)
-	E = builtin.make([]f64, min_mn - 1, allocator)
-	tauq = builtin.make([]complex128, min_mn, allocator)
-	taup = builtin.make([]complex128, min_mn, allocator)
-
-	// Query for optimal workspace
-	lwork := Blas_Int(-1)
-	work_query: complex128
-
-	lapack.zgebrd_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(D),
-		raw_data(E),
-		raw_data(tauq),
-		raw_data(taup),
-		&work_query,
-		&lwork,
-		&info,
-	)
-
-	// Allocate workspace
-	lwork = Blas_Int(real(work_query))
-	work := builtin.make([]complex128, lwork, allocator)
-	defer builtin.delete(work)
-
-	// Perform reduction
-	lapack.zgebrd_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(D),
-		raw_data(E),
-		raw_data(tauq),
-		raw_data(taup),
-		raw_data(work),
-		&lwork,
-		&info,
-	)
-
-	return D, E, tauq, taup, info
-}
 
 // ===================================================================================
 // LQ FACTORIZATION
@@ -275,29 +41,9 @@ m_lq_blocked_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgelq_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&tsize_query,
-			&tsize,
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sgelq_(&m, &n, raw_data(A.data), &lda, &tsize_query, &tsize, &work_query, &lwork, &info)
 	} else when T == f64 {
-		lapack.dgelq_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			&tsize_query,
-			&tsize,
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dgelq_(&m, &n, raw_data(A.data), &lda, &tsize_query, &tsize, &work_query, &lwork, &info)
 	}
 
 	// Allocate T factor and workspace
@@ -309,41 +55,15 @@ m_lq_blocked_real :: proc(
 
 	// Perform LQ factorization
 	when T == f32 {
-		lapack.sgelq_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgelq_(&m, &n, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dgelq_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgelq_(&m, &n, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(work), &lwork, &info)
 	}
 
 	return T_factor, info
 }
 
-m_lq_blocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	T_factor: []complex64,
-	info: Info,
-) {
+m_lq_blocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (T_factor: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -364,28 +84,12 @@ m_lq_blocked_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Perform LQ factorization
-	lapack.cgelq_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cgelq_(&m, &n, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(work), &lwork, &info)
 
 	return T_factor, info
 }
 
-m_lq_blocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	T_factor: []complex128,
-	info: Info,
-) {
+m_lq_blocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (T_factor: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -406,17 +110,7 @@ m_lq_blocked_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Perform LQ factorization
-	lapack.zgelq_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zgelq_(&m, &n, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(work), &lwork, &info)
 
 	return T_factor, info
 }
@@ -461,39 +155,15 @@ m_lq_real :: proc(
 
 	// Perform LQ factorization
 	when T == f32 {
-		lapack.sgelqf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dgelqf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return tau, info
 }
 
-m_lq_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_lq_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -519,13 +189,7 @@ m_lq_c64 :: proc(
 	return tau, info
 }
 
-m_lq_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_lq_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -587,13 +251,7 @@ m_lq_unblocked_real :: proc(
 	return tau, info
 }
 
-m_lq_unblocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_lq_unblocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -611,13 +269,7 @@ m_lq_unblocked_c64 :: proc(
 	return tau, info
 }
 
-m_lq_unblocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_lq_unblocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -672,43 +324,9 @@ m_apply_lq_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgemlq_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.sgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 	} else when T == f64 {
-		lapack.dgemlq_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.dgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 	}
 
 	// Allocate workspace
@@ -718,43 +336,9 @@ m_apply_lq_real :: proc(
 
 	// Apply Q to C
 	when T == f32 {
-		lapack.sgemlq_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.sgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 	} else when T == f64 {
-		lapack.dgemlq_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.dgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 	}
 
 	return info
@@ -784,24 +368,7 @@ m_apply_lq_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cgemlq_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		&work_query,
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.cgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -809,38 +376,12 @@ m_apply_lq_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Apply Q to C
-	lapack.cgemlq_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.cgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 
 	return info
 }
 
-m_apply_lq_c128 :: proc(
-	A: ^Matrix(complex128),
-	T_factor: []complex128,
-	C: ^Matrix(complex128),
-	left_multiply: bool = true,
-	transpose: bool = false,
-	allocator := context.allocator,
-) -> (
-	info: Info,
-) {
+m_apply_lq_c128 :: proc(A: ^Matrix(complex128), T_factor: []complex128, C: ^Matrix(complex128), left_multiply: bool = true, transpose: bool = false, allocator := context.allocator) -> (info: Info) {
 	m := Blas_Int(C.rows)
 	n := Blas_Int(C.cols)
 	k := Blas_Int(min(A.rows, A.cols))
@@ -855,24 +396,7 @@ m_apply_lq_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zgemlq_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		&work_query,
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.zgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -880,24 +404,7 @@ m_apply_lq_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Apply Q to C
-	lapack.zgemlq_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.zgemlq_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 
 	return info
 }
@@ -939,43 +446,9 @@ m_apply_qr_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgemqr_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.sgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 	} else when T == f64 {
-		lapack.dgemqr_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			&work_query,
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.dgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 	}
 
 	// Allocate workspace
@@ -985,43 +458,9 @@ m_apply_qr_real :: proc(
 
 	// Apply Q to C
 	when T == f32 {
-		lapack.sgemqr_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.sgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 	} else when T == f64 {
-		lapack.dgemqr_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_factor),
-			&tsize,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			&lwork,
-			&info,
-			1,
-			1,
-		)
+		lapack.dgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 	}
 
 	return info
@@ -1051,24 +490,7 @@ m_apply_qr_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cgemqr_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		&work_query,
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.cgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -1076,38 +498,12 @@ m_apply_qr_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Apply Q to C
-	lapack.cgemqr_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.cgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 
 	return info
 }
 
-m_apply_qr_c128 :: proc(
-	A: ^Matrix(complex128),
-	T_factor: []complex128,
-	C: ^Matrix(complex128),
-	left_multiply: bool = true,
-	transpose: bool = false,
-	allocator := context.allocator,
-) -> (
-	info: Info,
-) {
+m_apply_qr_c128 :: proc(A: ^Matrix(complex128), T_factor: []complex128, C: ^Matrix(complex128), left_multiply: bool = true, transpose: bool = false, allocator := context.allocator) -> (info: Info) {
 	m := Blas_Int(C.rows)
 	n := Blas_Int(C.cols)
 	k := Blas_Int(min(A.rows, A.cols))
@@ -1122,24 +518,7 @@ m_apply_qr_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zgemqr_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		&work_query,
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.zgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, &work_query, &lwork, &info, 1, 1)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -1147,24 +526,7 @@ m_apply_qr_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Apply Q to C
-	lapack.zgemqr_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_factor),
-		&tsize,
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&lwork,
-		&info,
-		1,
-		1,
-	)
+	lapack.zgemqr_(side_c, trans_c, &m, &n, &k, raw_data(A.data), &lda, raw_data(T_factor), &tsize, raw_data(C.data), &ldc, raw_data(work), &lwork, &info, 1, 1)
 
 	return info
 }
@@ -1204,43 +566,9 @@ m_apply_qr_blocked_real :: proc(
 	defer builtin.delete(work)
 
 	when T == f32 {
-		lapack.sgemqrt_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			&nb,
-			raw_data(V.data),
-			&ldv,
-			raw_data(T_matrix.data),
-			&ldt,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			&info,
-			1,
-			1,
-		)
+		lapack.sgemqrt_(side_c, trans_c, &m, &n, &k, &nb, raw_data(V.data), &ldv, raw_data(T_matrix.data), &ldt, raw_data(C.data), &ldc, raw_data(work), &info, 1, 1)
 	} else when T == f64 {
-		lapack.dgemqrt_(
-			side_c,
-			trans_c,
-			&m,
-			&n,
-			&k,
-			&nb,
-			raw_data(V.data),
-			&ldv,
-			raw_data(T_matrix.data),
-			&ldt,
-			raw_data(C.data),
-			&ldc,
-			raw_data(work),
-			&info,
-			1,
-			1,
-		)
+		lapack.dgemqrt_(side_c, trans_c, &m, &n, &k, &nb, raw_data(V.data), &ldv, raw_data(T_matrix.data), &ldt, raw_data(C.data), &ldc, raw_data(work), &info, 1, 1)
 	}
 
 	return info
@@ -1271,24 +599,7 @@ m_apply_qr_blocked_c64 :: proc(
 	work := builtin.make([]complex64, work_size, allocator)
 	defer builtin.delete(work)
 
-	lapack.cgemqrt_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		&nb,
-		raw_data(V.data),
-		&ldv,
-		raw_data(T_matrix.data),
-		&ldt,
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&info,
-		1,
-		1,
-	)
+	lapack.cgemqrt_(side_c, trans_c, &m, &n, &k, &nb, raw_data(V.data), &ldv, raw_data(T_matrix.data), &ldt, raw_data(C.data), &ldc, raw_data(work), &info, 1, 1)
 
 	return info
 }
@@ -1318,24 +629,7 @@ m_apply_qr_blocked_c128 :: proc(
 	work := builtin.make([]complex128, work_size, allocator)
 	defer builtin.delete(work)
 
-	lapack.zgemqrt_(
-		side_c,
-		trans_c,
-		&m,
-		&n,
-		&k,
-		&nb,
-		raw_data(V.data),
-		&ldv,
-		raw_data(T_matrix.data),
-		&ldt,
-		raw_data(C.data),
-		&ldc,
-		raw_data(work),
-		&info,
-		1,
-		1,
-	)
+	lapack.zgemqrt_(side_c, trans_c, &m, &n, &k, &nb, raw_data(V.data), &ldv, raw_data(T_matrix.data), &ldt, raw_data(C.data), &ldc, raw_data(work), &info, 1, 1)
 
 	return info
 }
@@ -1372,15 +666,7 @@ m_ql_unblocked_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgeql2_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data([]T{work_query}),
-			&info,
-		)
+		lapack.sgeql2_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data([]T{work_query}), &info)
 		lwork = Blas_Int(work_query)
 
 		// Allocate workspace
@@ -1390,15 +676,7 @@ m_ql_unblocked_real :: proc(
 		// Compute factorization
 		lapack.sgeql2_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &info)
 	} else {
-		lapack.dgeql2_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data([]T{work_query}),
-			&info,
-		)
+		lapack.dgeql2_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data([]T{work_query}), &info)
 		lwork = Blas_Int(work_query)
 
 		// Allocate workspace
@@ -1412,13 +690,7 @@ m_ql_unblocked_real :: proc(
 	return tau, info
 }
 
-m_ql_unblocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_ql_unblocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1431,15 +703,7 @@ m_ql_unblocked_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cgeql2_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(tau),
-		raw_data([]complex64{work_query}),
-		&info,
-	)
+	lapack.cgeql2_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data([]complex64{work_query}), &info)
 	lwork = Blas_Int(real(work_query))
 
 	// Allocate workspace
@@ -1452,13 +716,7 @@ m_ql_unblocked_c64 :: proc(
 	return tau, info
 }
 
-m_ql_unblocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_ql_unblocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1471,15 +729,7 @@ m_ql_unblocked_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zgeql2_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(tau),
-		raw_data([]complex128{work_query}),
-		&info,
-	)
+	lapack.zgeql2_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data([]complex128{work_query}), &info)
 	lwork = Blas_Int(real(work_query))
 
 	// Allocate workspace
@@ -1528,16 +778,7 @@ m_ql_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.sgeqlf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else {
 		lapack.dgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), &work_query, &lwork, &info)
 		lwork = Blas_Int(work_query)
@@ -1547,28 +788,13 @@ m_ql_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.dgeqlf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return tau, info
 }
 
-m_ql_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_ql_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1594,13 +820,7 @@ m_ql_c64 :: proc(
 	return tau, info
 }
 
-m_ql_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_ql_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1662,17 +882,7 @@ m_qr_pivot_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgeqp3_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(jpvt),
-			raw_data(tau),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), &work_query, &lwork, &info)
 		lwork = Blas_Int(work_query)
 
 		// Allocate workspace
@@ -1680,29 +890,9 @@ m_qr_pivot_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.sgeqp3_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(jpvt),
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), raw_data(work), &lwork, &info)
 	} else {
-		lapack.dgeqp3_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(jpvt),
-			raw_data(tau),
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), &work_query, &lwork, &info)
 		lwork = Blas_Int(work_query)
 
 		// Allocate workspace
@@ -1710,30 +900,13 @@ m_qr_pivot_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.dgeqp3_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(jpvt),
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return tau, info
 }
 
-m_qr_pivot_c64 :: proc(
-	A: ^Matrix(complex64),
-	jpvt: []i32,
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_qr_pivot_c64 :: proc(A: ^Matrix(complex64), jpvt: []i32, allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1753,18 +926,7 @@ m_qr_pivot_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cgeqp3_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(jpvt),
-		raw_data(tau),
-		&work_query,
-		&lwork,
-		raw_data(rwork),
-		&info,
-	)
+	lapack.cgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), &work_query, &lwork, raw_data(rwork), &info)
 	lwork = Blas_Int(real(work_query))
 
 	// Allocate workspace
@@ -1772,30 +934,12 @@ m_qr_pivot_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Compute factorization
-	lapack.cgeqp3_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(jpvt),
-		raw_data(tau),
-		raw_data(work),
-		&lwork,
-		raw_data(rwork),
-		&info,
-	)
+	lapack.cgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), raw_data(work), &lwork, raw_data(rwork), &info)
 
 	return tau, info
 }
 
-m_qr_pivot_c128 :: proc(
-	A: ^Matrix(complex128),
-	jpvt: []i32,
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_qr_pivot_c128 :: proc(A: ^Matrix(complex128), jpvt: []i32, allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1815,18 +959,7 @@ m_qr_pivot_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zgeqp3_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(jpvt),
-		raw_data(tau),
-		&work_query,
-		&lwork,
-		raw_data(rwork),
-		&info,
-	)
+	lapack.zgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), &work_query, &lwork, raw_data(rwork), &info)
 	lwork = Blas_Int(real(work_query))
 
 	// Allocate workspace
@@ -1834,18 +967,7 @@ m_qr_pivot_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Compute factorization
-	lapack.zgeqp3_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(jpvt),
-		raw_data(tau),
-		raw_data(work),
-		&lwork,
-		raw_data(rwork),
-		&info,
-	)
+	lapack.zgeqp3_(&m, &n, raw_data(A.data), &lda, raw_data(jpvt), raw_data(tau), raw_data(work), &lwork, raw_data(rwork), &info)
 
 	return tau, info
 }
@@ -1890,13 +1012,7 @@ m_qr_unblocked_real :: proc(
 	return tau, info
 }
 
-m_qr_unblocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_qr_unblocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1914,13 +1030,7 @@ m_qr_unblocked_c64 :: proc(
 	return tau, info
 }
 
-m_qr_unblocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_qr_unblocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -1991,41 +1101,15 @@ m_qr_blocked_real :: proc(
 
 	// Compute factorization
 	when T == f32 {
-		lapack.sgeqr_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&tsize,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgeqr_(&m, &n, raw_data(A.data), &lda, raw_data(T_matrix.data), &tsize, raw_data(work), &lwork, &info)
 	} else {
-		lapack.dgeqr_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&tsize,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgeqr_(&m, &n, raw_data(A.data), &lda, raw_data(T_matrix.data), &tsize, raw_data(work), &lwork, &info)
 	}
 
 	return T_matrix, info
 }
 
-m_qr_blocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex64),
-	info: Info,
-) {
+m_qr_blocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (T_matrix: Matrix(complex64), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2057,28 +1141,12 @@ m_qr_blocked_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Compute factorization
-	lapack.cgeqr_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&tsize,
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cgeqr_(&m, &n, raw_data(A.data), &lda, raw_data(T_matrix.data), &tsize, raw_data(work), &lwork, &info)
 
 	return T_matrix, info
 }
 
-m_qr_blocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex128),
-	info: Info,
-) {
+m_qr_blocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (T_matrix: Matrix(complex128), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2110,17 +1178,7 @@ m_qr_blocked_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Compute factorization
-	lapack.zgeqr_(
-		&m,
-		&n,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&tsize,
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zgeqr_(&m, &n, raw_data(A.data), &lda, raw_data(T_matrix.data), &tsize, raw_data(work), &lwork, &info)
 
 	return T_matrix, info
 }
@@ -2161,16 +1219,7 @@ m_qr_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.sgeqrf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else {
 		lapack.dgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), &work_query, &lwork, &info)
 		lwork = Blas_Int(work_query)
@@ -2180,28 +1229,13 @@ m_qr_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.dgeqrf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return tau, info
 }
 
-m_qr_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_qr_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2227,13 +1261,7 @@ m_qr_c64 :: proc(
 	return tau, info
 }
 
-m_qr_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_qr_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2295,16 +1323,7 @@ m_qr_nonneg_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.sgeqrfp_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else {
 		lapack.dgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), &work_query, &lwork, &info)
 		lwork = Blas_Int(work_query)
@@ -2314,28 +1333,13 @@ m_qr_nonneg_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.dgeqrfp_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return tau, info
 }
 
-m_qr_nonneg_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_qr_nonneg_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2361,13 +1365,7 @@ m_qr_nonneg_c64 :: proc(
 	return tau, info
 }
 
-m_qr_nonneg_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_qr_nonneg_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2434,42 +1432,15 @@ m_qr_compact_real :: proc(
 	defer builtin.delete(work)
 
 	when T == f32 {
-		lapack.sgeqrt_(
-			&m,
-			&n,
-			&nb,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&ldt,
-			raw_data(work),
-			&info,
-		)
+		lapack.sgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
 	} else {
-		lapack.dgeqrt_(
-			&m,
-			&n,
-			&nb,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&ldt,
-			raw_data(work),
-			&info,
-		)
+		lapack.dgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
 	}
 
 	return T_matrix, info
 }
 
-m_qr_compact_c64 :: proc(
-	A: ^Matrix(complex64),
-	nb: Blas_Int,
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex64),
-	info: Info,
-) {
+m_qr_compact_c64 :: proc(A: ^Matrix(complex64), nb: Blas_Int, allocator := context.allocator) -> (T_matrix: Matrix(complex64), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2490,29 +1461,12 @@ m_qr_compact_c64 :: proc(
 	work := builtin.make([]complex64, nb * n, allocator)
 	defer builtin.delete(work)
 
-	lapack.cgeqrt_(
-		&m,
-		&n,
-		&nb,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&ldt,
-		raw_data(work),
-		&info,
-	)
+	lapack.cgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
 
 	return T_matrix, info
 }
 
-m_qr_compact_c128 :: proc(
-	A: ^Matrix(complex128),
-	nb: Blas_Int,
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex128),
-	info: Info,
-) {
+m_qr_compact_c128 :: proc(A: ^Matrix(complex128), nb: Blas_Int, allocator := context.allocator) -> (T_matrix: Matrix(complex128), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2533,17 +1487,7 @@ m_qr_compact_c128 :: proc(
 	work := builtin.make([]complex128, nb * n, allocator)
 	defer builtin.delete(work)
 
-	lapack.zgeqrt_(
-		&m,
-		&n,
-		&nb,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&ldt,
-		raw_data(work),
-		&info,
-	)
+	lapack.zgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
 
 	return T_matrix, info
 }
@@ -2588,13 +1532,7 @@ m_qr_compact_unblocked_real :: proc(
 	return T_matrix, info
 }
 
-m_qr_compact_unblocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex64),
-	info: Info,
-) {
+m_qr_compact_unblocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (T_matrix: Matrix(complex64), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2616,13 +1554,7 @@ m_qr_compact_unblocked_c64 :: proc(
 	return T_matrix, info
 }
 
-m_qr_compact_unblocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex128),
-	info: Info,
-) {
+m_qr_compact_unblocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (T_matrix: Matrix(complex128), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2684,13 +1616,7 @@ m_qr_compact_recursive_real :: proc(
 	return T_matrix, info
 }
 
-m_qr_compact_recursive_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex64),
-	info: Info,
-) {
+m_qr_compact_recursive_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (T_matrix: Matrix(complex64), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2712,13 +1638,7 @@ m_qr_compact_recursive_c64 :: proc(
 	return T_matrix, info
 }
 
-m_qr_compact_recursive_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex128),
-	info: Info,
-) {
+m_qr_compact_recursive_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (T_matrix: Matrix(complex128), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2772,35 +1692,9 @@ m_qr_tall_skinny_real :: proc(
 	work_query: T
 
 	when T == f32 {
-		lapack.sgetsqrhrt_(
-			&m,
-			&n,
-			&mb1,
-			&nb1,
-			&nb2,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&ldt,
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.sgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, &work_query, &lwork, &info)
 	} else {
-		lapack.dgetsqrhrt_(
-			&m,
-			&n,
-			&mb1,
-			&nb1,
-			&nb2,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&ldt,
-			&work_query,
-			&lwork,
-			&info,
-		)
+		lapack.dgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, &work_query, &lwork, &info)
 	}
 
 	// Allocate workspace
@@ -2810,50 +1704,15 @@ m_qr_tall_skinny_real :: proc(
 
 	// Perform factorization
 	when T == f32 {
-		lapack.sgetsqrhrt_(
-			&m,
-			&n,
-			&mb1,
-			&nb1,
-			&nb2,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&ldt,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
 	} else {
-		lapack.dgetsqrhrt_(
-			&m,
-			&n,
-			&mb1,
-			&nb1,
-			&nb2,
-			raw_data(A.data),
-			&lda,
-			raw_data(T_matrix.data),
-			&ldt,
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
 	}
 
 	return T_matrix, info
 }
 
-m_qr_tall_skinny_c64 :: proc(
-	A: ^Matrix(complex64),
-	mb1: Blas_Int,
-	nb1: Blas_Int,
-	nb2: Blas_Int,
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex64),
-	info: Info,
-) {
+m_qr_tall_skinny_c64 :: proc(A: ^Matrix(complex64), mb1: Blas_Int, nb1: Blas_Int, nb2: Blas_Int, allocator := context.allocator) -> (T_matrix: Matrix(complex64), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2866,20 +1725,7 @@ m_qr_tall_skinny_c64 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex64
 
-	lapack.cgetsqrhrt_(
-		&m,
-		&n,
-		&mb1,
-		&nb1,
-		&nb2,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&ldt,
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.cgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -2887,34 +1733,12 @@ m_qr_tall_skinny_c64 :: proc(
 	defer builtin.delete(work)
 
 	// Perform factorization
-	lapack.cgetsqrhrt_(
-		&m,
-		&n,
-		&mb1,
-		&nb1,
-		&nb2,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&ldt,
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.cgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
 
 	return T_matrix, info
 }
 
-m_qr_tall_skinny_c128 :: proc(
-	A: ^Matrix(complex128),
-	mb1: Blas_Int,
-	nb1: Blas_Int,
-	nb2: Blas_Int,
-	allocator := context.allocator,
-) -> (
-	T_matrix: Matrix(complex128),
-	info: Info,
-) {
+m_qr_tall_skinny_c128 :: proc(A: ^Matrix(complex128), mb1: Blas_Int, nb1: Blas_Int, nb2: Blas_Int, allocator := context.allocator) -> (T_matrix: Matrix(complex128), info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -2927,20 +1751,7 @@ m_qr_tall_skinny_c128 :: proc(
 	lwork := Blas_Int(-1)
 	work_query: complex128
 
-	lapack.zgetsqrhrt_(
-		&m,
-		&n,
-		&mb1,
-		&nb1,
-		&nb2,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&ldt,
-		&work_query,
-		&lwork,
-		&info,
-	)
+	lapack.zgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, &work_query, &lwork, &info)
 
 	// Allocate workspace
 	lwork = Blas_Int(real(work_query))
@@ -2948,20 +1759,7 @@ m_qr_tall_skinny_c128 :: proc(
 	defer builtin.delete(work)
 
 	// Perform factorization
-	lapack.zgetsqrhrt_(
-		&m,
-		&n,
-		&mb1,
-		&nb1,
-		&nb2,
-		raw_data(A.data),
-		&lda,
-		raw_data(T_matrix.data),
-		&ldt,
-		raw_data(work),
-		&lwork,
-		&info,
-	)
+	lapack.zgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
 
 	return T_matrix, info
 }
@@ -3006,13 +1804,7 @@ m_rq_unblocked_real :: proc(
 	return tau, info
 }
 
-m_rq_unblocked_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_rq_unblocked_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -3030,13 +1822,7 @@ m_rq_unblocked_c64 :: proc(
 	return tau, info
 }
 
-m_rq_unblocked_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_rq_unblocked_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -3090,16 +1876,7 @@ m_rq_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.sgerqf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.sgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else {
 		lapack.dgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), &work_query, &lwork, &info)
 		lwork = Blas_Int(work_query)
@@ -3109,28 +1886,13 @@ m_rq_real :: proc(
 		defer builtin.delete(work)
 
 		// Compute factorization
-		lapack.dgerqf_(
-			&m,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(tau),
-			raw_data(work),
-			&lwork,
-			&info,
-		)
+		lapack.dgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return tau, info
 }
 
-m_rq_c64 :: proc(
-	A: ^Matrix(complex64),
-	allocator := context.allocator,
-) -> (
-	tau: []complex64,
-	info: Info,
-) {
+m_rq_c64 :: proc(A: ^Matrix(complex64), allocator := context.allocator) -> (tau: []complex64, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)
@@ -3156,13 +1918,7 @@ m_rq_c64 :: proc(
 	return tau, info
 }
 
-m_rq_c128 :: proc(
-	A: ^Matrix(complex128),
-	allocator := context.allocator,
-) -> (
-	tau: []complex128,
-	info: Info,
-) {
+m_rq_c128 :: proc(A: ^Matrix(complex128), allocator := context.allocator) -> (tau: []complex128, info: Info) {
 	m := Blas_Int(A.rows)
 	n := Blas_Int(A.cols)
 	lda := Blas_Int(A.ld)

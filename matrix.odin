@@ -42,18 +42,18 @@ Matrix :: struct($T: typeid) {
 			ldab:   Blas_Int, // Leading dimension of band storage
 		},
 		symmetric:   struct {
-			uplo: cstring, // "U" or "L" for LAPACK compatibility
+			uplo: UpLo, // "U" or "L" for LAPACK compatibility
 		},
 		hermitian:   struct {
-			uplo: cstring, // "U" or "L" for LAPACK compatibility
+			uplo: UpLo, // "U" or "L" for LAPACK compatibility
 		},
 		triangular:  struct {
-			uplo:  cstring, // "U" or "L" for upper/lower
-			diag:  cstring, // "U" (unit) or "N" (non-unit) diagonal
-			trans: cstring, // "N" (none), "T" (transpose), "C" (conjugate transpose)
+			uplo:  UpLo, // "U" or "L" for upper/lower
+			diag:  DiagonalType, // "U" (unit) or "N" (non-unit) diagonal
+			trans: TransposeState, // "N" (none), "T" (transpose), "C" (conjugate transpose)
 		},
 		packed:      struct {
-			uplo: cstring, // "U" or "L" for upper/lower triangular
+			uplo: UpLo, // "U" or "L" for upper/lower triangular
 			n:    Blas_Int, // Matrix dimension for packed storage
 		},
 		diagonal:    struct {
@@ -262,49 +262,6 @@ matrix_submatrix :: proc(m: ^Matrix($T), row_start, col_start, rows, cols: int) 
 	}
 }
 
-
-// Create a symmetric matrix
-make_symmetric_matrix :: proc($T: typeid, n: int, uplo: cstring = "U", allocator := context.allocator) -> Matrix(T) {
-	m := make_matrix(T, n, n, MatrixFormat.Symmetric, allocator)
-	m.storage.symmetric.uplo = uplo
-	return m
-}
-
-// Create a triangular matrix
-make_triangular_matrix :: proc($T: typeid, n: int, uplo: cstring = "U", diag: cstring = "N", allocator := context.allocator) -> Matrix(T) {
-	m := make_matrix(T, n, n, MatrixFormat.Triangular, allocator)
-	m.storage.triangular.uplo = uplo
-	m.storage.triangular.diag = diag
-	m.storage.triangular.trans = "N"
-	return m
-}
-
-// Create a banded matrix
-make_banded_matrix :: proc(
-	$T: typeid,
-	rows, cols: int,
-	kl, ku: int, // Lower and upper bandwidth
-	allocator := context.allocator,
-) -> Matrix(T) {
-	// Band storage requires (kl + ku + 1) rows for column-major format
-	ldab := kl + ku + 1
-	size := ldab * cols
-	return Matrix(T){data = builtin.make([]T, size, allocator), rows = rows, cols = cols, ld = rows, format = MatrixFormat.Banded, storage = {banded = {kl = kl, ku = ku, ldab = ldab}}}
-}
-
-// Create a packed triangular matrix (compact storage)
-make_packed_matrix :: proc($T: typeid, n: int, uplo: cstring = "U", allocator := context.allocator) -> Matrix(T) {
-	// Packed storage uses n*(n+1)/2 elements
-	size := n * (n + 1) / 2
-	return Matrix(T) {
-		data = builtin.make([]T, size, allocator),
-		rows = n,
-		cols = n,
-		ld = 0, // Not used for packed storage
-		format = MatrixFormat.Packed,
-		storage = {packed = {uplo = uplo, n = n}},
-	}
-}
 
 // ===================================================================================
 // ERROR HANDLING
