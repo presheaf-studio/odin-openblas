@@ -7,9 +7,6 @@ import "core:fmt"
 import "core:mem"
 import "core:slice"
 
-is_float :: intrinsics.type_is_float
-is_complex :: intrinsics.type_is_complex
-
 // ==== BLAS Level 1: Vector operations ====
 
 // ===================================================================================

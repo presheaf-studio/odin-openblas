@@ -22,51 +22,21 @@ Vector :: struct($T: typeid) {
 
 MatrixFormat :: enum {
 	General, // GE routines - general dense matrices
-	Banded, // GB routines - banded matrices
-	Symmetric, // SY routines - symmetric matrices (real)
-	Hermitian, // HE routines - Hermitian matrices (complex)
-	Packed, // SP/HP/PP routines - packed triangular storage
-	Triangular, // TR routines - triangular matrices
-	Diagonal, // DI - diagonal matrices
-	Tridiagonal, // GT routines - tridiagonal matrices
+	Symmetric, // SY routines - symmetric dense matrices (real)
+	Hermitian, // HE routines - Hermitian dense matrices (complex)
+	Triangular, // TR routines - triangular dense matrices
 }
 
+// Dense matrix with full n×m storage
 Matrix :: struct($T: typeid) {
-	data:       []T,
-	rows, cols: Blas_Int,
-	ld:         Blas_Int, // Leading dimension (for column-major storage)
-	format:     MatrixFormat,
-	storage:    struct #raw_union {
-		banded:      struct {
-			kl, ku: Blas_Int, // Lower/upper bandwidth
-			ldab:   Blas_Int, // Leading dimension of band storage
-		},
-		symmetric:   struct {
-			uplo: UpLo, // "U" or "L" for LAPACK compatibility
-		},
-		hermitian:   struct {
-			uplo: UpLo, // "U" or "L" for LAPACK compatibility
-		},
-		triangular:  struct {
-			uplo:  UpLo, // "U" or "L" for upper/lower
-			diag:  DiagonalType, // "U" (unit) or "N" (non-unit) diagonal
-			trans: TransposeState, // "N" (none), "T" (transpose), "C" (conjugate transpose)
-		},
-		packed:      struct {
-			uplo: UpLo, // "U" or "L" for upper/lower triangular
-			n:    Blas_Int, // Matrix dimension for packed storage
-		},
-		diagonal:    struct {
-			// Diagonal matrices store only diagonal elements
-			n: Blas_Int, // Matrix dimension
-		},
-		tridiagonal: struct {
-			// Tridiagonal matrices: three diagonals
-			dl_offset: Blas_Int, // Offset to lower diagonal in data array
-			d_offset:  Blas_Int, // Offset to main diagonal in data array
-			du_offset: Blas_Int, // Offset to upper diagonal in data array
-		},
-	},
+	data:       []T, // Matrix data in column-major order
+	rows, cols: Blas_Int, // Matrix dimensions
+	ld:         Blas_Int, // Leading dimension (>= rows for column-major)
+	format:     MatrixFormat, // Matrix structure (General/Symmetric/Hermitian/Triangular)
+
+	// Dense matrix properties (when format != General)
+	uplo:       UpLo, // Upper/Lower for symmetric/hermitian/triangular
+	diag:       DiagonalType, // Unit/NonUnit for triangular matrices
 }
 
 data_ptr :: proc {

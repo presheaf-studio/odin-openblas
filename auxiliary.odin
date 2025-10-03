@@ -47,7 +47,7 @@ query_workspace_condition_estimate :: proc($T: typeid, n: int) -> (work_size: in
 }
 
 // Estimate condition number for f32/f64
-m_condition_estimate_f32_f64 :: proc(
+m_condition_estimate_real :: proc(
 	A: ^Matrix($T), // Factored matrix (from getrf)
 	anorm: T, // Norm of original matrix
 	work: []T, // Pre-allocated workspace (size 4*n)
@@ -63,7 +63,7 @@ m_condition_estimate_f32_f64 :: proc(
 	assert(len(iwork) >= n, "Integer workspace too small")
 
 	n_int := Blas_Int(n)
-	lda := A.ld
+	lda := Blas_Int(A.ld)
 
 	// Convert norm type to char
 	norm_c := cast(u8)norm
@@ -80,7 +80,7 @@ m_condition_estimate_f32_f64 :: proc(
 }
 
 // Estimate condition number for complex64/complex128
-m_condition_estimate_c64_c128 :: proc(
+m_condition_estimate_complex :: proc(
 	A: ^Matrix($T), // Factored matrix (from getrf)
 	anorm: $R, // Norm of original matrix
 	work: []T, // Pre-allocated workspace (size 2*n)
@@ -97,7 +97,7 @@ m_condition_estimate_c64_c128 :: proc(
 	assert(len(rwork) >= 2 * n, "Real workspace too small")
 
 	n_int := Blas_Int(n)
-	lda := A.ld
+	lda := Blas_Int(A.ld)
 
 	// Convert norm type to char
 	norm_c := cast(u8)norm
@@ -105,17 +105,17 @@ m_condition_estimate_c64_c128 :: proc(
 	anorm_copy := anorm
 
 	when T == complex64 {
-		lapack.cgecon_(&norm_c, &n_int, cast(^lapack.complex)raw_data(A.data), &lda, &anorm_copy, &rcond, cast(^lapack.complex)raw_data(work), raw_data(rwork), &info, 1)
+		lapack.cgecon_(&norm_c, &n_int, cast(^complex64)raw_data(A.data), &lda, &anorm_copy, &rcond, cast(^complex64)raw_data(work), raw_data(rwork), &info, 1)
 	} else when T == complex128 {
-		lapack.zgecon_(&norm_c, &n_int, cast(^lapack.doublecomplex)raw_data(A.data), &lda, &anorm_copy, &rcond, cast(^lapack.doublecomplex)raw_data(work), raw_data(rwork), &info, 1)
+		lapack.zgecon_(&norm_c, &n_int, cast(^complex128)raw_data(A.data), &lda, &anorm_copy, &rcond, cast(^complex128)raw_data(work), raw_data(rwork), &info, 1)
 	}
 	return rcond, info, info == 0
 }
 
 // Procedure group for condition estimation
 m_condition_estimate :: proc {
-	m_condition_estimate_f32_f64,
-	m_condition_estimate_c64_c128,
+	m_condition_estimate_real,
+	m_condition_estimate_complex,
 }
 
 // Helper function to check if matrix is well-conditioned
@@ -133,7 +133,7 @@ m_is_well_conditioned :: proc(rcond: $T, threshold: T) -> bool where is_float(T)
 // Scale factors R and C are chosen so that R*A*C has rows and columns with similar norms
 
 // Compute equilibration scale factors for f32/f64
-m_equilibrate_f32_f64 :: proc(
+m_equilibrate_real :: proc(
 	A: ^Matrix($T), // Matrix to equilibrate
 	R: []T, // Pre-allocated row scale factors (size m)
 	C: []T, // Pre-allocated column scale factors (size n)
@@ -151,7 +151,7 @@ m_equilibrate_f32_f64 :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	lda := A.ld
+	lda := Blas_Int(A.ld)
 
 	when T == f32 {
 		lapack.sgeequ_(&m_int, &n_int, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
@@ -164,7 +164,7 @@ m_equilibrate_f32_f64 :: proc(
 }
 
 // Compute equilibration scale factors for complex64/complex128
-m_equilibrate_c64_c128 :: proc(
+m_equilibrate_complex :: proc(
 	A: ^Matrix($T), // Matrix to equilibrate
 	R: []$Real, // Pre-allocated row scale factors (size m)
 	C: []Real, // Pre-allocated column scale factors (size n)
@@ -175,7 +175,7 @@ m_equilibrate_c64_c128 :: proc(
 	info: Info,
 	ok: bool, // Ratio of smallest to largest row scale// Ratio of smallest to largest column scale// Absolute value of largest matrix element
 ) where is_complex(T),
-	R == real_type_of(T) {
+	Real == real_type_of(T) {
 	m := A.rows
 	n := A.cols
 	assert(len(R) >= m, "Row scale factors array too small")
@@ -183,12 +183,12 @@ m_equilibrate_c64_c128 :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	lda := A.ld
+	lda := Blas_Int(A.ld)
 
 	when T == complex64 {
-		lapack.cgeequ_(&m_int, &n_int, cast(^lapack.complex)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
+		lapack.cgeequ_(&m_int, &n_int, cast(^complex64)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
 	} else when T == complex128 {
-		lapack.zgeequ_(&m_int, &n_int, cast(^lapack.doublecomplex)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
+		lapack.zgeequ_(&m_int, &n_int, cast(^complex128)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
 	}
 
 	ok = info == 0
@@ -197,15 +197,15 @@ m_equilibrate_c64_c128 :: proc(
 
 // Procedure group for equilibration
 m_equilibrate :: proc {
-	m_equilibrate_f32_f64,
-	m_equilibrate_c64_c128,
+	m_equilibrate_real,
+	m_equilibrate_complex,
 }
 
 // Improved equilibration with better algorithm (LAPACK 3.x)
 // More robust handling of over/underflow
 
 // Compute improved equilibration scale factors for f32/f64
-m_equilibrate_improved_f32_f64 :: proc(
+m_equilibrate_improved_real :: proc(
 	A: ^Matrix($T), // Matrix to equilibrate
 	R: []T, // Pre-allocated row scale factors (size m)
 	C: []T, // Pre-allocated column scale factors (size n)
@@ -223,7 +223,7 @@ m_equilibrate_improved_f32_f64 :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	lda := A.ld
+	lda := Blas_Int(A.ld)
 
 	when T == f32 {
 		lapack.sgeequb_(&m_int, &n_int, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
@@ -236,7 +236,7 @@ m_equilibrate_improved_f32_f64 :: proc(
 }
 
 // Compute improved equilibration scale factors for complex64/complex128
-m_equilibrate_improved_c64_c128 :: proc(
+m_equilibrate_improved_complex :: proc(
 	A: ^Matrix($T), // Matrix to equilibrate
 	R: []$Real, // Pre-allocated row scale factors (size m)
 	C: []Real, // Pre-allocated column scale factors (size n)
@@ -247,7 +247,7 @@ m_equilibrate_improved_c64_c128 :: proc(
 	info: Info,
 	ok: bool, // Ratio of smallest to largest row scale// Ratio of smallest to largest column scale// Absolute value of largest matrix element
 ) where is_complex(T),
-	R == real_type_of(T) {
+	Real == real_type_of(T) {
 	m := A.rows
 	n := A.cols
 	assert(len(R) >= m, "Row scale factors array too small")
@@ -255,12 +255,12 @@ m_equilibrate_improved_c64_c128 :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	lda := A.ld
+	lda := Blas_Int(A.ld)
 
 	when T == complex64 {
-		lapack.cgeequb_(&m_int, &n_int, cast(^lapack.complex)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
+		lapack.cgeequb_(&m_int, &n_int, cast(^complex64)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
 	} else when T == complex128 {
-		lapack.zgeequb_(&m_int, &n_int, cast(^lapack.doublecomplex)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
+		lapack.zgeequb_(&m_int, &n_int, cast(^complex128)raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
 	}
 
 	ok = info == 0
@@ -269,8 +269,8 @@ m_equilibrate_improved_c64_c128 :: proc(
 
 // Procedure group for improved equilibration
 m_equilibrate_improved :: proc {
-	m_equilibrate_improved_f32_f64,
-	m_equilibrate_improved_c64_c128,
+	m_equilibrate_improved_real,
+	m_equilibrate_improved_complex,
 }
 
 // Apply equilibration scale factors to a matrix
@@ -335,3 +335,318 @@ m_needs_equilibration :: proc(rowcnd, colcnd: $T, threshold: T) -> bool where is
 }
 
 // ===================================================================================
+// MATRIX COPY OPERATIONS (LACPY)
+// ===================================================================================
+
+// Copy matrix or submatrix
+m_copy_matrix :: proc {
+	m_copy_matrix_f32,
+	m_copy_matrix_f64,
+	m_copy_matrix_c64,
+	m_copy_matrix_c128,
+}
+
+// Copy matrix (f32)
+m_copy_matrix_f32 :: proc(
+	A: ^Matrix(f32), // Source matrix
+	B: ^Matrix(f32), // Destination matrix
+	region := MatrixRegion.Full, // Region to copy (Full, Upper, Lower)
+) {
+	// Validate matrices
+	assert(A.rows == B.rows && A.cols == B.cols, "Matrix dimensions must match")
+
+	m := Blas_Int(A.rows)
+	n := Blas_Int(A.cols)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	uplo_c := cast(u8)region
+
+	lapack.slacpy_(&uplo_c, &m, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, 1)
+}
+
+// Copy matrix (f64)
+m_copy_matrix_f64 :: proc(
+	A: ^Matrix(f64), // Source matrix
+	B: ^Matrix(f64), // Destination matrix
+	region := MatrixRegion.Full, // Region to copy (Full, Upper, Lower)
+) {
+	// Validate matrices
+	assert(A.rows == B.rows && A.cols == B.cols, "Matrix dimensions must match")
+
+	m := Blas_Int(A.rows)
+	n := Blas_Int(A.cols)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	uplo_c := cast(u8)region
+
+	lapack.dlacpy_(&uplo_c, &m, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, 1)
+}
+
+// Copy matrix (c64)
+m_copy_matrix_c64 :: proc(
+	A: ^Matrix(complex64), // Source matrix
+	B: ^Matrix(complex64), // Destination matrix
+	region := MatrixRegion.Full, // Region to copy (Full, Upper, Lower)
+) {
+	// Validate matrices
+	assert(A.rows == B.rows && A.cols == B.cols, "Matrix dimensions must match")
+
+	m := Blas_Int(A.rows)
+	n := Blas_Int(A.cols)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	uplo_c := cast(u8)region
+
+	lapack.clacpy_(&uplo_c, &m, &n, cast(^complex64)raw_data(A.data), &lda, cast(^complex64)raw_data(B.data), &ldb, 1)
+}
+
+// Copy matrix (c128)
+m_copy_matrix_c128 :: proc(
+	A: ^Matrix(complex128), // Source matrix
+	B: ^Matrix(complex128), // Destination matrix
+	region := MatrixRegion.Full, // Region to copy (Full, Upper, Lower)
+) {
+	// Validate matrices
+	assert(A.rows == B.rows && A.cols == B.cols, "Matrix dimensions must match")
+
+	m := Blas_Int(A.rows)
+	n := Blas_Int(A.cols)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	uplo_c := cast(u8)region
+
+	lapack.zlacpy_(&uplo_c, &m, &n, cast(^complex128)raw_data(A.data), &lda, cast(^complex128)raw_data(B.data), &ldb, 1)
+}
+
+// ===================================================================================
+// COMPLEX VECTOR CONJUGATION (LACGV)
+// ===================================================================================
+
+// Conjugate complex vector proc group
+v_conjugate :: proc {
+	v_conjugate_c64,
+	v_conjugate_c128,
+}
+
+// Conjugate complex vector (c64)
+// Computes X[i] = conj(X[i]) for i = 0, incx, 2*incx, ..., (n-1)*incx
+v_conjugate_c64 :: proc(X: []complex64, incx: int = 1) {
+	if len(X) == 0 do return
+
+	n := Blas_Int(len(X))
+	incx_int := Blas_Int(incx)
+
+	lapack.clacgv_(&n, cast(^complex64)raw_data(X), &incx_int)
+}
+
+// Conjugate complex vector (c128)
+// Computes X[i] = conj(X[i]) for i = 0, incx, 2*incx, ..., (n-1)*incx
+v_conjugate_c128 :: proc(X: []complex128, incx: int = 1) {
+	if len(X) == 0 do return
+
+	n := Blas_Int(len(X))
+	incx_int := Blas_Int(incx)
+
+	lapack.zlacgv_(&n, cast(^complex128)raw_data(X), &incx_int)
+}
+
+// ===================================================================================
+// COMPLEX × REAL MATRIX MULTIPLICATION (LACRM)
+// ===================================================================================
+
+// Complex × real matrix multiplication proc group
+// Computes C = A * B where A is complex and B is real
+m_multiply_complex_real :: proc {
+	m_multiply_complex_real_c64,
+	m_multiply_complex_real_c128,
+}
+
+// Complex × real matrix multiplication (c64)
+// Computes C = A * B where A is complex(m×n), B is real(n×n), C is complex(m×n)
+// rwork must be at least size 2*m*n
+m_multiply_complex_real_c64 :: proc(
+	A: ^Matrix(complex64), // Complex matrix (m × n)
+	B: ^Matrix(f32), // Real matrix (n × n)
+	C: ^Matrix(complex64), // Complex result (m × n)
+	rwork: []f32, // Real workspace (size >= 2*m*n)
+) {
+	m := A.rows
+	n := A.cols
+	assert(B.rows == n && B.cols == n, "B must be n×n")
+	assert(C.rows == m && C.cols == n, "C must be m×n")
+	assert(len(rwork) >= 2 * m * n, "rwork array too small")
+
+	m_int := Blas_Int(m)
+	n_int := Blas_Int(n)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	ldc := Blas_Int(C.ld)
+
+	lapack.clacrm_(&m_int, &n_int, cast(^complex64)raw_data(A.data), &lda, raw_data(B.data), &ldb, cast(^complex64)raw_data(C.data), &ldc, raw_data(rwork))
+}
+
+// Complex × real matrix multiplication (c128)
+// Computes C = A * B where A is complex(m×n), B is real(n×n), C is complex(m×n)
+// rwork must be at least size 2*m*n
+m_multiply_complex_real_c128 :: proc(
+	A: ^Matrix(complex128), // Complex matrix (m × n)
+	B: ^Matrix(f64), // Real matrix (n × n)
+	C: ^Matrix(complex128), // Complex result (m × n)
+	rwork: []f64, // Real workspace (size >= 2*m*n)
+) {
+	m := A.rows
+	n := A.cols
+	assert(B.rows == n && B.cols == n, "B must be n×n")
+	assert(C.rows == m && C.cols == n, "C must be m×n")
+	assert(len(rwork) >= 2 * m * n, "rwork array too small")
+
+	m_int := Blas_Int(m)
+	n_int := Blas_Int(n)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	ldc := Blas_Int(C.ld)
+
+	lapack.zlacrm_(&m_int, &n_int, cast(^complex128)raw_data(A.data), &lda, raw_data(B.data), &ldb, cast(^complex128)raw_data(C.data), &ldc, raw_data(rwork))
+}
+
+// ===================================================================================
+// REAL × COMPLEX MATRIX MULTIPLICATION (LARCM)
+// ===================================================================================
+
+// Real × complex matrix multiplication proc group
+// Computes C = A * B where A is real and B is complex
+m_multiply_real_complex :: proc {
+	m_multiply_real_complex_c64,
+	m_multiply_real_complex_c128,
+}
+
+// Real × complex matrix multiplication (c64)
+// Computes C = A * B where A is real(m×m), B is complex(m×n), C is complex(m×n)
+// rwork must be at least size 2*m*n
+m_multiply_real_complex_c64 :: proc(
+	A: ^Matrix(f32), // Real matrix (m × m)
+	B: ^Matrix(complex64), // Complex matrix (m × n)
+	C: ^Matrix(complex64), // Complex result (m × n)
+	rwork: []f32, // Real workspace (size >= 2*m*n)
+) {
+	m := A.rows
+	n := B.cols
+	assert(A.cols == m, "A must be m×m")
+	assert(B.rows == m, "B must be m×n")
+	assert(C.rows == m && C.cols == n, "C must be m×n")
+	assert(len(rwork) >= 2 * m * n, "rwork array too small")
+
+	m_int := Blas_Int(m)
+	n_int := Blas_Int(n)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	ldc := Blas_Int(C.ld)
+
+	lapack.clarcm_(&m_int, &n_int, raw_data(A.data), &lda, cast(^complex64)raw_data(B.data), &ldb, cast(^complex64)raw_data(C.data), &ldc, raw_data(rwork))
+}
+
+// Real × complex matrix multiplication (c128)
+// Computes C = A * B where A is real(m×m), B is complex(m×n), C is complex(m×n)
+// rwork must be at least size 2*m*n
+m_multiply_real_complex_c128 :: proc(
+	A: ^Matrix(f64), // Real matrix (m × m)
+	B: ^Matrix(complex128), // Complex matrix (m × n)
+	C: ^Matrix(complex128), // Complex result (m × n)
+	rwork: []f64, // Real workspace (size >= 2*m*n)
+) {
+	m := A.rows
+	n := B.cols
+	assert(A.cols == m, "A must be m×m")
+	assert(B.rows == m, "B must be m×n")
+	assert(C.rows == m && C.cols == n, "C must be m×n")
+	assert(len(rwork) >= 2 * m * n, "rwork array too small")
+
+	m_int := Blas_Int(m)
+	n_int := Blas_Int(n)
+	lda := Blas_Int(A.ld)
+	ldb := Blas_Int(B.ld)
+	ldc := Blas_Int(C.ld)
+
+	lapack.zlarcm_(&m_int, &n_int, raw_data(A.data), &lda, cast(^complex128)raw_data(B.data), &ldb, cast(^complex128)raw_data(C.data), &ldc, raw_data(rwork))
+}
+
+// ===================================================================================
+// RECIPROCAL CONDITION NUMBERS FOR EIGENVALUES/SINGULAR VALUES (DISNA)
+// ===================================================================================
+
+// Reciprocal condition numbers for eigenvalues/singular values proc group
+compute_reciprocal_condition_numbers :: proc {
+	compute_reciprocal_condition_numbers_f32,
+	compute_reciprocal_condition_numbers_f64,
+}
+
+// Job type for DISNA
+DisnaJob :: enum u8 {
+	Eigenvalues   = 'E', // Compute condition numbers for eigenvalues
+	SingularLeft  = 'L', // Compute condition numbers for left singular vectors
+	SingularRight = 'R', // Compute condition numbers for right singular vectors
+}
+
+// Compute reciprocal condition numbers for eigenvalues/singular values (f32)
+// For eigenvalue problems: SEP[i] = |lambda[i] - lambda[i+1]| (gap between eigenvalues)
+// For singular value problems: SEP[i] = min(D[i], D[i-1]) (minimum singular value gap)
+compute_reciprocal_condition_numbers_f32 :: proc(
+	D: []f32, // Eigenvalues or singular values
+	SEP: []f32, // Reciprocal condition numbers (output)
+	job: DisnaJob = .Eigenvalues,
+	m: int = 0, // Rows (for SVD, 0 for eigenvalue)
+	n: int = 0, // Cols (for SVD, 0 for eigenvalue)
+) -> (
+	info: Info,
+	ok: bool,
+) {
+	// For eigenvalue problems, m and n are not used (set to 0)
+	// For SVD, m and n are matrix dimensions
+	m_int := Blas_Int(m)
+	n_int := Blas_Int(n)
+
+	if job == .Eigenvalues {
+		// For eigenvalue problems, m is not used, but n should be size of D
+		n_int = Blas_Int(len(D))
+	}
+
+	assert(len(SEP) >= len(D), "SEP array too small")
+
+	job_c := cast(u8)job
+
+	lapack.sdisna_(&job_c, &m_int, &n_int, raw_data(D), raw_data(SEP), &info, 1)
+
+	return info, info == 0
+}
+
+// Compute reciprocal condition numbers for eigenvalues/singular values (f64)
+// For eigenvalue problems: SEP[i] = |lambda[i] - lambda[i+1]| (gap between eigenvalues)
+// For singular value problems: SEP[i] = min(D[i], D[i-1]) (minimum singular value gap)
+compute_reciprocal_condition_numbers_f64 :: proc(
+	D: []f64, // Eigenvalues or singular values
+	SEP: []f64, // Reciprocal condition numbers (output)
+	job: DisnaJob = .Eigenvalues,
+	m: int = 0, // Rows (for SVD, 0 for eigenvalue)
+	n: int = 0, // Cols (for SVD, 0 for eigenvalue)
+) -> (
+	info: Info,
+	ok: bool,
+) {
+	// For eigenvalue problems, m and n are not used (set to 0)
+	// For SVD, m and n are matrix dimensions
+	m_int := Blas_Int(m)
+	n_int := Blas_Int(n)
+
+	if job == .Eigenvalues {
+		// For eigenvalue problems, m is not used, but n should be size of D
+		n_int = Blas_Int(len(D))
+	}
+
+	assert(len(SEP) >= len(D), "SEP array too small")
+
+	job_c := cast(u8)job
+
+	lapack.ddisna_(&job_c, &m_int, &n_int, raw_data(D), raw_data(SEP), &info, 1)
+
+	return info, info == 0
+}

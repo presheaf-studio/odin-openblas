@@ -223,17 +223,7 @@ m_mul_3m :: proc(A: ^Matrix($T), B: ^Matrix(T), C: ^Matrix(T), alpha: T, beta: T
 // Computes matrix multiplication and stores only the upper or lower triangle of the result.
 // Useful when the result is known to be symmetric or when only one triangle is needed.
 // Supported types: f32, f64, complex64, complex128
-m_mul_triangular :: proc(
-	A: ^Matrix($T),
-	B: ^Matrix(T),
-	C: ^Matrix(T),
-	alpha: T,
-	beta: T,
-	uplo: blas.CBLAS_UPLO = .Upper,
-	transA: blas.CBLAS_TRANSPOSE = .NoTrans,
-	transB: blas.CBLAS_TRANSPOSE = .NoTrans,
-) where is_float(T) ||
-	is_complex(T) {
+m_mul_triangular :: proc(A: ^Matrix($T), B: ^Matrix(T), C: ^Matrix(T), alpha: T, beta: T, uplo: blas.CBLAS_UPLO = .Upper, transA: blas.CBLAS_TRANSPOSE = .NoTrans, transB: blas.CBLAS_TRANSPOSE = .NoTrans) where is_float(T) || is_complex(T) {
 	assert(C.rows == C.cols, "C must be square")
 
 	m := i64(C.rows) // Size of C (square)

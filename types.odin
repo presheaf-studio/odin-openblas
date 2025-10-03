@@ -96,6 +96,12 @@ MatrixRegion :: enum u8 {
 	Lower = 'L', // "L" - Lower triangular part
 }
 
+// Diagonal type for triangular matrices
+DiagonalType :: enum u8 {
+	NonUnit = 'N', // Non-unit diagonal (general triangular)
+	Unit    = 'U', // Unit diagonal (diagonal elements assumed to be 1)
+}
+
 SortDirection :: enum u8 {
 	Increasing = 'I', // "I" - Sort in increasing order
 	Decreasing = 'D', // "D" - Sort in decreasing order
@@ -237,4 +243,32 @@ MatrixScalingType :: enum u8 {
 	LowerBanded = 'B', // Lower banded triangular
 	UpperBanded = 'Q', // Upper banded triangular
 	ZeroBanded  = 'Z', // Band matrix with KL=KU=0
+}
+
+// ===================================================================================
+// UTILITY FUNCTIONS FOR ENUM TO CSTRING CONVERSION
+// ===================================================================================
+
+// Convert MatrixRegion enum to cstring for LAPACK calls
+matrix_region_to_cstring :: proc(region: MatrixRegion) -> cstring {
+	switch region {
+	case .Full:
+		return "A"
+	case .Upper:
+		return "U"
+	case .Lower:
+		return "L"
+	}
+	return "A" // Default to full
+}
+
+// Convert SortDirection enum to cstring for LAPACK calls
+sort_direction_to_cstring :: proc(direction: SortDirection) -> cstring {
+	switch direction {
+	case .Increasing:
+		return "I"
+	case .Decreasing:
+		return "D"
+	}
+	return "I" // Default to increasing
 }

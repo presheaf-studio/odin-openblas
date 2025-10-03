@@ -1,613 +1,301 @@
 package openblas
 
-import lapack "./f77"
-import "core:c"
-import "core:math"
+import "base:builtin"
 import "core:mem"
-import "core:slice"
 
-// ============================================================================
-// SIMPLE TRIDIAGONAL EIGENVALUE COMPUTATION
-// ============================================================================
+// ===================================================================================
+// TRIDIAGONAL MATRIX TYPE DEFINITIONS AND BASIC UTILITIES
+//
+// This file provides the foundation for all tridiagonal matrix operations.
+// Tridiagonal matrices have non-zero elements only on the main diagonal and the
+// diagonals immediately above and below it.
+//
+// Tridiagonal Matrix Formats:
+// - GT: General tridiagonal (three diagonals: sub, main, super)
+// - ST: Symmetric tridiagonal (symmetric: super = sub for real, super = conj(sub) for complex)
+// - PT: Positive definite tridiagonal (special properties for Cholesky)
+//
+// Storage Format:
+// - Three arrays: dl (subdiagonal), d (diagonal), du (superdiagonal)
+// - For symmetric/Hermitian: du may share storage with dl (real) or be computed from dl (complex)
+// ===================================================================================
 
-// Compute eigenvalues only using STERF (simple, no workspace)
+// ===================================================================================
+// TRIDIAGONAL MATRIX TYPE DEFINITION
+// ===================================================================================
 
+// Tridiagonal matrix - special case of banded with kl=ku=1
+Tridiagonal :: struct($T: typeid) where is_float(T) || is_complex(T) {
+	n:         Blas_Int, // Matrix dimension (n×n)
+	dl:        []T, // Subdiagonal, size n-1
+	d:         []T, // Main diagonal, size n
+	du:        []T, // Superdiagonal, size n-1
 
-// Helper to analyze eigenvalues after computation
-analyze_tridiagonal_eigenvalues :: proc(eigenvalues: []$T) -> (min_val: f64, max_val: f64, condition_number: f64, all_positive: bool) {
-	if len(eigenvalues) == 0 {
-		return 0, 0, 1, false
-	}
-
-	// Eigenvalues are sorted by LAPACK
-	when T == f32 {
-		min_val = f64(eigenvalues[0])
-		max_val = f64(eigenvalues[len(eigenvalues) - 1])
-	} else {
-		min_val = eigenvalues[0]
-		max_val = eigenvalues[len(eigenvalues) - 1]
-	}
-
-	all_positive = eigenvalues[0] > 0
-
-	// Compute condition number
-	if abs(eigenvalues[0]) > machine_epsilon(T) {
-		when T == f32 {
-			condition_number = f64(abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0]))
-		} else {
-			condition_number = abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0])
-		}
-	} else {
-		condition_number = math.INF_F64
-	}
-
-	return min_val, max_val, condition_number, all_positive
+	// For symmetric tridiagonal (du = dl for real, du = conj(dl) for complex)
+	symmetric: bool,
 }
 
-// Helper to get machine epsilon
-machine_epsilon :: proc($T: typeid) -> T {
-	when T == f32 {
-		return math.F32_EPSILON
-	} else when T == f64 {
-		return math.F64_EPSILON
-	} else {
-		#panic("Unsupported type for machine epsilon")
-	}
+// ===================================================================================
+// TRIDIAGONAL MATRIX CREATION
+// ===================================================================================
+
+// Create a general tridiagonal matrix
+make_tridiagonal :: proc(n: int, $T: typeid, allocator := context.allocator) -> Tridiagonal(T) {
+	return Tridiagonal(T){n = Blas_Int(n), dl = make([]T, max(n - 1, 0), allocator), d = make([]T, n, allocator), du = make([]T, max(n - 1, 0), allocator)}
 }
 
-// Compute eigenvalues only (S/D STERF - no workspace needed)
-m_compute_tridiagonal_eigenvalues_only :: proc(
-	d: []$T, // Diagonal (modified to eigenvalues on output)
-	e: []T, // Off-diagonal (destroyed)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-
-	n_int := Blas_Int(n)
-
-	when T == f32 {
-		lapack.ssterf_(&n_int, raw_data(d), raw_data(e), &info)
-	} else when T == f64 {
-		lapack.dsterf_(&n_int, raw_data(d), raw_data(e), &info)
+// Create symmetric tridiagonal matrix (du is not allocated for real, or computed from dl for complex)
+make_symmetric_tridiagonal :: proc(n: int, $T: typeid, allocator := context.allocator) -> Tridiagonal(T) {
+	tm := Tridiagonal(T) {
+		n         = Blas_Int(n),
+		d         = make([]T, n, allocator),
+		dl        = make([]T, max(n - 1, 0), allocator),
+		symmetric = true,
 	}
 
-	return info, info == 0
-}
-
-// Compute eigenvalues from tridiagonal matrix (extracts d,e internally)
-// Works for both real and complex matrices since Hermitian tridiagonal has real elements
-compute_tridiagonal_eigenvalues_from_matrix :: proc(
-	M: ^Matrix($T), // Tridiagonal matrix (not modified)
-	d: []$U, // Pre-allocated diagonal output (becomes eigenvalues)
-	e: []U, // Pre-allocated off-diagonal workspace
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) || is_complex(T) {
-	n := M.rows
-	assert(M.rows == M.cols, "Matrix must be square")
-	assert(len(d) >= n, "Diagonal array too small")
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	// FIXME: review diagonal
-	// Extract diagonal and off-diagonal from matrix
-	for i in 0 ..< n {
-		when is_float(T) {
-			d[i] = M.data[i * M.ld + i]
-			if i < n - 1 {
-				// Can extract from upper or lower diagonal
-				e[i] = M.data[i * M.ld + i + 1] // Upper diagonal
-				// e[i] = M.data[(i + 1) * M.ld + i] // Lower diagonal
-			}
-			return m_compute_eigenvalues_only_f32_f64(d, e)
-		} else when is_complex(T) {
-			// For complex Hermitian tridiagonal, diagonal is real part
-			d[i] = real(M.data[i * M.ld + i])
-			if i < n - 1 {
-				// Off-diagonal is also real for Hermitian tridiagonal
-				e[i] = real(M.data[i * M.ld + i + 1]) // Upper diagonal
-				// e[i] = real(M.data[(i + 1) * M.ld + i]) // Lower diagonal
-			}
-			return m_compute_eigenvalues_only_f32_f64(d, e)
-		}
-	}
-
-}
-
-// ============================================================================
-// TRIDIAGONAL EIGENVALUE/EIGENVECTOR - SIMPLE DRIVER (STEV)
-// ============================================================================
-
-// Query workspace for eigenvalue/eigenvector computation (STEV)
-query_workspace_eigenvalues_tridiagonal_vectors :: proc($T: typeid, n: int, compute_vectors: bool) -> (work_size: int) {
-	if compute_vectors {
-		return 2 * n - 2
-	}
-	return 0
-}
-
-// Compute eigenvalues and optionally eigenvectors (STEV)
-m_compute_eigenvalues_tridiagonal_vectors :: proc(
-	d: []$T, // Diagonal (modified to eigenvalues on output)
-	e: []T, // Off-diagonal (destroyed)
-	Z: ^Matrix(T) = nil, // Eigenvectors (optional output)
-	work: []T = nil, // Pre-allocated workspace (2*n-2 if computing vectors)
-	jobz := EigenJobOption.VALUES_ONLY,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-
-	if jobz == .VALUES_AND_VECTORS {
-		assert(Z != nil && int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-		assert(work != nil && len(work) >= 2 * n - 2, "Insufficient workspace for eigenvectors")
-	}
-
-	jobz_c := cast(u8)jobz
-	n_int := Blas_Int(n)
-
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^T = nil
-	if jobz == .VALUES_AND_VECTORS && Z != nil {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
-
-	work_ptr: ^T = nil
-	if work != nil {
-		work_ptr = raw_data(work)
-	}
-
-	when T == f32 {
-		lapack.sstev_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, work_ptr, &info)
-	} else when T == f64 {
-		lapack.dstev_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, work_ptr, &info)
-	}
-
-	return info, info == 0
-}
-
-// ============================================================================
-// TRIDIAGONAL EIGENVALUE/EIGENVECTOR - DIVIDE AND CONQUER DRIVER
-// ============================================================================
-
-// Query workspace for divide and conquer eigenvalue/eigenvector computation (STEVD)
-query_workspace_tridiagonal_eigenvalues_all_dc :: proc($T: typeid, n: int, compute_vectors: bool) -> (work_size: int, iwork_size: int) {
-	n_blas := Blas_Int(n)
-
-	// Create dummy arrays for query
-	d_dummy: T
-	e_dummy: T
-	z_dummy: T
-	work_query: T
-	iwork_query: Blas_Int
-	lwork := Blas_Int(-1)
-	liwork := Blas_Int(-1)
-	info: Info
-	ldz := Blas_Int(1)
-
-	jobz_c := cast(u8)compute_vectors ? .VALUES_AND_VECTORS : .VALUES_ONLY
-
-	when T == f32 {
-		lapack.sstevd_(&jobz_c, &n_blas, &d_dummy, &e_dummy, &z_dummy, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
-	} else when T == f64 {
-		lapack.dstevd_(&jobz_c, &n_blas, &d_dummy, &e_dummy, &z_dummy, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
-	}
-
-	return int(work_query), int(iwork_query)
-}
-
-// Compute eigenvalues/eigenvectors using divide and conquer (STEVD)
-m_compute_tridiagonal_eigenvalues_all_dc :: proc(
-	d: []$T, // Diagonal (modified to eigenvalues on output)
-	e: []T, // Off-diagonal (destroyed)
-	Z: ^Matrix(T) = nil, // Eigenvectors (optional output)
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	n := len(d)
-	assert(n >= 0, "Matrix dimension must be non-negative")
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-
-	compute_vectors := Z != nil
-	if compute_vectors {
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	// Verify workspace  TODO: WHEN OB_ASSERT CLAUSE
-	work_size, iwork_size := query_workspace_dc(T, n, compute_vectors)
-	assert(len(work) >= work_size, "Insufficient workspace")
-	assert(len(iwork) >= iwork_size, "Insufficient integer workspace")
-
-	jobz_c := cast(u8)compute_vectors ? .VALUES_AND_VECTORS : .VALUES_ONLY
-
-	n_int := Blas_Int(n)
-	lwork := Blas_Int(len(work))
-	liwork := Blas_Int(len(iwork))
-
-	// Handle eigenvectors
-	ldz := Blas_Int(1)
-	z_ptr: ^T = nil
-	if compute_vectors {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
-
-	// Call LAPACK
-	when T == f32 {
-		lapack.sstevd_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	} else when T == f64 {
-		lapack.dstevd_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	}
-
-	return info, info == 0
-}
-
-// ============================================================================
-// TRIDIAGONAL EIGENVALUE/EIGENVECTOR - MRRR DRIVER (STEVR)
-// ============================================================================
-// Note: This uses STEVR for symmetric tridiagonal from reduction
-// For general tridiagonal MRRR, use tridiagonal_mrrr.odin (STEGR)
-
-// Query workspace for MRRR eigenvalue/eigenvector computation (STEVR)
-query_workspace_tridiagonal_symmetric_mrrr :: proc($T: typeid, n: int, compute_vectors: bool) -> (work_size: int, iwork_size: int) {
-	// Query LAPACK for optimal workspace sizes
-	n_blas := Blas_Int(n)
-	jobz_c := cast(u8)compute_vectors ? .VALUES_AND_VECTORS : .VALUES_ONLY
-	range_c := cast(u8)EigenRangeOption.ALL
-
-	// Dummy values for workspace query
-	d_dummy: T
-	e_dummy: T
-	vl_dummy: T = 0
-	vu_dummy: T = 0
-	il_dummy := Blas_Int(1)
-	iu_dummy := Blas_Int(n)
-	abstol_dummy: T = 0
-	m_dummy: Blas_Int
-	ldz := Blas_Int(1)
-
-	lwork := QUERY_WORKSPACE
-	liwork := QUERY_WORKSPACE
-	info: Info
-
-	when T == f32 {
-		work_query: f32
-		iwork_query: Blas_Int
-
-		lapack.sstevr_(
-			&jobz_c,
-			&range_c,
-			&n_blas,
-			&d_dummy,
-			&e_dummy,
-			&vl_dummy,
-			&vu_dummy,
-			&il_dummy,
-			&iu_dummy,
-			&abstol_dummy,
-			&m_dummy,
-			nil, // w
-			nil, // Z
-			&ldz,
-			nil, // isuppz
-			&work_query,
-			&lwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		work_size = int(work_query)
-		iwork_size = int(iwork_query)
-	} else when T == f64 {
-		work_query: f64
-		iwork_query: Blas_Int
-
-		lapack.dstevr_(
-			&jobz_c,
-			&range_c,
-			&n_blas,
-			&d_dummy,
-			&e_dummy,
-			&vl_dummy,
-			&vu_dummy,
-			&il_dummy,
-			&iu_dummy,
-			&abstol_dummy,
-			&m_dummy,
-			nil, // w
-			nil, // Z
-			&ldz,
-			nil, // isuppz
-			&work_query,
-			&lwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		work_size = int(work_query)
-		iwork_size = int(iwork_query)
-	}
-
-	return work_size, iwork_size
-}
-
-// Compute eigenvalues/eigenvectors using MRRR for symmetric tridiagonal (STEVR)
-m_compute_eigenvalues_tridiagonal_symmetric_mrrr :: proc(
-	d: []$T, // Diagonal (modified to eigenvalues on output)
-	e: []T, // Off-diagonal (modified)
-	w: []T, // Pre-allocated eigenvalues output
-	Z: ^Matrix(T) = nil, // Eigenvectors (optional output)
-	isuppz: []Blas_Int = nil, // Pre-allocated support arrays (size 2*max_eigenvalues)
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	range := EigenRangeOption.ALL,
-	vl: T, // Lower bound (if range == VALUE)
-	vu: T, // Upper bound (if range == VALUE)
-	il: int = 1, // Lower index (if range == INDEX, 1-based)
-	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T, // Absolute tolerance
-) -> (
-	num_found: int,
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(work) > 0, "Work array required")
-	assert(len(iwork) > 0, "Integer work array required")
-
-	jobz := Z != nil ? EigenJobOption.VALUES_AND_VECTORS : EigenJobOption.VALUES_ONLY
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)EigenRangeOption.ALL
-
-	n_int := Blas_Int(n)
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m: Blas_Int
-	lwork_int := Blas_Int(len(work))
-	liwork_int := Blas_Int(len(iwork))
-
-	// Handle eigenvectors
-	ldz := Blas_Int(1)
-	z_ptr: rawptr = nil
-	if Z != nil {
-		assert(int(Z.rows) >= n, "Eigenvector matrix too small")
-		assert(len(w) >= n, "Eigenvalue array too small")
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-
-		// Support arrays required for eigenvectors
-		max_m := range == .ALL ? n : (range == .INDEX ? iu - il + 1 : n)
-		assert(isuppz != nil && len(isuppz) >= 2 * max_m, "Support array required for eigenvectors")
-	}
-
-	// Call LAPACK
-	when T == f32 {
-		lapack.sstevr_(
-			&jobz_c,
-			&range_c,
-			&n_int,
-			raw_data(d),
-			raw_data(e),
-			&vl_val,
-			&vu_val,
-			&il_int,
-			&iu_int,
-			&abstol_val,
-			&m,
-			raw_data(w),
-			z_ptr,
-			&ldz,
-			raw_data(isuppz) if isuppz != nil else nil,
-			raw_data(work),
-			&lwork_int,
-			raw_data(iwork),
-			&liwork_int,
-			&info,
-		)
-	} else when T == f64 {
-		lapack.dstevr_(
-			&jobz_c,
-			&range_c,
-			&n_int,
-			raw_data(d),
-			raw_data(e),
-			&vl_val,
-			&vu_val,
-			&il_int,
-			&iu_int,
-			&abstol_val,
-			&m,
-			raw_data(w),
-			z_ptr,
-			&ldz,
-			raw_data(isuppz) if isuppz != nil else nil,
-			raw_data(work),
-			&lwork_int,
-			raw_data(iwork),
-			&liwork_int,
-			&info,
-		)
-	}
-
-	num_found = int(m)
-	return num_found, info, info == 0
-}
-
-// ============================================================================
-// TRIDIAGONAL EIGENVALUE/EIGENVECTOR - BISECTION AND INVERSE ITERATION
-// ============================================================================
-
-// Query workspace for bisection and inverse iteration (STEVX)
-query_workspace_tridiagonal_bisection :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) {
-	// STEVX requires:
-	// work: 5*n for real types
-	// iwork: 5*n
-	return 5 * n, 5 * n
-}
-
-// Compute eigenvalues/eigenvectors using bisection and inverse iteration (STEVX)
-m_compute_eigenvalues_tridiagonal_bisection :: proc(
-	d: []$T, // Diagonal (preserved in a copy)
-	e: []T, // Off-diagonal (preserved in a copy)
-	w: []T, // Pre-allocated eigenvalues output
-	Z: ^Matrix(T) = nil, // Eigenvectors (optional output)
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	ifail: []Blas_Int, // Pre-allocated failure indices
-	range: EigenRangeOption = .ALL,
-	vl: T, // Lower bound (if range == VALUE)
-	vu: T, // Upper bound (if range == VALUE)
-	il: int = 1, // Lower index (if range == INDEX, 1-based)
-	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T, // Absolute tolerance
-) -> (
-	num_found: int,
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(work) >= 5 * n, "Insufficient workspace")
-	assert(len(iwork) >= 5 * n, "Insufficient integer workspace")
-	assert(len(ifail) >= n, "Insufficient failure array")
-
-	jobz := Z != nil ? EigenJobOption.VALUES_AND_VECTORS : EigenJobOption.VALUES_ONLY
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)EigenRangeOption.ALL
-
-	n_int := Blas_Int(n)
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m: Blas_Int
-
-	// Handle eigenvectors
-	ldz := Blas_Int(1)
-	z_ptr: rawptr = nil
-	if Z != nil {
-		assert(int(Z.rows) >= n, "Eigenvector matrix too small")
-		assert(len(w) >= n, "Eigenvalue array too small")
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
-
-	// Call LAPACK
-	when T == f32 {
-		lapack.sstevx_(&jobz_c, &range_c, &n_int, raw_data(d), raw_data(e), &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, &m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
-	} else when T == f64 {
-		lapack.dstevx_(&jobz_c, &range_c, &n_int, raw_data(d), raw_data(e), &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, &m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
-	}
-
-	num_found = int(m)
-	return num_found, info, info == 0
-}
-
-// ============================================================================
-// SYMMETRIC MATRIX CONDITION NUMBER ESTIMATION
-// ============================================================================
-
-// Query workspace for symmetric condition number estimation
-query_workspace_tridiagonal_symmetric_condition :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) {
 	when is_float(T) {
-		// Real types need work and iwork
-		return 2 * n, n
-	} else when T == complex64 || T == complex128 {
-		// Complex types only need work
-		return 2 * n, 0
+		// For real symmetric, du shares storage with dl
+		tm.du = tm.dl
+	} else {
+		// For complex Hermitian, du = conj(dl) (need separate storage)
+		tm.du = make([]T, max(n - 1, 0), allocator)
 	}
+
+	return tm
 }
 
-// Estimate symmetric matrix condition number for f32/c64
-m_estimate_tridiagonal_symmetric_condition_f32_c64 :: proc(
-	A: ^Matrix($T), // Factored matrix from sytrf
-	ipiv: []Blas_Int, // Pivot indices from sytrf
-	anorm: f32, // 1-norm of original matrix
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int = nil, // Pre-allocated integer workspace (real only)
-	uplo := MatrixRegion.Upper,
-) -> (
-	rcond: f32,
-	info: Info,
-	ok: bool,
-) where T == f32 || T == complex64 {
-	n := A.rows
-	assert(A.rows == A.cols, "Matrix must be square")
-	assert(len(ipiv) >= n, "Pivot array too small")
+// ===================================================================================
+// TRIDIAGONAL MATRIX INDEXING AND ACCESS
+// ===================================================================================
 
-	when T == f32 {
-		assert(len(work) >= 2 * n, "Insufficient workspace")
-		assert(len(iwork) >= n, "Insufficient integer workspace")
-	} else when T == complex64 {
-		assert(len(work) >= 2 * n, "Insufficient workspace")
+// Get element (i,j) from tridiagonal matrix
+tridiagonal_get :: proc(tm: ^Tridiagonal($T), i, j: int) -> (value: T, stored: bool) {
+	assert(i >= 0 && i < int(tm.n) && j >= 0 && j < int(tm.n), "Index out of bounds")
+
+	if i == j {
+		return tm.d[i], true
+	} else if i == j + 1 && i > 0 {
+		return tm.dl[j], true
+	} else if i == j - 1 && j > 0 {
+		when T == complex64 || T == complex128 {
+			if tm.symmetric {
+				return conj(tm.dl[i]), true // Hermitian case
+			}
+		}
+		return tm.du[i], true
 	}
 
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	lda := A.ld
-	anorm_val := anorm
-	rcond_val: f32
-
-	when T == f32 {
-		lapack.ssycon_(&uplo_c, &n_int, raw_data(A.data), &lda, raw_data(ipiv), &anorm_val, &rcond_val, raw_data(work), raw_data(iwork), &info)
-	} else when T == complex64 {
-		lapack.csycon_(&uplo_c, &n_int, raw_data(A.data), &lda, raw_data(ipiv), &anorm_val, &rcond_val, raw_data(work), &info)
-	}
-
-	rcond = rcond_val
-	return rcond, info, info == 0
+	return T{}, false
 }
 
-// Estimate symmetric matrix condition number for f64/c128
-m_estimate_symmetric_condition_f64_c128 :: proc(
-	A: ^Matrix($T), // Factored matrix from sytrf
-	ipiv: []Blas_Int, // Pivot indices from sytrf
-	anorm: f64, // 1-norm of original matrix
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int = nil, // Pre-allocated integer workspace (real only)
-	uplo := MatrixRegion.Upper,
-) -> (
-	rcond: f64,
-	info: Info,
-	ok: bool,
-) where T == f64 || T == complex128 {
-	n := A.rows
-	assert(A.rows == A.cols, "Matrix must be square")
-	assert(len(ipiv) >= n, "Pivot array too small")
+// Set element (i,j) in tridiagonal matrix
+tridiagonal_set :: proc(tm: ^Tridiagonal($T), i, j: int, value: T) -> bool {
+	assert(i >= 0 && i < int(tm.n) && j >= 0 && j < int(tm.n), "Index out of bounds")
 
-	when T == f64 {
-		assert(len(work) >= 2 * n, "Insufficient workspace")
-		assert(len(iwork) >= n, "Insufficient integer workspace")
-	} else when T == complex128 {
-		assert(len(work) >= 2 * n, "Insufficient workspace")
+	if i == j {
+		tm.d[i] = value
+		return true
+	} else if i == j + 1 && i > 0 {
+		tm.dl[j] = value
+		if tm.symmetric {
+			when is_float(T) {
+				// Real symmetric: du = dl
+			} else {
+				// Complex Hermitian: du = conj(dl)
+				tm.du[j] = conj(value)
+			}
+		}
+		return true
+	} else if i == j - 1 && j > 0 {
+		tm.du[i] = value
+		if tm.symmetric {
+			when is_float(T) {
+				tm.dl[i] = value // Real symmetric
+			} else {
+				tm.dl[i] = conj(value) // Complex Hermitian
+			}
+		}
+		return true
 	}
 
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	lda := A.ld
-	anorm_val := anorm
+	return false // Element not in tridiagonal structure
+}
 
-	when T == f64 {
-		lapack.dsycon_(&uplo_c, &n_int, raw_data(A.data), &lda, raw_data(ipiv), &anorm_val, &rcond, raw_data(work), raw_data(iwork), &info)
-	} else when T == complex128 {
-		lapack.zsycon_(&uplo_c, &n_int, raw_data(A.data), &lda, raw_data(ipiv), &anorm_val, &rcond, raw_data(work), &info)
+// ===================================================================================
+// TRIDIAGONAL MATRIX PROPERTIES AND VALIDATION
+// ===================================================================================
+
+// Check if matrix has valid tridiagonal structure
+validate_tridiagonal :: proc(tm: ^Tridiagonal($T)) -> bool {
+	if tm.n <= 0 {
+		return false
+	}
+	if len(tm.d) != int(tm.n) {
+		return false
+	}
+	if tm.n > 1 && (len(tm.dl) != int(tm.n - 1) || len(tm.du) != int(tm.n - 1)) {
+		return false
+	}
+	return true
+}
+
+// Check if tridiagonal matrix is diagonally dominant
+is_diagonally_dominant :: proc(tm: ^Tridiagonal($T)) -> bool {
+	n := int(tm.n)
+
+	// First row
+	if n > 1 {
+		when is_float(T) {
+			if abs(tm.d[0]) < abs(tm.du[0]) {
+				return false
+			}
+		} else {
+			if abs(tm.d[0]) < abs(tm.du[0]) {
+				return false
+			}
+		}
 	}
 
-	return rcond, info, info == 0
+	// Middle rows
+	for i in 1 ..< n - 1 {
+		when is_float(T) {
+			if abs(tm.d[i]) < abs(tm.dl[i - 1]) + abs(tm.du[i]) {
+				return false
+			}
+		} else {
+			if abs(tm.d[i]) < abs(tm.dl[i - 1]) + abs(tm.du[i]) {
+				return false
+			}
+		}
+	}
+
+	// Last row
+	if n > 1 {
+		when is_float(T) {
+			if abs(tm.d[n - 1]) < abs(tm.dl[n - 2]) {
+				return false
+			}
+		} else {
+			if abs(tm.d[n - 1]) < abs(tm.dl[n - 2]) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// ===================================================================================
+// MEMORY MANAGEMENT
+// ===================================================================================
+
+// Delete tridiagonal matrix data
+delete_tridiagonal :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) {
+	delete(tm.d, allocator)
+	delete(tm.dl, allocator)
+	// Only delete du if it's not sharing storage with dl
+	when is_complex(T) {
+		if tm.symmetric {
+			delete(tm.du, allocator)
+		}
+	} else {
+		if !tm.symmetric {
+			delete(tm.du, allocator)
+		}
+	}
+	tm.d = nil
+	tm.dl = nil
+	tm.du = nil
+}
+
+// Clone a tridiagonal matrix
+clone_tridiagonal :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) -> Tridiagonal(T) {
+	clone := Tridiagonal(T) {
+		n         = tm.n,
+		symmetric = tm.symmetric,
+		d         = make([]T, len(tm.d), allocator),
+		dl        = make([]T, len(tm.dl), allocator),
+	}
+
+	copy(clone.d, tm.d)
+	copy(clone.dl, tm.dl)
+
+	// Handle du based on symmetry
+	if tm.symmetric {
+		when is_float(T) {
+			// Share storage for real symmetric
+			clone.du = clone.dl
+		} else {
+			// Allocate and copy for complex Hermitian
+			clone.du = make([]T, len(tm.du), allocator)
+			copy(clone.du, tm.du)
+		}
+	} else {
+		// Allocate and copy for general tridiagonal
+		clone.du = make([]T, len(tm.du), allocator)
+		copy(clone.du, tm.du)
+	}
+
+	return clone
+}
+
+// ===================================================================================
+// WORKSPACE AND SIZE QUERIES
+// ===================================================================================
+
+// Query workspace requirements for tridiagonal operations
+query_workspace_tridiagonal :: proc(operation: string, $T: typeid, n: int) -> (work_size, rwork_size, iwork_size: int) {
+	// Default workspace requirements for common operations
+	switch operation {
+	case "factor":
+		// LU factorization for tridiagonal
+		work_size = 0
+		rwork_size = 0
+		iwork_size = 0
+	case "solve":
+		// Linear solve for tridiagonal
+		work_size = 0
+		rwork_size = 0
+		iwork_size = 0
+	case "eigenvalues":
+		// Eigenvalue computation
+		when is_float(T) {
+			work_size = max(1, 2 * n - 2)
+		} else {
+			work_size = max(1, n)
+			rwork_size = max(1, n)
+		}
+	case "eigenvectors":
+		// Eigenvector computation
+		when is_float(T) {
+			work_size = max(1, 2 * n - 2)
+		} else {
+			work_size = max(1, 2 * n)
+			rwork_size = max(1, 3 * n - 2)
+		}
+	case:
+		// Unknown operation, return minimal workspace
+		work_size = n
+		rwork_size = 0
+		iwork_size = 0
+	}
+
+	return
+}
+
+// Allocate workspace for tridiagonal operations
+allocate_tridiagonal_workspace :: proc(operation: string, $T: typeid, n: int, allocator := context.allocator) -> (work: []T, rwork: []f64, iwork: []Blas_Int) {
+	work_size, rwork_size, iwork_size := query_workspace_tridiagonal(operation, T, n)
+
+	if work_size > 0 {
+		work = make([]T, work_size, allocator)
+	}
+	if rwork_size > 0 {
+		rwork = make([]f64, rwork_size, allocator)
+	}
+	if iwork_size > 0 {
+		iwork = make([]Blas_Int, iwork_size, allocator)
+	}
+
+	return
 }

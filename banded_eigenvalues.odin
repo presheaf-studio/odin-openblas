@@ -1,54 +1,78 @@
 package openblas
 
 import lapack "./f77"
+import "base:builtin"
 
-eigen_banded_hermitian :: proc {
-	eigen_banded_hermitian_c64,
-	eigen_banded_hermitian_c128,
+// ===================================================================================
+// BANDED MATRIX EIGENVALUE PROBLEMS
+//
+// This file provides eigenvalue computation for banded matrices:
+// - Symmetric/Hermitian banded eigenvalue problems (SB/HB routines)
+// - Generalized eigenvalue problems for banded matrices
+// - Reduction to tridiagonal form and specialized solvers
+// - Expert drivers with subset selection and improved accuracy
+//
+// All routines follow the unified API patterns with real/complex overloading.
+// ===================================================================================
+
+// ===================================================================================
+// PROC GROUPS FOR OVERLOADING
+// ===================================================================================
+
+// Standard eigenvalue computation for symmetric/Hermitian banded matrices
+banded_eigen :: proc {
+	banded_eigen_real,
+	banded_eigen_complex,
 }
 
-eigen_banded_hermitian_2stage :: proc {
-	eigen_banded_hermitian_2stage_c64,
-	eigen_banded_hermitian_2stage_c128,
+// Eigenvalue computation using divide-and-conquer algorithm
+banded_eigen_dc :: proc {
+	banded_eigen_dc_real,
+	banded_eigen_dc_complex,
 }
 
-eigen_banded_hermitian_dc :: proc {
-	eigen_banded_hermitian_dc_c64,
-	eigen_banded_hermitian_dc_c128,
+// Expert driver with subset selection and improved accuracy
+banded_eigen_expert :: proc {
+	banded_eigen_expert_real,
+	banded_eigen_expert_complex,
 }
 
-eigen_banded_hermitian_dc_2stage :: proc {
-	eigen_banded_hermitian_dc_2stage_c64,
-	eigen_banded_hermitian_dc_2stage_c128,
+// Reduce banded symmetric/Hermitian matrix to tridiagonal form with Q generation (SBTRD/HBTRD)
+banded_to_tridiagonal_with_q :: proc {
+	banded_to_tridiagonal_with_q_real,
+	banded_to_tridiagonal_with_q_complex,
 }
 
-// Solve hermitian/symmetric banded eigenvalue problem (expert with subset selection)
-eigen_banded_hermitian_expert :: proc {
-	eigen_banded_hermitian_expert_real,
-	eigen_banded_hermitian_expert_c64,
-	eigen_banded_hermitian_expert_c128,
+// Generalized eigenvalue problem: A*x = lambda*B*x
+banded_eigen_generalized :: proc {
+	banded_eigen_generalized_real,
+	banded_eigen_generalized_complex,
 }
 
-// Reduce hermitian/symmetric banded matrix to tridiagonal form
-tridiagonalize_banded_hermitian :: proc {
-	tridiagonalize_banded_hermitian_real,
-	tridiagonalize_banded_hermitian_c64,
-	tridiagonalize_banded_hermitian_c128,
+// Generalized eigenvalue problem using divide-and-conquer: A*x = lambda*B*x
+banded_eigen_generalized_dc :: proc {
+	banded_eigen_generalized_dc_real,
+	banded_eigen_generalized_dc_complex,
+}
+
+// Reduce generalized symmetric/Hermitian banded eigenvalue problem to standard form
+banded_reduce_generalized :: proc {
+	banded_reduce_generalized_real,
+	banded_reduce_generalized_complex,
+}
+
+// Generalized eigenvalue problem with expert driver (selected eigenvalues): A*x = lambda*B*x
+banded_eigen_generalized_expert :: proc {
+	banded_eigen_generalized_expert_real,
+	banded_eigen_generalized_expert_complex,
 }
 
 // ===================================================================================
-// HERMITIAN BANDED EIGENVALUE ROUTINES
+// WORKSPACE AND SIZE QUERIES
 // ===================================================================================
 
-// Query result sizes for hermitian banded eigenvalue computation
-query_result_sizes_eigen_banded_hermitian :: proc(
-	n: int,
-	compute_vectors: bool,
-) -> (
-	w_size: int,
-	z_rows: int,
-	z_cols: int, // Eigenvalues array// Eigenvector matrix rows// Eigenvector matrix cols
-) {
+// Query result sizes for eigenvalue computation
+query_result_sizes_banded_eigen :: proc(n: int, compute_vectors: bool) -> (w_size: int, z_rows: int, z_cols: int) {
 	w_size = n
 	if compute_vectors {
 		z_rows = n
@@ -57,1114 +81,883 @@ query_result_sizes_eigen_banded_hermitian :: proc(
 	return
 }
 
-// Query workspace for hermitian banded eigenvalue computation
-query_workspace_eigen_banded_hermitian :: proc($T: typeid, n: int, compute_vectors: bool) -> (work: Blas_Int, rwork: Blas_Int) where T == complex64 || T == complex128 {
-	// Standard algorithm workspace
-	return Blas_Int(n), Blas_Int(max(1, 3 * n - 2))
+// Query workspace for standard eigenvalue computation
+query_workspace_banded_eigen :: proc($T: typeid, n: int, compute_vectors: bool) -> (work: int, rwork: int) {
+	when is_float(T) {
+		if compute_vectors {
+			return 3 * n - 2, 0
+		} else {
+			return 1, 0
+		}
+	} else when is_complex(T) {
+		if compute_vectors {
+			return n, max(1, 3 * n - 2)
+		} else {
+			return 1, max(1, n)
+		}
+	}
 }
 
-// Query workspace for hermitian banded eigenvalue computation (2-stage)
-query_workspace_eigen_banded_hermitian_2stage :: proc($T: typeid, n: int, kd: int, jobz: VectorOption, uplo := MatrixRegion.Upper) -> (lwork: int, rwork: int) where T == complex64 || T == complex128 {
-	// Query LAPACK for optimal workspace
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := Blas_Int(kd + 1)
-	ldz := Blas_Int(1)
-	lwork_query := QUERY_WORKSPACE
-	info: Info
-
-	when T == complex64 {
-		work_query: complex64
-		lapack.chbev_2stage_(
-			jobz_c,
-			uplo_c,
-			&n_int,
-			&kd_int,
-			nil, // ab
-			&ldab,
-			nil, // w
-			nil, // z
-			&ldz,
-			&work_query,
-			&lwork_query,
-			nil, // rwork
-			&info,
-			len(jobz_c),
-			len(uplo_c),
-		)
-		lwork = int(real(work_query))
-	} else when T == complex128 {
-		work_query: complex128
-		lapack.zhbev_2stage_(
-			jobz_c,
-			uplo_c,
-			&n_int,
-			&kd_int,
-			nil, // ab
-			&ldab,
-			nil, // w
-			nil, // z
-			&ldz,
-			&work_query,
-			&lwork_query,
-			nil, // rwork
-			&info,
-			len(jobz_c),
-			len(uplo_c),
-		)
-		lwork = int(real(work_query))
+// Query workspace for divide-and-conquer algorithm
+query_workspace_banded_eigen_dc :: proc($T: typeid, n: int, compute_vectors: bool) -> (work: int, rwork: int, iwork: int) {
+	when is_float(T) {
+		if compute_vectors {
+			return 1 + 6 * n + 2 * n * n, 1 + 5 * n + 2 * n * n, 3 + 5 * n
+		} else {
+			return 2 * n, 0, 1
+		}
+	} else when is_complex(T) {
+		if compute_vectors {
+			return 1 + 5 * n + 2 * n * n, 1 + 5 * n + 2 * n * n, 3 + 5 * n
+		} else {
+			return n, n, 1
+		}
 	}
-
-	// rwork is always max(1, 3*n-2) for CHBEV_2STAGE/ZHBEV_2STAGE
-	rwork = max(1, 3 * n - 2)
-	return lwork, rwork
 }
 
-// Compute eigenvalues/eigenvectors of hermitian banded matrix (complex64)
-eigen_banded_hermitian_c64 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex64), // Hermitian banded matrix (input, destroyed on output)
-	w: []f32, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex64) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex64, // Pre-allocated workspace
-	rwork: []f32, // Pre-allocated real workspace
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= n, "Work array too small")
-	assert(len(rwork) >= max(1, 3 * n - 2), "Real work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-
+// Query workspace for expert eigenvalue computation with subset selection
+query_workspace_banded_eigen_expert_subset :: proc($T: typeid, n: int) -> (work: int, rwork: int, iwork: int) {
+	when is_float(T) {
+		return 7 * n, 0, 5 * n
+	} else when is_complex(T) {
+		return n, 7 * n, 5 * n
 	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-
-	lapack.chbev_(&jobz_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), raw_data(rwork), &info)
-
-	return info, info == 0
 }
 
-// Compute eigenvalues/eigenvectors of hermitian banded matrix (complex128)
-eigen_banded_hermitian_c128 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex128), // Hermitian banded matrix (input, destroyed on output)
-	w: []f64, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex128) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex128, // Pre-allocated workspace
-	rwork: []f64, // Pre-allocated real workspace
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= n, "Work array too small")
-	assert(len(rwork) >= max(1, 3 * n - 2), "Real work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-
+// Query workspace for tridiagonal reduction with Q generation
+query_workspace_banded_to_tridiagonal_with_q :: proc($T: typeid, n: int) -> (work: int, rwork: int) {
+	when is_float(T) {
+		return n, 0
+	} else when is_complex(T) {
+		return n, max(1, n - 1)
 	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-
-	lapack.zhbev_(&jobz_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), raw_data(rwork), &info)
-
-	return info, info == 0
 }
-
-// Compute eigenvalues/eigenvectors of hermitian banded matrix - 2-stage (complex64)
-eigen_banded_hermitian_2stage_c64 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex64), // Hermitian banded matrix (input, destroyed on output)
-	w: []f32, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex64) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex64, // Pre-allocated workspace
-	lwork: Blas_Int, // Size of work array
-	rwork: []f32, // Pre-allocated real workspace
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= int(lwork), "Work array too small")
-	assert(len(rwork) >= max(1, 3 * n - 2), "Real work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-
-	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-	lwork_val := lwork
-
-	lapack.chbev_2stage_(&jobz_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), &lwork_val, raw_data(rwork), &info)
-
-	return info, info == 0
-}
-
-// Compute eigenvalues/eigenvectors of hermitian banded matrix - 2-stage (complex128)
-eigen_banded_hermitian_2stage_c128 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex128), // Hermitian banded matrix (input, destroyed on output)
-	w: []f64, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex128) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex128, // Pre-allocated workspace
-	lwork: Blas_Int, // Size of work array
-	rwork: []f64, // Pre-allocated real workspace
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= int(lwork), "Work array too small")
-	assert(len(rwork) >= max(1, 3 * n - 2), "Real work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-
-	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-	lwork_val := lwork
-
-	lapack.zhbev_2stage_(&jobz_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(w), raw_data(Z.data) if Z != nil else nil, &ldz, raw_data(work), &lwork_val, raw_data(rwork), &info)
-
-	return info, info == 0
-}
-
-// Query workspace for hermitian banded eigenvalue divide-and-conquer
-query_workspace_eigen_banded_hermitian_dc :: proc(
-	$T: typeid,
-	n: int,
-	kd: int,
-	jobz: VectorOption,
-	uplo := MatrixRegion.Upper,
-) -> (
-	work_size: int,
-	rwork_size: int,
-	iwork_size: int,
-) where T == complex64 ||
-	T == complex128 {
-	// Query LAPACK for optimal workspace
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := Blas_Int(kd + 1)
-	ldz := Blas_Int(1)
-	lwork := QUERY_WORKSPACE
-	lrwork := QUERY_WORKSPACE
-	liwork := QUERY_WORKSPACE
-	info: Info
-
-	when T == complex64 {
-		work_query: complex64
-		rwork_query: f32
-		iwork_query: Blas_Int
-
-		lapack.chbevd_(
-			&jobz_c,
-			&uplo_c,
-			&n_int,
-			&kd_int,
-			nil, // ab
-			&ldab,
-			nil, // w
-			nil, // z
-			&ldz,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		work_size = int(real(work_query))
-		rwork_size = int(rwork_query)
-		iwork_size = int(iwork_query)
-	} else when T == complex128 {
-		work_query: complex128
-		rwork_query: f64
-		iwork_query: Blas_Int
-
-		lapack.zhbevd_(
-			&jobz_c,
-			&uplo_c,
-			&n_int,
-			&kd_int,
-			nil, // ab
-			&ldab,
-			nil, // w
-			nil, // z
-			&ldz,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		work_size = int(real(work_query))
-		rwork_size = int(rwork_query)
-		iwork_size = int(iwork_query)
-	}
-
-	return work_size, rwork_size, iwork_size
-}
-
-// Compute eigenvalues/eigenvectors using divide-and-conquer (complex64)
-eigen_banded_hermitian_dc_c64 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex64), // Hermitian banded matrix (input, destroyed on output)
-	w: []f32, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex64) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex64, // Pre-allocated workspace
-	lwork: Blas_Int, // Size of work array
-	rwork: []f32, // Pre-allocated real workspace
-	lrwork: Blas_Int, // Size of rwork array
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	liwork: Blas_Int, // Size of iwork array
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= int(lwork), "Work array too small")
-	assert(len(rwork) >= int(lrwork), "Real work array too small")
-	assert(len(iwork) >= int(liwork), "Integer work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-	lwork_val := lwork
-	lrwork_val := lrwork
-	liwork_val := liwork
-
-	lapack.chbevd_(
-		&jobz_c,
-		&uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		&lwork_val,
-		raw_data(rwork),
-		&lrwork_val,
-		raw_data(iwork),
-		&liwork_val,
-		&info,
-	)
-
-	return info, info == 0
-}
-
-// Compute eigenvalues/eigenvectors using divide-and-conquer (complex128)
-eigen_banded_hermitian_dc_c128 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex128), // Hermitian banded matrix (input, destroyed on output)
-	w: []f64, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex128) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex128, // Pre-allocated workspace
-	lwork: Blas_Int, // Size of work array
-	rwork: []f64, // Pre-allocated real workspace
-	lrwork: Blas_Int, // Size of rwork array
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	liwork: Blas_Int, // Size of iwork array
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= int(lwork), "Work array too small")
-	assert(len(rwork) >= int(lrwork), "Real work array too small")
-	assert(len(iwork) >= int(liwork), "Integer work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-
-	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-	lwork_val := lwork
-	lrwork_val := lrwork
-	liwork_val := liwork
-
-	lapack.zhbevd_(
-		&jobz_c,
-		&uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		&lwork_val,
-		raw_data(rwork),
-		&lrwork_val,
-		raw_data(iwork),
-		&liwork_val,
-		&info,
-	)
-
-	return info, info == 0
-}
-
-// Query workspace for hermitian banded eigenvalue divide-and-conquer 2-stage
-query_workspace_eigen_banded_hermitian_dc_2stage :: proc(
-	$T: typeid,
-	n: int,
-	kd: int,
-	jobz: VectorOption,
-	uplo := MatrixRegion.Upper,
-) -> (
-	work_size: int,
-	rwork_size: int,
-	iwork_size: int,
-) where T == complex64 ||
-	T == complex128 {
-	// Query LAPACK for optimal workspace
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := Blas_Int(kd + 1)
-	ldz := Blas_Int(1)
-	lwork := QUERY_WORKSPACE
-	lrwork := QUERY_WORKSPACE
-	liwork := QUERY_WORKSPACE
-	info: Info
-
-	when T == complex64 {
-		work_query: complex64
-		rwork_query: f32
-		iwork_query: Blas_Int
-
-		lapack.chbevd_2stage_(
-			&jobz_c,
-			&uplo_c,
-			&n_int,
-			&kd_int,
-			nil, // ab
-			&ldab,
-			nil, // w
-			nil, // z
-			&ldz,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		work_size = int(real(work_query))
-		rwork_size = int(rwork_query)
-		iwork_size = int(iwork_query)
-	} else when T == complex128 {
-		work_query: complex128
-		rwork_query: f64
-		iwork_query: Blas_Int
-
-		lapack.zhbevd_2stage_(
-			&jobz_c,
-			&uplo_c,
-			&n_int,
-			&kd_int,
-			nil, // ab
-			&ldab,
-			nil, // w
-			nil, // z
-			&ldz,
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		work_size = int(real(work_query))
-		rwork_size = int(rwork_query)
-		iwork_size = int(iwork_query)
-	}
-
-	return work_size, rwork_size, iwork_size
-}
-
-// Compute eigenvalues/eigenvectors using divide-and-conquer 2-stage (complex64)
-eigen_banded_hermitian_dc_2stage_c64 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex64), // Hermitian banded matrix (input, destroyed on output)
-	w: []f32, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex64) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex64, // Pre-allocated workspace
-	lwork: Blas_Int, // Size of work array
-	rwork: []f32, // Pre-allocated real workspace
-	lrwork: Blas_Int, // Size of rwork array
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	liwork: Blas_Int, // Size of iwork array
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= int(lwork), "Work array too small")
-	assert(len(rwork) >= int(lrwork), "Real work array too small")
-	assert(len(iwork) >= int(liwork), "Integer work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-	lwork_val := lwork
-	lrwork_val := lrwork
-	liwork_val := liwork
-
-	lapack.chbevd_2stage_(
-		&jobz_c,
-		&uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		&lwork_val,
-		raw_data(rwork),
-		&lrwork_val,
-		raw_data(iwork),
-		&liwork_val,
-		&info,
-	)
-
-	return info, info == 0
-}
-
-// Compute eigenvalues/eigenvectors using divide-and-conquer 2-stage (complex128)
-eigen_banded_hermitian_dc_2stage_c128 :: proc(
-	jobz: VectorOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex128), // Hermitian banded matrix (input, destroyed on output)
-	w: []f64, // Pre-allocated eigenvalues (size n)
-	Z: ^Matrix(complex128) = nil, // Pre-allocated eigenvectors (n×n) if jobz == FORM_VECTORS
-	work: []complex128, // Pre-allocated workspace
-	lwork: Blas_Int, // Size of work array
-	rwork: []f64, // Pre-allocated real workspace
-	lrwork: Blas_Int, // Size of rwork array
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	liwork: Blas_Int, // Size of iwork array
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= int(lwork), "Work array too small")
-	assert(len(rwork) >= int(lrwork), "Real work array too small")
-	assert(len(iwork) >= int(liwork), "Integer work array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	jobz_c := cast(u8)jobz
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	ldz := Z.ld if Z != nil else Blas_Int(1)
-	lwork_val := lwork
-	lrwork_val := lrwork
-	liwork_val := liwork
-
-	lapack.zhbevd_2stage_(
-		&jobz_c,
-		&uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		&lwork_val,
-		raw_data(rwork),
-		&lrwork_val,
-		raw_data(iwork),
-		&liwork_val,
-		&info,
-	)
-
-	return info, info == 0
-}
-
-// Expert eigenvalue computation for hermitian/symmetric banded matrices with subset selection
-// Query result sizes for expert hermitian/symmetric banded eigenvalue computation
-query_result_sizes_eigen_banded_hermitian_expert :: proc(
-	n: int,
-	compute_vectors: bool,
-	range: EigenRangeOption,
-	vl: $T,
-	vu: T,
-	il: int = 1,
-	iu: int = 0,
-) -> (
-	m: int,
-	z_rows: int,
-	z_cols: int, // Number of eigenvalues found
-) where T == f32 || T == f64 {
-	// For range == .ALL, all eigenvalues are found
-	if range == .ALL {
-		m = n
-	} else if range == .INDEXED {
-		// For indexed range, number is iu - il + 1
-		m = iu - il + 1
-	} else {
-		// For value range, we don't know exactly how many will be found
-		// Return maximum possible
-		m = n
-	}
-
-	if compute_vectors {
-		z_rows = n
-		z_cols = n // Maximum possible
-	}
-
-	return m, z_rows, z_cols
-}
-
-// Query workspace for expert hermitian/symmetric banded eigenvalue computation
-query_workspace_eigen_banded_hermitian_expert :: proc(
-	$T: typeid,
-	n: int,
-	kd: int,
-) -> (
-	work_size: int,
-	iwork_size: int,
-	rwork_size: int, // Only for complex types
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
-	when T == f32 || T == f64 {
-		work_size = 7 * n
-		iwork_size = 5 * n
-		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
-		work_size = n
-		iwork_size = 5 * n
-		rwork_size = 7 * n
-	}
-	return work_size, iwork_size, rwork_size
-}
-
-// Real variant
-eigen_banded_hermitian_expert_real :: proc(
-	jobz: VectorOption,
-	range: EigenRangeOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: Matrix($T),
-	vl: T,
-	vu: T,
-	il: int,
-	iu: int,
-	abstol: T,
-	m: ^int, // Number of eigenvalues found
-	w: []T, // Pre-allocated eigenvalue array
-	Z: ^Matrix(T), // Optional pre-allocated eigenvector matrix
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	ifail: []Blas_Int, // Pre-allocated failure array
-) -> (
-	info: Info,
-	ok: bool,
-) where T == f32 || T == f64 {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= 7 * n, "Work array too small")
-	assert(len(iwork) >= 5 * n, "Integer work array too small")
-	assert(len(ifail) >= n, "Failure array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)range
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m_int := Blas_Int(0)
-	ldz: Blas_Int = 1
-	if Z != nil {
-		ldz = Z.ld
-	}
-
-	when T == f32 {
-		lapack.ssbevx_(
-			&jobz_c,
-			&range_c,
-			&uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			nil, // Q not used in this mode
-			&n_int, // LDQ
-			&vl_val,
-			&vu_val,
-			&il_int,
-			&iu_int,
-			&abstol_val,
-			&m_int,
-			raw_data(w),
-			raw_data(Z.data) if Z != nil else nil,
-			&ldz,
-			raw_data(work),
-			raw_data(iwork),
-			raw_data(ifail),
-			&info,
-		)
-	} else {
-		lapack.dsbevx_(
-			&jobz_c,
-			&range_c,
-			&uplo_c,
-			&n_int,
-			&kd_int,
-			raw_data(AB.data),
-			&ldab,
-			nil, // Q not used in this mode
-			&n_int, // LDQ
-			&vl_val,
-			&vu_val,
-			&il_int,
-			&iu_int,
-			&abstol_val,
-			&m_int,
-			raw_data(w),
-			raw_data(Z.data) if Z != nil else nil,
-			&ldz,
-			raw_data(work),
-			raw_data(iwork),
-			raw_data(ifail),
-			&info,
-		)
-	}
-
-	m^ = int(m_int)
-	return info, info == 0
-}
-
-// Complex64 variant
-eigen_banded_hermitian_expert_c64 :: proc(
-	jobz: VectorOption,
-	range: EigenRangeOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: Matrix(complex64),
-	vl: f32,
-	vu: f32,
-	il: int,
-	iu: int,
-	abstol: f32,
-	m: ^int, // Number of eigenvalues found
-	w: []f32, // Pre-allocated eigenvalue array
-	Z: ^Matrix(complex64), // Optional pre-allocated eigenvector matrix
-	work: []complex64, // Pre-allocated workspace
-	rwork: []f32, // Pre-allocated real workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	ifail: []Blas_Int, // Pre-allocated failure array
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= n, "Work array too small")
-	assert(len(rwork) >= 7 * n, "Real work array too small")
-	assert(len(iwork) >= 5 * n, "Integer work array too small")
-	assert(len(ifail) >= n, "Failure array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)range
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m_int := Blas_Int(0)
-	ldz: Blas_Int = 1
-	if Z != nil {
-		ldz = Z.ld
-	}
-
-	lapack.chbevx_(
-		&jobz_c,
-		&range_c,
-		&uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		nil, // Q not used in this mode
-		&n_int, // LDQ
-		&vl_val,
-		&vu_val,
-		&il_int,
-		&iu_int,
-		&abstol_val,
-		&m_int,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		raw_data(rwork),
-		raw_data(iwork),
-		raw_data(ifail),
-		&info,
-	)
-
-	m^ = int(m_int)
-	return info, info == 0
-}
-
-// Complex128 variant
-eigen_banded_hermitian_expert_c128 :: proc(
-	jobz: VectorOption,
-	range: EigenRangeOption,
-	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: Matrix(complex128),
-	vl: f64,
-	vu: f64,
-	il: int,
-	iu: int,
-	abstol: f64,
-	m: ^int, // Number of eigenvalues found
-	w: []f64, // Pre-allocated eigenvalue array
-	Z: ^Matrix(complex128), // Optional pre-allocated eigenvector matrix
-	work: []complex128, // Pre-allocated workspace
-	rwork: []f64, // Pre-allocated real workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	ifail: []Blas_Int, // Pre-allocated failure array
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	// Validate inputs
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= n, "Work array too small")
-	assert(len(rwork) >= 7 * n, "Real work array too small")
-	assert(len(iwork) >= 5 * n, "Integer work array too small")
-	assert(len(ifail) >= n, "Failure array too small")
-	if jobz == .FORM_VECTORS {
-		assert(Z != nil, "Eigenvector matrix required when computing vectors")
-		assert(int(Z.rows) >= n && int(Z.cols) >= n, "Eigenvector matrix too small")
-	}
-
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)range
-	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.ld
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m_int := Blas_Int(0)
-	ldz: Blas_Int = 1
-	if Z != nil {
-		ldz = Z.ld
-	}
-
-	lapack.zhbevx_(
-		&jobz_c,
-		&range_c,
-		&uplo_c,
-		&n_int,
-		&kd_int,
-		raw_data(AB.data),
-		&ldab,
-		nil, // Q not used in this mode
-		&n_int, // LDQ
-		&vl_val,
-		&vu_val,
-		&il_int,
-		&iu_int,
-		&abstol_val,
-		&m_int,
-		raw_data(w),
-		raw_data(Z.data) if Z != nil else nil,
-		&ldz,
-		raw_data(work),
-		raw_data(rwork),
-		raw_data(iwork),
-		raw_data(ifail),
-		&info,
-	)
-
-	m^ = int(m_int)
-	return info, info == 0
-}
-
 
 // ===================================================================================
-// HERMITIAN BANDED TRIDIAGONALIZATION
+// STANDARD EIGENVALUE COMPUTATION (SBEV/HBEV)
 // ===================================================================================
 
-// Query result sizes for tridiagonalization of hermitian/symmetric banded matrix
-query_result_sizes_tridiagonalize_banded_hermitian :: proc(
-	n: int,
-	compute_q: bool,
-) -> (
-	d_size: int,
-	e_size: int,
-	q_rows: int,
-	q_cols: int, // Diagonal elements array size// Off-diagonal elements array size// Q matrix rows// Q matrix cols
-) {
-	d_size = n
-	e_size = max(0, n - 1)
-
-	if compute_q {
-		q_rows = n
-		q_cols = n
-	}
-
-	return d_size, e_size, q_rows, q_cols
-}
-
-// Query workspace for tridiagonalization of hermitian/symmetric banded matrix
-query_workspace_tridiagonalize_banded_hermitian :: proc($T: typeid, n: int) -> (work: Blas_Int) where is_float(T) || is_complex(T) {
-	return Blas_Int(n)
-}
-
-// Reduce symmetric banded matrix to tridiagonal form (real)
-tridiagonalize_banded_hermitian_real :: proc(
-	vect: VectorOption,
+// Compute eigenvalues and optionally eigenvectors of symmetric/Hermitian banded matrix (real version)
+banded_eigen_real :: proc(
+	jobz: VectorOption,
 	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix($T), // Symmetric banded matrix (input/output)
-	d: []T, // Pre-allocated diagonal elements (size n)
-	e: []T, // Pre-allocated off-diagonal elements (size n-1)
-	Q: ^Matrix(T) = nil, // Pre-allocated Q matrix if vect == .FORM_VECTORS
+	AB: ^BandedMatrix($T), // Banded matrix (input/output - destroyed)
+	w: []T, // Pre-allocated eigenvalues array (size n)
+	Z: ^Matrix(T) = nil, // Pre-allocated eigenvectors matrix (optional)
 	work: []T, // Pre-allocated workspace
 ) -> (
 	info: Info,
 	ok: bool,
 ) where is_float(T) {
-	assert(AB.format == .Banded, "Matrix must be banded format")
-	assert(len(d) >= n, "Diagonal array too small")
-	assert(len(e) >= n - 1, "Off-diagonal array too small")
-	assert(len(work) >= n, "Work array too small")
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
 
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.storage.banded.ldab
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	min_work := max(1, 3 * int(n) - 2) if jobz == .Vectors else 1
+	assert(len(work) >= min_work, "Work array too small")
 
-	vect_c := cast(u8)vect
+	ldz := Blas_Int(1)
+	z_ptr: ^T = nil
+	if jobz == .Vectors && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
+
+	when T == f32 {
+		lapack.ssbev_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
+	} else when T == f64 {
+		lapack.dsbev_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
+	}
+
+	return info, info == 0
+}
+
+// Compute eigenvalues and optionally eigenvectors of Hermitian banded matrix (complex version)
+banded_eigen_complex :: proc(
+	jobz: VectorOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - destroyed)
+	w: []$Real, // Pre-allocated eigenvalues array (size n) - always real
+	Z: ^Matrix(Cmplx) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []Real, // Pre-allocated real workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	min_work := int(n) if jobz == .Vectors else 1
+	min_rwork := max(1, 3 * int(n) - 2) if jobz == .Vectors else max(1, int(n))
+	assert(len(work) >= min_work, "Work array too small")
+	assert(len(rwork) >= min_rwork, "Real work array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^Cmplx = nil
+	if jobz == .Vectors && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+
+	when Cmplx == complex64 {
+		lapack.chbev_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbev_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
+	}
+
+	return info, info == 0
+}
+
+// ===================================================================================
+// DIVIDE-AND-CONQUER ALGORITHM (SBEVD/HBEVD)
+// ===================================================================================
+
+// Compute eigenvalues and optionally eigenvectors using divide-and-conquer (real version)
+banded_eigen_dc_real :: proc(
+	jobz: VectorOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($T), // Banded matrix (input/output - destroyed)
+	w: []T, // Pre-allocated eigenvalues array (size n)
+	Z: ^Matrix(T) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []T, // Pre-allocated workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^T = nil
+	if jobz == .Vectors && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lwork := Blas_Int(len(work))
+	liwork := Blas_Int(len(iwork))
+
+	when T == f32 {
+		lapack.ssbevd_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
+	} else when T == f64 {
+		lapack.dsbevd_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
+	}
+
+	return info, info == 0
+}
+
+// Compute eigenvalues and optionally eigenvectors using divide-and-conquer (complex version)
+banded_eigen_dc_complex :: proc(
+	jobz: VectorOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - destroyed)
+	w: []$Real, // Pre-allocated eigenvalues array (size n) - always real
+	Z: ^Matrix(Cmplx) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []Real, // Pre-allocated real workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^Cmplx = nil
+	if jobz == .Vectors && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lwork := Blas_Int(len(work))
+	lrwork := Blas_Int(len(rwork))
+	liwork := Blas_Int(len(iwork))
+
+	when Cmplx == complex64 {
+		lapack.chbevd_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbevd_(&jobz_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
+	}
+
+	return info, info == 0
+}
+
+// ===================================================================================
+// EXPERT EIGENVALUE COMPUTATION (SBEVX/HBEVX)
+// ===================================================================================
+
+// Compute selected eigenvalues and optionally eigenvectors (real version)
+banded_eigen_expert_real :: proc(
+	jobz: EigenJobOption,
+	range: EigenRangeOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($T), // Banded matrix (input/output - destroyed)
+	Q: ^BandedMatrix(T) = nil, // Optional Q matrix from reduction (input/output)
+	vl: T, // Lower bound of eigenvalue range (if range == .VALUE)
+	vu: T, // Upper bound of eigenvalue range (if range == .VALUE)
+	il: int = 1, // Lower index of eigenvalues to compute (if range == .INDEX)
+	iu: int = 1, // Upper index of eigenvalues to compute (if range == .INDEX)
+	abstol: T, // Absolute error tolerance for eigenvalues
+	w: []T, // Pre-allocated eigenvalues array (size n)
+	Z: ^Matrix(T) = nil, // Pre-allocated eigenvectors matrix (optional)
+	m: ^Blas_Int, // Number of eigenvalues found (output)
+	work: []T, // Pre-allocated workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+	ifail: []Blas_Int, // Pre-allocated failure indices (size n)
+) -> (
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	assert(len(work) >= 7 * int(n), "Work array too small")
+	assert(len(iwork) >= 5 * int(n), "Integer work array too small")
+	assert(len(ifail) >= int(n), "IFAIL array too small")
+
+	ldq := Blas_Int(1)
+	q_ptr: ^T = nil
+	if Q != nil {
+		ldq = Q.ldab
+		q_ptr = raw_data(Q.data)
+	}
+
+	ldz := Blas_Int(1)
+	z_ptr: ^T = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
+	vl_val := vl
+	vu_val := vu
+	il_val := Blas_Int(il)
+	iu_val := Blas_Int(iu)
+	abstol_val := abstol
+
+	when T == f32 {
+		lapack.ssbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+	} else when T == f64 {
+		lapack.dsbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+	}
+
+	return info, info == 0
+}
+
+// Compute selected eigenvalues and optionally eigenvectors (complex version)
+banded_eigen_expert_complex :: proc(
+	jobz: EigenJobOption,
+	range: EigenRangeOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - destroyed)
+	Q: ^BandedMatrix(Cmplx) = nil, // Optional Q matrix from reduction (input/output)
+	vl: $Real, // Lower bound of eigenvalue range (if range == .VALUE)
+	vu: Real, // Upper bound of eigenvalue range (if range == .VALUE)
+	il: int = 1, // Lower index of eigenvalues to compute (if range == .INDEX)
+	iu: int = 1, // Upper index of eigenvalues to compute (if range == .INDEX)
+	abstol: Real, // Absolute error tolerance for eigenvalues
+	w: []Real, // Pre-allocated eigenvalues array (size n) - always real
+	Z: ^Matrix(Cmplx) = nil, // Pre-allocated eigenvectors matrix (optional)
+	m: ^Blas_Int, // Number of eigenvalues found (output)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []Real, // Pre-allocated real workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+	ifail: []Blas_Int, // Pre-allocated failure indices (size n)
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	assert(len(work) >= int(n), "Work array too small")
+	assert(len(rwork) >= 7 * int(n), "Real work array too small")
+	assert(len(iwork) >= 5 * int(n), "Integer work array too small")
+	assert(len(ifail) >= int(n), "IFAIL array too small")
+
+	ldq := Blas_Int(1)
+	q_ptr: ^Cmplx = nil
+	if Q != nil {
+		ldq = Q.ldab
+		q_ptr = raw_data(Q.data)
+	}
+
+	ldz := Blas_Int(1)
+	z_ptr: ^Cmplx = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
+	vl_val := vl
+	vu_val := vu
+	il_val := Blas_Int(il)
+	iu_val := Blas_Int(iu)
+	abstol_val := abstol
+
+	when Cmplx == complex64 {
+		lapack.chbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+	}
+
+	return info, info == 0
+}
+
+// ===================================================================================
+// REDUCTION TO TRIDIAGONAL FORM (SBTRD/HBTRD)
+// ===================================================================================
+
+// Reduce banded symmetric/Hermitian matrix to tridiagonal form (real version)
+banded_to_tridiagonal_with_q_real :: proc(
+	vect: VectorOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($T), // Banded matrix (input/output - reduced to tridiagonal)
+	D: []T, // Pre-allocated diagonal elements (size n)
+	E: []T, // Pre-allocated off-diagonal elements (size n-1)
+	Q: ^Matrix(T) = nil, // Pre-allocated transformation matrix (optional)
+	work: []T, // Pre-allocated workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
+
+	// Validate inputs
+	assert(len(D) >= int(n), "D array too small")
+	assert(len(E) >= int(n - 1), "E array too small")
+	assert(len(work) >= int(n), "Work array too small")
 
 	ldq := Blas_Int(1)
 	q_ptr: ^T = nil
 	if vect == .FORM_VECTORS && Q != nil {
-		assert(Q.rows >= n && Q.cols >= n, "Q matrix too small")
+		assert(int(Q.rows) >= int(n) && int(Q.cols) >= int(n), "Q matrix too small")
 		ldq = Q.ld
 		q_ptr = raw_data(Q.data)
 	}
+
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
 
 	when T == f32 {
-		lapack.ssbtrd_(&vect_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info)
+		lapack.ssbtrd_(&vect_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dsbtrd_(&vect_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info)
+		lapack.dsbtrd_(&vect_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, raw_data(work), &info)
 	}
 
 	return info, info == 0
 }
 
-// Reduce hermitian banded matrix to tridiagonal form (complex64)
-tridiagonalize_banded_hermitian_c64 :: proc(
+// Reduce banded Hermitian matrix to tridiagonal form (complex version)
+banded_to_tridiagonal_with_q_complex :: proc(
 	vect: VectorOption,
 	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex64), // Hermitian banded matrix (input/output)
-	d: []f32, // Pre-allocated diagonal elements (size n)
-	e: []f32, // Pre-allocated off-diagonal elements (size n-1)
-	Q: ^Matrix(complex64) = nil, // Pre-allocated Q matrix if vect == .FORM_VECTORS
-	work: []complex64, // Pre-allocated workspace
+	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - reduced to tridiagonal)
+	D: []$Real, // Pre-allocated diagonal elements (size n) - always real
+	E: []Real, // Pre-allocated off-diagonal elements (size n-1) - always real
+	Q: ^Matrix(Cmplx) = nil, // Pre-allocated transformation matrix (optional)
+	work: []Cmplx, // Pre-allocated workspace
 ) -> (
 	info: Info,
 	ok: bool,
-) {
-	assert(AB.format == .Banded, "Matrix must be banded format")
-	assert(len(d) >= n, "Diagonal array too small")
-	assert(len(e) >= n - 1, "Off-diagonal array too small")
-	assert(len(work) >= n, "Work array too small")
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	kd := AB.kl
+	ldab := AB.ldab
 
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.storage.banded.ldab
-
-	vect_c := cast(u8)vect
-	uplo_c := cast(u8)uplo
+	// Validate inputs
+	assert(len(D) >= int(n), "D array too small")
+	assert(len(E) >= int(n - 1), "E array too small")
+	assert(len(work) >= int(n), "Work array too small")
 
 	ldq := Blas_Int(1)
-	q_ptr: ^complex64 = nil
+	q_ptr: ^Cmplx = nil
 	if vect == .FORM_VECTORS && Q != nil {
-		assert(int(Q.rows) >= n && int(Q.cols) >= n, "Q matrix too small")
+		assert(int(Q.rows) >= int(n) && int(Q.cols) >= int(n), "Q matrix too small")
 		ldq = Q.ld
 		q_ptr = raw_data(Q.data)
 	}
 
-	lapack.chbtrd_(&vect_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info)
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
+
+	when Cmplx == complex64 {
+		lapack.chbtrd_(&vect_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, raw_data(work), &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbtrd_(&vect_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, raw_data(D), raw_data(E), q_ptr, &ldq, raw_data(work), &info)
+	}
 
 	return info, info == 0
 }
 
-// Reduce hermitian banded matrix to tridiagonal form (complex128)
-tridiagonalize_banded_hermitian_c128 :: proc(
-	vect: VectorOption,
+// ===================================================================================
+// GENERALIZED EIGENVALUE PROBLEMS (SBGV/HBGV)
+// ===================================================================================
+
+// Solve generalized eigenvalue problem A*x = lambda*B*x (real version)
+banded_eigen_generalized_real :: proc(
+	jobz: EigenJobOption,
 	uplo: MatrixRegion,
-	n: int,
-	kd: int,
-	AB: ^Matrix(complex128), // Hermitian banded matrix (input/output)
-	d: []f64, // Pre-allocated diagonal elements (size n)
-	e: []f64, // Pre-allocated off-diagonal elements (size n-1)
-	Q: ^Matrix(complex128) = nil, // Pre-allocated Q matrix if vect == .FORM_VECTORS
-	work: []complex128, // Pre-allocated workspace
+	AB: ^BandedMatrix($T), // Banded matrix A (input/output - destroyed)
+	BB: ^BandedMatrix(T), // Banded matrix B (input/output - destroyed)
+	w: []T, // Pre-allocated eigenvalues array (size n)
+	Z: ^Matrix(T) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []T, // Pre-allocated workspace
 ) -> (
 	info: Info,
 	ok: bool,
-) {
-	assert(AB.format == .Banded, "Matrix must be banded format")
-	assert(len(d) >= n, "Diagonal array too small")
-	assert(len(e) >= n - 1, "Off-diagonal array too small")
-	assert(len(work) >= n, "Work array too small")
+) where is_float(T) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
 
-	n_int := Blas_Int(n)
-	kd_int := Blas_Int(kd)
-	ldab := AB.storage.banded.ldab
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	assert(len(work) >= 3 * int(n), "Work array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^T = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+
+	when T == f32 {
+		lapack.ssbgv_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
+	} else when T == f64 {
+		lapack.dsbgv_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &info)
+	}
+
+	return info, info == 0
+}
+
+// Solve generalized eigenvalue problem A*x = lambda*B*x (complex version)
+banded_eigen_generalized_complex :: proc(
+	jobz: EigenJobOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - destroyed)
+	BB: ^BandedMatrix(Cmplx), // Banded matrix B (input/output - destroyed)
+	w: []$Real, // Pre-allocated eigenvalues array (size n) - always real
+	Z: ^Matrix(Cmplx) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []Real, // Pre-allocated real workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	assert(len(work) >= int(n), "Work array too small")
+	assert(len(rwork) >= 3 * int(n), "Real work array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^Cmplx = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+
+	when Cmplx == complex64 {
+		lapack.chbgv_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbgv_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), &info)
+	}
+
+	return info, info == 0
+}
+
+// ===================================================================================
+// GENERALIZED EIGENVALUE PROBLEMS - DIVIDE AND CONQUER (SBGVD/HBGVD)
+// ===================================================================================
+
+// Solve generalized eigenvalue problem using divide-and-conquer (real version)
+banded_eigen_generalized_dc_real :: proc(
+	jobz: EigenJobOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($T), // Banded matrix A (input/output - destroyed)
+	BB: ^BandedMatrix(T), // Banded matrix B (input/output - destroyed)
+	w: []T, // Pre-allocated eigenvalues array (size n)
+	Z: ^Matrix(T) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []T, // Pre-allocated workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^T = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lwork := Blas_Int(len(work))
+	liwork := Blas_Int(len(iwork))
+
+	when T == f32 {
+		lapack.ssbgvd_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
+	} else when T == f64 {
+		lapack.dsbgvd_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
+	}
+
+	return info, info == 0
+}
+
+// Solve generalized eigenvalue problem using divide-and-conquer (complex version)
+banded_eigen_generalized_dc_complex :: proc(
+	jobz: EigenJobOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - destroyed)
+	BB: ^BandedMatrix(Cmplx), // Banded matrix B (input/output - destroyed)
+	w: []$Real, // Pre-allocated eigenvalues array (size n) - always real
+	Z: ^Matrix(Cmplx) = nil, // Pre-allocated eigenvectors matrix (optional)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []Real, // Pre-allocated real workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+
+	ldz := Blas_Int(1)
+	z_ptr: ^Cmplx = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	uplo_c := cast(u8)uplo
+	lwork := Blas_Int(len(work))
+	lrwork := Blas_Int(len(rwork))
+	liwork := Blas_Int(len(iwork))
+
+	when Cmplx == complex64 {
+		lapack.chbgvd_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbgvd_(&jobz_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, raw_data(w), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
+	}
+
+	return info, info == 0
+}
+
+// ===================================================================================
+// GENERALIZED EIGENVALUE PROBLEMS - EXPERT (SBGVX/HBGVX)
+// ===================================================================================
+
+// Solve generalized eigenvalue problem with expert driver (real version)
+banded_eigen_generalized_expert_real :: proc(
+	jobz: EigenJobOption,
+	range: EigenRangeOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($T), // Banded matrix A (input/output - destroyed)
+	BB: ^BandedMatrix(T), // Banded matrix B (input/output - destroyed)
+	Q: ^BandedMatrix(T) = nil, // Optional Q matrix from reduction (input/output)
+	vl: T, // Lower bound of eigenvalue range (if range == .VALUE)
+	vu: T, // Upper bound of eigenvalue range (if range == .VALUE)
+	il: int = 1, // Lower index of eigenvalues to compute (if range == .INDEX)
+	iu: int = 1, // Upper index of eigenvalues to compute (if range == .INDEX)
+	abstol: T, // Absolute error tolerance for eigenvalues
+	w: []T, // Pre-allocated eigenvalues array (size n)
+	Z: ^Matrix(T) = nil, // Pre-allocated eigenvectors matrix (optional)
+	m: ^Blas_Int, // Number of eigenvalues found (output)
+	work: []T, // Pre-allocated workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+	ifail: []Blas_Int, // Pre-allocated failure indices (size n)
+) -> (
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	assert(len(work) >= 7 * int(n), "Work array too small")
+	assert(len(iwork) >= 5 * int(n), "Integer work array too small")
+	assert(len(ifail) >= int(n), "IFAIL array too small")
+
+	ldq := Blas_Int(1)
+	q_ptr: ^T = nil
+	if Q != nil {
+		ldq = Q.ldab
+		q_ptr = raw_data(Q.data)
+	}
+
+	ldz := Blas_Int(1)
+	z_ptr: ^T = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
+	vl_val := vl
+	vu_val := vu
+	il_val := Blas_Int(il)
+	iu_val := Blas_Int(iu)
+	abstol_val := abstol
+
+	when T == f32 {
+		lapack.ssbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+	} else when T == f64 {
+		lapack.dsbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+	}
+
+	return info, info == 0
+}
+
+// Solve generalized eigenvalue problem with expert driver (complex version)
+banded_eigen_generalized_expert_complex :: proc(
+	jobz: EigenJobOption,
+	range: EigenRangeOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - destroyed)
+	BB: ^BandedMatrix(Cmplx), // Banded matrix B (input/output - destroyed)
+	Q: ^BandedMatrix(Cmplx) = nil, // Optional Q matrix from reduction (input/output)
+	vl: $Real, // Lower bound of eigenvalue range (if range == .VALUE)
+	vu: Real, // Upper bound of eigenvalue range (if range == .VALUE)
+	il: int = 1, // Lower index of eigenvalues to compute (if range == .INDEX)
+	iu: int = 1, // Upper index of eigenvalues to compute (if range == .INDEX)
+	abstol: Real, // Absolute error tolerance for eigenvalues
+	w: []Real, // Pre-allocated eigenvalues array (size n) - always real
+	Z: ^Matrix(Cmplx) = nil, // Pre-allocated eigenvectors matrix (optional)
+	m: ^Blas_Int, // Number of eigenvalues found (output)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []Real, // Pre-allocated real workspace
+	iwork: []Blas_Int, // Pre-allocated integer workspace
+	ifail: []Blas_Int, // Pre-allocated failure indices (size n)
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(w) >= int(n), "Eigenvalues array too small")
+	assert(len(work) >= int(n), "Work array too small")
+	assert(len(rwork) >= 7 * int(n), "Real work array too small")
+	assert(len(iwork) >= 5 * int(n), "Integer work array too small")
+	assert(len(ifail) >= int(n), "IFAIL array too small")
+
+	ldq := Blas_Int(1)
+	q_ptr: ^Cmplx = nil
+	if Q != nil {
+		ldq = Q.ldab
+		q_ptr = raw_data(Q.data)
+	}
+
+	ldz := Blas_Int(1)
+	z_ptr: ^Cmplx = nil
+	if jobz == .VALUES_AND_VECTORS && Z != nil {
+		assert(int(Z.rows) >= int(n) && int(Z.cols) >= int(n), "Eigenvectors matrix too small")
+		ldz = Z.ld
+		z_ptr = raw_data(Z.data)
+	}
+
+	jobz_c := cast(u8)jobz
+	range_c := cast(u8)range
+	uplo_c := cast(u8)uplo
+	vl_val := vl
+	vu_val := vu
+	il_val := Blas_Int(il)
+	iu_val := Blas_Int(iu)
+	abstol_val := abstol
+
+	when Cmplx == complex64 {
+		lapack.chbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+	}
+
+	return info, info == 0
+}
+
+// ===================================================================================
+// REDUCTION OF GENERALIZED PROBLEM TO STANDARD FORM (SBGST/HBGST)
+// ===================================================================================
+
+// Reduce generalized problem to standard form: C = L^{-1}*A*L^{-T} or C = U^{-T}*A*U^{-1} (real version)
+banded_reduce_generalized_real :: proc(
+	vect: VectorOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($T), // Banded matrix A (input/output - reduced)
+	BB: ^BandedMatrix(T), // Cholesky factor of B (input - from banded_cholesky)
+	X: ^Matrix(T) = nil, // Optional transformation matrix (output)
+	work: []T, // Pre-allocated workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(work) >= 2 * int(n), "Work array too small")
+
+	ldx := Blas_Int(1)
+	x_ptr: ^T = nil
+	if vect == .FORM_VECTORS && X != nil {
+		assert(int(X.rows) >= int(n) && int(X.cols) >= int(n), "X matrix too small")
+		ldx = X.ld
+		x_ptr = raw_data(X.data)
+	}
 
 	vect_c := cast(u8)vect
 	uplo_c := cast(u8)uplo
 
-	ldq := Blas_Int(1)
-	q_ptr: ^complex128 = nil
-	if vect == .FORM_VECTORS && Q != nil {
-		assert(int(Q.rows) >= n && int(Q.cols) >= n, "Q matrix too small")
-		ldq = Q.ld
-		q_ptr = raw_data(Q.data)
+	when T == f32 {
+		lapack.ssbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), &info)
+	} else when T == f64 {
+		lapack.dsbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), &info)
 	}
 
-	lapack.zhbtrd_(&vect_c, &uplo_c, &n_int, &kd_int, raw_data(AB.data), &ldab, raw_data(d), raw_data(e), q_ptr, &ldq, raw_data(work), &info)
+	return info, info == 0
+}
+
+// Reduce generalized problem to standard form: C = L^{-1}*A*L^{-H} or C = U^{-H}*A*U^{-1} (complex version)
+banded_reduce_generalized_complex :: proc(
+	vect: VectorOption,
+	uplo: MatrixRegion,
+	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - reduced)
+	BB: ^BandedMatrix(Cmplx), // Cholesky factor of B (input - from banded_cholesky)
+	X: ^Matrix(Cmplx) = nil, // Optional transformation matrix (output)
+	work: []Cmplx, // Pre-allocated workspace
+	rwork: []$Real, // Pre-allocated real workspace
+) -> (
+	info: Info,
+	ok: bool,
+) where is_complex(Cmplx),
+	Real == real_type_of(Cmplx) {
+	n := AB.cols
+	ka := AB.kl // Bandwidth of A
+	kb := BB.kl // Bandwidth of B
+	ldab := AB.ldab
+	ldbb := BB.ldab
+
+	// Validate inputs
+	assert(len(work) >= int(n), "Work array too small")
+	assert(len(rwork) >= int(n), "Real work array too small")
+
+	ldx := Blas_Int(1)
+	x_ptr: ^Cmplx = nil
+	if vect == .FORM_VECTORS && X != nil {
+		assert(int(X.rows) >= int(n) && int(X.cols) >= int(n), "X matrix too small")
+		ldx = X.ld
+		x_ptr = raw_data(X.data)
+	}
+
+	vect_c := cast(u8)vect
+	uplo_c := cast(u8)uplo
+
+	when Cmplx == complex64 {
+		lapack.chbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info)
+	} else when Cmplx == complex128 {
+		lapack.zhbgst_(&vect_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, x_ptr, &ldx, raw_data(work), raw_data(rwork), &info)
+	}
 
 	return info, info == 0
 }

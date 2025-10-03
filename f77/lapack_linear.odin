@@ -1322,10 +1322,7 @@ foreign lib {
 
 	// latrs3: triangular solve with robust scaling, level 3
 
-	// ctrtri_ :: proc(uplo: ^char, diag: ^char, n: ^blasint, A: ^complex64, lda: ^blasint, info: ^Info, l_uplo: c.size_t = 1, l_diag: c.size_t = 1) -> i32 ---
-	// dtrtri_ :: proc(uplo: ^char, diag: ^char, n: ^blasint, A: ^f64, lda: ^blasint, info: ^Info, l_uplo: c.size_t = 1, l_diag: c.size_t = 1) -> i32 ---
-	// strtri_ :: proc(uplo: ^char, diag: ^char, n: ^blasint, A: ^f32, lda: ^blasint, info: ^Info, l_uplo: c.size_t = 1, l_diag: c.size_t = 1) -> i32 ---
-	// ztrtri_ :: proc(uplo: ^char, diag: ^char, n: ^blasint, A: ^complex128, lda: ^blasint, info: ^Info, l_uplo: c.size_t = 1, l_diag: c.size_t = 1) -> i32 ---
+	// Note: trtri functions are already declared in blas.odin
 
 	// trti2: triangular inverse, level 2
 
