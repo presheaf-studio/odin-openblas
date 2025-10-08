@@ -1,4 +1,25 @@
-# LAPACK Function Reference Table
+# LAPACK Function Mapping
+
+## Signature Naming Conention
+
+| Prefix     | Type                    | Example Functions                                 |
+|------------|-------------------------|---------------------------------------------------|
+| dns_       | Dense matrices          | dns_solve, dns_eigen_symmetric, dns_svd_dc        |
+| band_      | Banded matrices         | band_cholesky, band_eigen, band_solve             |
+| tri_       | Triangular matrices     | tri_solve, tri_invert, tri_refine                 |
+| trid_      | Tridiagonal matrices    | trid_eigen_mrrr, trid_solve, trid_norm            |
+| pack_sym_  | Packed symmetric        | pack_sym_eigen, pack_sym_solve, pack_sym_cholesky |
+| pack_herm_ | Packed Hermitian        | pack_herm_solve, pack_herm_condition              |
+| pack_tri_  | Packed triangular       | pack_tri_make, pack_tri_from_dns                  |
+| bidi_      | Bidiagonal              | bidi_svd, bidi_reduce_from_dns                    |
+| rfp_       | Rectangular Full Packed | rfp_cholesky, rfp_tri_solve                       |
+| v_         | Vector operations       | v_householder_generate, v_givens_apply            |
+
+Key Accomplishments
+
+Procedures follow {storage_type}_{operation}_{method/variant}_{precision}
+
+## LAPACK Function Reference Table
 
 | Function | Variants | Matrix Type | Description | Target File |
 |----------|----------|-------------|-------------|-------------|

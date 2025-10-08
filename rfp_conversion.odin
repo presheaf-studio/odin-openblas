@@ -18,11 +18,28 @@ import "core:mem"
 // ===================================================================================
 
 // ===================================================================================
+// PROC GROUPS
+// ===================================================================================
+
+// Convert various matrix formats to RFP format
+to_rfp :: proc {
+	dense_to_rfp,
+	packed_symmetric_to_rfp,
+	packed_hermitian_to_rfp,
+}
+
+// Convert RFP to various matrix formats
+from_rfp :: proc {
+	rfp_to_dense,
+	rfp_to_packed_symmetric,
+}
+
+// ===================================================================================
 // DENSE TO RFP CONVERSION
 // ===================================================================================
 
 // Convert dense symmetric/Hermitian matrix to RFP format using LAPACK trttf
-dense_to_rfp :: proc(source: ^Matrix($T), trans_state: TransposeState, uplo: UpLo, allocator := context.allocator) -> RFP(T) where is_float(T) || is_complex(T) {
+dense_to_rfp :: proc(source: ^Matrix($T), trans_state: TransposeState, uplo: UpLo, allocator := context.allocator) -> (rfp: RFP(T), info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	assert(source.format == .Symmetric || source.format == .Hermitian, "Source matrix must be symmetric or Hermitian")
 	assert(source.rows == source.cols, "Source matrix must be square")
 
@@ -46,8 +63,7 @@ dense_to_rfp :: proc(source: ^Matrix($T), trans_state: TransposeState, uplo: UpL
 		lapack.ztrttf_(&transr, &uplo_c, &n_blas, raw_data(source.data), &lda, raw_data(dest.data), &info)
 	}
 
-	assert(info == 0, "LAPACK dense to RFP conversion failed")
-	return dest
+	return dest, info, info == 0
 }
 
 // ===================================================================================
@@ -55,7 +71,7 @@ dense_to_rfp :: proc(source: ^Matrix($T), trans_state: TransposeState, uplo: UpL
 // ===================================================================================
 
 // Convert RFP matrix back to dense format using LAPACK tfttr
-rfp_to_dense :: proc(source: ^RFP($T), allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
+rfp_to_dense :: proc(source: ^RFP($T), allocator := context.allocator) -> (mat: Matrix(T), info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	n := int(source.n)
 
 	dest := Matrix(T) {
@@ -84,8 +100,7 @@ rfp_to_dense :: proc(source: ^RFP($T), allocator := context.allocator) -> Matrix
 		lapack.ztfttr_(&transr, &uplo, &n_blas, raw_data(source.data), raw_data(dest.data), &lda, &info)
 	}
 
-	assert(info == 0, "LAPACK RFP to dense conversion failed")
-	return dest
+	return dest, info, info == 0
 }
 
 // ===================================================================================
@@ -93,7 +108,7 @@ rfp_to_dense :: proc(source: ^RFP($T), allocator := context.allocator) -> Matrix
 // ===================================================================================
 
 // Convert PackedSymmetric to RFP format
-packed_symmetric_to_rfp :: proc(source: ^PackedSymmetric($T), trans_state: TransposeState, allocator := context.allocator) -> RFP(T) where is_float(T) || is_complex(T) {
+packed_symmetric_to_rfp :: proc(source: ^PackedSymmetric($T), trans_state: TransposeState, allocator := context.allocator) -> (rfp: RFP(T), info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	dest := make_rfp(source.n, trans_state, source.uplo, T, allocator)
 
 	// Use LAPACK conversion routines (STPTTF/DTPTTF for real, CTPTTF/ZTPTTF for complex)
@@ -112,12 +127,11 @@ packed_symmetric_to_rfp :: proc(source: ^PackedSymmetric($T), trans_state: Trans
 		lapack.ztpttf_(&transr_c, &uplo_c, &n_blas, raw_data(source.data), raw_data(dest.data), &info)
 	}
 
-	assert(info == 0, "LAPACK conversion failed")
-	return dest
+	return dest, info, info == 0
 }
 
 // Convert PackedHermitian to RFP format
-packed_hermitian_to_rfp :: proc(source: ^PackedHermitian($T), trans_state: TransposeState, allocator := context.allocator) -> RFP(T) where T == complex64 || T == complex128 {
+packed_hermitian_to_rfp :: proc(source: ^PackedHermitian($T), trans_state: TransposeState, allocator := context.allocator) -> (rfp: RFP(T), info: Info, ok: bool) where is_complex(T) {
 	dest := make_rfp(source.n, trans_state, source.uplo, T, allocator)
 
 	// Use LAPACK conversion routines for Hermitian matrices
@@ -132,8 +146,7 @@ packed_hermitian_to_rfp :: proc(source: ^PackedHermitian($T), trans_state: Trans
 		lapack.ztpttf_(&transr_c, &uplo_c, &n_blas, raw_data(source.data), raw_data(dest.data), &info)
 	}
 
-	assert(info == 0, "LAPACK conversion failed")
-	return dest
+	return dest, info, info == 0
 }
 
 // ===================================================================================
@@ -141,8 +154,8 @@ packed_hermitian_to_rfp :: proc(source: ^PackedHermitian($T), trans_state: Trans
 // ===================================================================================
 
 // Convert RFP to PackedSymmetric format
-rfp_to_packed_symmetric :: proc(source: ^RFP($T), allocator := context.allocator) -> PackedSymmetric(T) where is_float(T) || is_complex(T) {
-	dest := make_packed_symmetric(int(source.n), source.uplo, T, allocator)
+rfp_to_packed_symmetric :: proc(source: ^RFP($T), allocator := context.allocator) -> (ps: PackedSymmetric(T), info: Info, ok: bool) where is_float(T) || is_complex(T) {
+	dest := pack_sym_make(T, int(source.n), source.uplo, allocator)
 
 	// Use LAPACK conversion routines (STFTTP/DTFTTP for real, CTFTTP/ZTFTTP for complex)
 	n_blas := source.n
@@ -160,8 +173,7 @@ rfp_to_packed_symmetric :: proc(source: ^RFP($T), allocator := context.allocator
 		lapack.ztfttp_(&transr_c, &uplo_c, &n_blas, raw_data(source.data), raw_data(dest.data), &info)
 	}
 
-	assert(info == 0, "LAPACK conversion failed")
-	return dest
+	return dest, info, info == 0
 }
 
 // ===================================================================================

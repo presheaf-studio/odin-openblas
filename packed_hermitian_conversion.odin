@@ -20,15 +20,15 @@ import "core:math"
 // MEMORY LAYOUT CONVERSIONS
 // ===================================================================================
 
-// Convert full Hermitian matrix to packed storage
+// Convert full dense Hermitian matrix to packed storage
 // Non-allocating version: requires pre-allocated packed array
-pack_hermitian :: proc(
+pack_herm_from_dns :: proc(
 	A: []$T, // Full matrix (n×n) in column-major order
 	AP: []T, // Pre-allocated packed array (n*(n+1)/2 elements)
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
 	uplo: MatrixRegion = .Upper,
-) where T == complex64 || T == complex128 {
+) where is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(A) >= n * lda, "Full matrix array too small")
 
@@ -55,15 +55,15 @@ pack_hermitian :: proc(
 	}
 }
 
-// Convert packed storage to full Hermitian matrix
+// Convert packed storage to full dense Hermitian matrix
 // Non-allocating version: requires pre-allocated full matrix
-unpack_hermitian :: proc(
+dns_from_pack_herm :: proc(
 	AP: []$T, // Packed array
 	A: []T, // Pre-allocated full matrix (n×n)
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
 	uplo: MatrixRegion = .Upper,
-) where T == complex64 || T == complex128 {
+) where is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(A) >= n * lda, "Full matrix array too small")
 
@@ -110,33 +110,33 @@ unpack_hermitian :: proc(
 // ===================================================================================
 
 // Create PackedHermitian from full matrix (allocating version for convenience)
-create_packed_hermitian :: proc(
+pack_herm_make :: proc(
 	A: []$T, // Full matrix
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
 	uplo: MatrixRegion = .Upper,
 	allocator := context.allocator,
-) -> PackedHermitian(T) where T == complex64 || T == complex128 {
+) -> PackedHermitian(T) where is_complex(T) {
 	packed_size := packed_storage_size(n)
 	data := make([]T, packed_size, allocator)
 
-	pack_hermitian(A, data, n, lda, uplo)
+	pack_herm_from_dns(A, data, n, lda, uplo)
 
 	return PackedHermitian(T){data = data, n = n, uplo = uplo}
 }
 
-// Extract full matrix from PackedHermitian (allocating version for convenience)
-extract_full_hermitian :: proc(
+// Extract full dense matrix from PackedHermitian (allocating version for convenience)
+dns_from_pack_herm_alloc :: proc(
 	packed: ^PackedHermitian($T),
 	lda: int, // Leading dimension for output
 	allocator := context.allocator,
-) -> []T where T == complex64 || T == complex128 {
+) -> []T where is_complex(T) {
 	if lda < packed.n {
 		panic("Leading dimension too small")
 	}
 
 	A := make([]T, packed.n * lda, allocator)
-	unpack_hermitian(packed.data, A, packed.n, lda, packed.uplo)
+	dns_from_pack_herm(packed.data, A, packed.n, lda, packed.uplo)
 
 	return A
 }
@@ -145,47 +145,21 @@ extract_full_hermitian :: proc(
 // HERMITIAN TO REAL/IMAGINARY CONVERSIONS
 // ===================================================================================
 
-// Convert Hermitian matrix to real symmetric (for real part analysis)
-extract_real_part :: proc {
-	extract_real_part_complex64,
-	extract_real_part_complex128,
-}
-
-extract_real_part_complex64 :: proc(packed: ^PackedHermitian(complex64), allocator := context.allocator) -> PackedSymmetric(f32) {
-	real_data := make([]f32, len(packed.data), allocator)
+// Convert packed Hermitian matrix to real symmetric (for real part analysis)
+// Generic implementation: extracts real part of complex64 → f32 or complex128 → f64
+pack_herm_extract_real :: proc(packed: ^PackedHermitian($Cmplx), $Real: typeid, allocator := context.allocator) -> PackedSymmetric(Real) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+	real_data := make([]Real, len(packed.data), allocator)
 	for val, i in packed.data {
 		real_data[i] = real(val)
 	}
 
-	return PackedSymmetric(f32){data = real_data, n = packed.n, uplo = packed.uplo}
+	return PackedSymmetric(Real){data = real_data, n = packed.n, uplo = packed.uplo}
 }
 
-extract_real_part_complex128 :: proc(packed: ^PackedHermitian(complex128), allocator := context.allocator) -> PackedSymmetric(f64) {
-	real_data := make([]f64, len(packed.data), allocator)
-	for val, i in packed.data {
-		real_data[i] = real(val)
-	}
-
-	return PackedSymmetric(f64){data = real_data, n = packed.n, uplo = packed.uplo}
-}
-
-// Convert Hermitian matrix to imaginary antisymmetric (for imaginary part analysis)
-extract_imaginary_part :: proc {
-	extract_imaginary_part_complex64,
-	extract_imaginary_part_complex128,
-}
-
-extract_imaginary_part_complex64 :: proc(packed: ^PackedHermitian(complex64), allocator := context.allocator) -> []f32 {
-	imag_data := make([]f32, len(packed.data), allocator)
-	for val, i in packed.data {
-		imag_data[i] = imag(val)
-	}
-
-	return imag_data
-}
-
-extract_imaginary_part_complex128 :: proc(packed: ^PackedHermitian(complex128), allocator := context.allocator) -> []f64 {
-	imag_data := make([]f64, len(packed.data), allocator)
+// Convert packed Hermitian matrix to imaginary antisymmetric (for imaginary part analysis)
+// Generic implementation: extracts imaginary part of complex64 → f32 or complex128 → f64
+pack_herm_extract_imag :: proc(packed: ^PackedHermitian($Cmplx), $Real: typeid, allocator := context.allocator) -> []Real where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+	imag_data := make([]Real, len(packed.data), allocator)
 	for val, i in packed.data {
 		imag_data[i] = imag(val)
 	}

@@ -21,7 +21,7 @@ import "base:intrinsics"
 
 // Solve triangular system Ax = b or AX = B
 // Supports all numeric types: f32, f64, complex64, complex128
-solve_triangular :: proc(
+tri_solve :: proc(
 	A: []$T, // Triangular matrix [n×n]
 	B: []T, // RHS matrix/vectors (modified to solution) [n×nrhs]
 	n, nrhs: int, // Matrix dimension and number of RHS
@@ -33,7 +33,6 @@ solve_triangular :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(validate_triangular(n, lda, len(A)), "Invalid triangular matrix dimensions")
 	assert(len(B) >= n * nrhs, "B array too small for column-major storage")
 	assert(len(B) >= ldb * nrhs, "B array too small for given leading dimension")
@@ -57,8 +56,7 @@ solve_triangular :: proc(
 		lapack.ztrtrs_(&uplo_c, &trans_c, &diag_c, &n_blas, &nrhs_blas, raw_data(A), &lda_blas, raw_data(B), &ldb_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -67,7 +65,7 @@ solve_triangular :: proc(
 
 // Invert triangular matrix in-place
 // Supports all numeric types: f32, f64, complex64, complex128
-invert_triangular :: proc(
+tri_invert :: proc(
 	A: []$T, // Triangular matrix (modified to inverse) [n×n]
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension
@@ -77,7 +75,6 @@ invert_triangular :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(validate_triangular(n, lda, len(A)), "Invalid triangular matrix dimensions")
 
 	uplo_c := u8(uplo)
@@ -95,8 +92,7 @@ invert_triangular :: proc(
 		lapack.ztrtri_(&uplo_c, &diag_c, &n_blas, raw_data(A), &lda_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -104,13 +100,13 @@ invert_triangular :: proc(
 // ===================================================================================
 
 // Iterative refinement for triangular systems
-refine_triangular :: proc {
-	refine_triangular_real,
-	refine_triangular_complex,
+tri_refine :: proc {
+	tri_refine_real,
+	tri_refine_complex,
 }
 
 // Real triangular iterative refinement (f32/f64)
-refine_triangular_real :: proc(
+tri_refine_real :: proc(
 	A: []$T, // Triangular matrix [n×n]
 	B: []T, // Original RHS [n×nrhs]
 	X: []T, // Solution (refined on output) [n×nrhs]
@@ -127,7 +123,6 @@ refine_triangular_real :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) {
-	// Validate inputs
 	assert(validate_triangular(n, lda, len(A)), "Invalid triangular matrix dimensions")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
 	assert(len(X) >= n * nrhs || len(X) >= ldx * nrhs, "X array too small")
@@ -151,12 +146,11 @@ refine_triangular_real :: proc(
 		lapack.dtrrfs_(&uplo_c, &trans_c, &diag_c, &n_blas, &nrhs_blas, raw_data(A), &lda_blas, raw_data(B), &ldb_blas, raw_data(X), &ldx_blas, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex triangular iterative refinement (complex64/complex128)
-refine_triangular_complex :: proc(
+tri_refine_complex :: proc(
 	A: []$Cmplx, // Triangular matrix [n×n]
 	B: []Cmplx, // Original RHS [n×nrhs]
 	X: []Cmplx, // Solution (refined on output) [n×nrhs]
@@ -172,9 +166,7 @@ refine_triangular_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	// Validate inputs
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(validate_triangular(n, lda, len(A)), "Invalid triangular matrix dimensions")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
 	assert(len(X) >= n * nrhs || len(X) >= ldx * nrhs, "X array too small")
@@ -198,8 +190,7 @@ refine_triangular_complex :: proc(
 		lapack.ztrrfs_(&uplo_c, &trans_c, &diag_c, &n_blas, &nrhs_blas, raw_data(A), &lda_blas, raw_data(B), &ldb_blas, raw_data(X), &ldx_blas, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -207,11 +198,12 @@ refine_triangular_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for triangular refinement
-query_workspace_refine_triangular :: proc($T: typeid) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_tri_refine :: proc(A: Triangular($T)) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	n := A.n
 	when is_float(T) {
-		return 3, 1, 0 // 3*n work, n iwork, 0 rwork (per n and nrhs)
+		return 3 * n, 1 * n, 0 // 3*n work, n iwork, 0 rwork (per n and nrhs)
 	} else when is_complex(T) {
-		return 2, 0, 1 // 2*n work, 0 iwork, n rwork (per n)
+		return 2 * n, 0, 1 * n // 2*n work, 0 iwork, n rwork (per n)
 	}
 }
 
@@ -220,7 +212,7 @@ query_workspace_refine_triangular :: proc($T: typeid) -> (work_size: int, iwork_
 // ===================================================================================
 
 // Solve single triangular system (single RHS)
-solve_triangular_vector :: proc(
+tri_solve_vector :: proc(
 	A: []$T,
 	b: []T, // Vector (modified to solution)
 	n: int,
@@ -232,7 +224,7 @@ solve_triangular_vector :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	return solve_triangular(A, b, n, 1, lda, max(1, n), uplo, trans, diag)
+	return tri_solve(A, b, n, 1, lda, max(1, n), uplo, trans, diag)
 }
 
 // Check if triangular matrix is invertible (non-singular)
@@ -263,7 +255,7 @@ is_invertible_triangular :: proc(A: []$T, n: int, lda: int, uplo: MatrixRegion =
 
 // Solve banded triangular system Ax = b or AX = B
 // AB is stored in banded format with kd super/sub-diagonals
-solve_banded_triangular :: proc(
+tri_solve_banded :: proc(
 	AB: []$T, // Banded triangular matrix [ldab×n]
 	B: []T, // RHS matrix/vectors (modified to solution) [n×nrhs]
 	n, kd, nrhs: int, // Matrix dimension, bandwidth, and number of RHS
@@ -275,7 +267,6 @@ solve_banded_triangular :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(ldab >= kd + 1, "Leading dimension ldab too small for bandwidth")
 	assert(len(AB) >= ldab * n, "AB array too small")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
@@ -300,8 +291,7 @@ solve_banded_triangular :: proc(
 		lapack.ztbtrs_(&uplo_c, &trans_c, &diag_c, &n_blas, &kd_blas, &nrhs_blas, raw_data(AB), &ldab_blas, raw_data(B), &ldb_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -309,13 +299,13 @@ solve_banded_triangular :: proc(
 // ===================================================================================
 
 // Estimate condition number of banded triangular matrix
-estimate_condition_banded_triangular :: proc {
-	estimate_condition_banded_triangular_real,
-	estimate_condition_banded_triangular_complex,
+tri_condition_banded :: proc {
+	tri_condition_banded_real,
+	tri_condition_banded_complex,
 }
 
 // Real banded triangular condition number estimation (f32/f64)
-estimate_condition_banded_triangular_real :: proc(
+tri_condition_banded_real :: proc(
 	AB: []$T, // Banded triangular matrix [ldab×n]
 	work: []T, // Pre-allocated workspace (size 3*n)
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size n)
@@ -329,7 +319,6 @@ estimate_condition_banded_triangular_real :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) {
-	// Validate inputs
 	assert(ldab >= kd + 1, "Leading dimension ldab too small for bandwidth")
 	assert(len(AB) >= ldab * n, "AB array too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
@@ -348,12 +337,11 @@ estimate_condition_banded_triangular_real :: proc(
 		lapack.dtbcon_(&norm_c, &uplo_c, &diag_c, &n_blas, &kd_blas, raw_data(AB), &ldab_blas, &rcond, raw_data(work), raw_data(iwork), &info)
 	}
 
-	ok = (info == 0)
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // Complex banded triangular condition number estimation (complex64/complex128)
-estimate_condition_banded_triangular_complex :: proc(
+tri_condition_banded_complex :: proc(
 	AB: []$Cmplx, // Banded triangular matrix [ldab×n]
 	work: []Cmplx, // Pre-allocated workspace (size 2*n)
 	rwork: []$Real, // Pre-allocated real workspace (size n)
@@ -366,9 +354,7 @@ estimate_condition_banded_triangular_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	// Validate inputs
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(ldab >= kd + 1, "Leading dimension ldab too small for bandwidth")
 	assert(len(AB) >= ldab * n, "AB array too small")
 	assert(len(work) >= 2 * n, "Workspace too small")
@@ -387,8 +373,7 @@ estimate_condition_banded_triangular_complex :: proc(
 		lapack.ztbcon_(&norm_c, &uplo_c, &diag_c, &n_blas, &kd_blas, raw_data(AB), &ldab_blas, &rcond, raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = (info == 0)
-	return rcond, info, ok
+	return rcond, info, info == 0
 }
 
 // ===================================================================================
@@ -396,13 +381,13 @@ estimate_condition_banded_triangular_complex :: proc(
 // ===================================================================================
 
 // Iterative refinement for banded triangular systems
-refine_banded_triangular :: proc {
-	refine_banded_triangular_real,
-	refine_banded_triangular_complex,
+tri_refine_banded :: proc {
+	tri_refine_banded_real,
+	tri_refine_banded_complex,
 }
 
 // Real banded triangular iterative refinement (f32/f64)
-refine_banded_triangular_real :: proc(
+tri_refine_banded_real :: proc(
 	AB: []$T, // Banded triangular matrix [ldab×n]
 	B: []T, // Original RHS [n×nrhs]
 	X: []T, // Solution (refined on output) [n×nrhs]
@@ -419,7 +404,6 @@ refine_banded_triangular_real :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) {
-	// Validate inputs
 	assert(ldab >= kd + 1, "Leading dimension ldab too small for bandwidth")
 	assert(len(AB) >= ldab * n, "AB array too small")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
@@ -445,12 +429,11 @@ refine_banded_triangular_real :: proc(
 		lapack.dtbrfs_(&uplo_c, &trans_c, &diag_c, &n_blas, &kd_blas, &nrhs_blas, raw_data(AB), &ldab_blas, raw_data(B), &ldb_blas, raw_data(X), &ldx_blas, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(iwork), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex banded triangular iterative refinement (complex64/complex128)
-refine_banded_triangular_complex :: proc(
+tri_refine_banded_complex :: proc(
 	AB: []$Cmplx, // Banded triangular matrix [ldab×n]
 	B: []Cmplx, // Original RHS [n×nrhs]
 	X: []Cmplx, // Solution (refined on output) [n×nrhs]
@@ -466,9 +449,7 @@ refine_banded_triangular_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	// Validate inputs
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(ldab >= kd + 1, "Leading dimension ldab too small for bandwidth")
 	assert(len(AB) >= ldab * n, "AB array too small")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
@@ -494,8 +475,7 @@ refine_banded_triangular_complex :: proc(
 		lapack.ztbrfs_(&uplo_c, &trans_c, &diag_c, &n_blas, &kd_blas, &nrhs_blas, raw_data(AB), &ldab_blas, raw_data(B), &ldb_blas, raw_data(X), &ldx_blas, raw_data(ferr), raw_data(berr), raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -503,19 +483,21 @@ refine_banded_triangular_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for banded triangular condition estimation
-query_workspace_condition_banded_triangular :: proc($T: typeid) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_tri_condition_banded :: proc(AB: Triangular($T)) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	n := AB.n
 	when is_float(T) {
-		return 3, 1, 0 // 3*n work, n iwork, 0 rwork (per n)
+		return 3 * n, 1 * n, 0 // 3*n work, n iwork, 0 rwork (per n)
 	} else when is_complex(T) {
-		return 2, 0, 1 // 2*n work, 0 iwork, n rwork (per n)
+		return 2 * n, 0, 1 * n // 2*n work, 0 iwork, n rwork (per n)
 	}
 }
 
 // Query workspace size for banded triangular refinement
-query_workspace_refine_banded_triangular :: proc($T: typeid) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_tri_refine_banded :: proc(AB: Triangular($T)) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	n := AB.n
 	when is_float(T) {
-		return 3, 1, 0 // 3*n work, n iwork, 0 rwork (per n)
+		return 3 * n, 1 * n, 0 // 3*n work, n iwork, 0 rwork (per n)
 	} else when is_complex(T) {
-		return 2, 0, 1 // 2*n work, 0 iwork, n rwork (per n)
+		return 2 * n, 0, 1 * n // 2*n work, 0 iwork, n rwork (per n)
 	}
 }

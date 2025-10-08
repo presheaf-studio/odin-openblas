@@ -32,25 +32,14 @@ PackedTriangular :: struct($T: typeid) {
 	diag: DiagonalType, // Diagonal type (Unit or NonUnit)
 }
 
-// Storage layout validation
-validate_packed_storage :: proc(n: int, data_len: int) -> bool {
-	expected_len := n * (n + 1) / 2
-	return data_len >= expected_len
-}
-
-// Calculate packed storage size
-packed_storage_size :: proc(n: int) -> int {
-	return n * (n + 1) / 2
-}
-
 // ===================================================================================
 // PACKED MATRIX CREATION AND MANAGEMENT
 // ===================================================================================
 
 // Create empty PackedTriangular matrix
 // Supports all numeric types: f32, f64, complex64, complex128
-make_packed_triangular :: proc(n: int, uplo: MatrixRegion = .Upper, diag: DiagonalType = .NonUnit, allocator := context.allocator) -> PackedTriangular($T) where is_float(T) || is_complex(T) {
-	size := packed_storage_size(n)
+pack_tri_make :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, diag: DiagonalType = .NonUnit, allocator := context.allocator) -> PackedTriangular(T) where is_float(T) || is_complex(T) {
+	size := pack_tri_storage_size(n)
 	data := make([]T, size, allocator)
 
 	return PackedTriangular(T){data = data, n = n, uplo = uplo, diag = diag}
@@ -58,7 +47,7 @@ make_packed_triangular :: proc(n: int, uplo: MatrixRegion = .Upper, diag: Diagon
 
 // Delete PackedTriangular matrix
 // Supports all numeric types: f32, f64, complex64, complex128
-delete_packed_triangular :: proc(packed: ^PackedTriangular($T), allocator := context.allocator) where is_float(T) || is_complex(T) {
+pack_tri_delete :: proc(packed: ^PackedTriangular($T), allocator := context.allocator) where is_float(T) || is_complex(T) {
 	delete(packed.data, allocator)
 	packed.data = nil
 	packed.n = 0
@@ -67,6 +56,11 @@ delete_packed_triangular :: proc(packed: ^PackedTriangular($T), allocator := con
 // ===================================================================================
 // TRIANGULAR MATRIX PROPERTIES
 // ===================================================================================
+
+// Calculate packed storage size for triangular matrix
+pack_tri_storage_size :: proc(n: int) -> int {
+	return n * (n + 1) / 2
+}
 
 
 // ===================================================================================
@@ -85,7 +79,7 @@ solve_packed_triangular :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
 
@@ -123,7 +117,7 @@ invert_packed_triangular :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 
 	uplo_c := u8(uplo)
@@ -148,13 +142,7 @@ invert_packed_triangular :: proc(
 // CONDITION NUMBER ESTIMATION
 // ===================================================================================
 
-// Estimate condition number of triangular packed matrix
-estimate_condition_packed_triangular :: proc {
-	estimate_condition_packed_triangular_real,
-	estimate_condition_packed_triangular_complex,
-}
-
-// Real triangular packed condition estimation (f32/f64)
+// Estimate condition number of real triangular packed matrix (f32/f64)
 estimate_condition_packed_triangular_real :: proc(
 	AP: []$T, // Triangular packed matrix
 	work: []T, // Pre-allocated workspace (size 3*n)
@@ -167,7 +155,7 @@ estimate_condition_packed_triangular_real :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
 	assert(len(iwork) >= n, "Integer workspace too small")
@@ -187,7 +175,7 @@ estimate_condition_packed_triangular_real :: proc(
 	return rcond, info, ok
 }
 
-// Complex triangular packed condition estimation (complex64/complex128)
+// Estimate condition number of complex triangular packed matrix (complex64/complex128)
 estimate_condition_packed_triangular_complex :: proc(
 	AP: []$Cmplx, // Triangular packed matrix
 	work: []Cmplx, // Pre-allocated workspace (size 2*n)
@@ -200,8 +188,7 @@ estimate_condition_packed_triangular_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(work) >= 2 * n, "Workspace too small")
 	assert(len(rwork) >= n, "Real workspace too small")
@@ -221,17 +208,17 @@ estimate_condition_packed_triangular_complex :: proc(
 	return rcond, info, ok
 }
 
+// Overloaded proc group for condition number estimation
+estimate_condition_packed_triangular :: proc {
+	estimate_condition_packed_triangular_real,
+	estimate_condition_packed_triangular_complex,
+}
+
 // ===================================================================================
 // ITERATIVE REFINEMENT
 // ===================================================================================
 
-// Iterative refinement for triangular systems
-refine_packed_triangular :: proc {
-	refine_packed_triangular_real,
-	refine_packed_triangular_complex,
-}
-
-// Real triangular packed iterative refinement (f32/f64)
+// Iterative refinement for real triangular packed systems (f32/f64)
 refine_packed_triangular_real :: proc(
 	AP: []$T, // Triangular packed matrix
 	B: []T, // Original RHS [n×nrhs]
@@ -248,7 +235,7 @@ refine_packed_triangular_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
 	assert(len(X) >= n * nrhs || len(X) >= ldx * nrhs, "X array too small")
@@ -275,7 +262,7 @@ refine_packed_triangular_real :: proc(
 	return info, ok
 }
 
-// Complex triangular packed iterative refinement (complex64/complex128)
+// Iterative refinement for complex triangular packed systems (complex64/complex128)
 refine_packed_triangular_complex :: proc(
 	AP: []$Cmplx, // Triangular packed matrix
 	B: []Cmplx, // Original RHS [n×nrhs]
@@ -292,8 +279,7 @@ refine_packed_triangular_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(B) >= n * nrhs || len(B) >= ldb * nrhs, "B array too small")
 	assert(len(X) >= n * nrhs || len(X) >= ldx * nrhs, "X array too small")
@@ -318,6 +304,12 @@ refine_packed_triangular_complex :: proc(
 
 	ok = (info == 0)
 	return info, ok
+}
+
+// Overloaded proc group for iterative refinement
+refine_packed_triangular :: proc {
+	refine_packed_triangular_real,
+	refine_packed_triangular_complex,
 }
 
 

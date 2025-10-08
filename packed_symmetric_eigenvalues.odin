@@ -20,13 +20,13 @@ import lapack "./f77"
 // ===================================================================================
 
 // Compute all eigenvalues and optionally eigenvectors
-eigenvalues_packed_symmetric :: proc {
-	eigenvalues_packed_symmetric_real,
-	eigenvalues_packed_hermitian_complex,
+pack_sym_eigen :: proc {
+	pack_sym_eigen_real,
+	pack_sym_eigen_hermitian,
 }
 
 // Real symmetric packed eigenvalues (f32/f64)
-eigenvalues_packed_symmetric_real :: proc(
+pack_sym_eigen_real :: proc(
 	AP: []$T, // Packed matrix (destroyed on output)
 	W: []T, // Pre-allocated eigenvalues (size n)
 	Z: []T, // Pre-allocated eigenvectors [n×n] (if jobz = .VALUES_AND_VECTORS)
@@ -38,7 +38,7 @@ eigenvalues_packed_symmetric_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(W) >= n, "Eigenvalue array too small")
 	assert(len(work) >= 3 * n, "Workspace too small")
@@ -59,12 +59,11 @@ eigenvalues_packed_symmetric_real :: proc(
 		lapack.dspev_(&jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex Hermitian packed eigenvalues (complex64/complex128)
-eigenvalues_packed_hermitian_complex :: proc(
+pack_sym_eigen_hermitian :: proc(
 	AP: []$T, // Packed matrix (destroyed on output)
 	W: []$Real, // Pre-allocated eigenvalues (size n, always real)
 	Z: []T, // Pre-allocated eigenvectors [n×n] (if jobz = .VALUES_AND_VECTORS)
@@ -99,8 +98,7 @@ eigenvalues_packed_hermitian_complex :: proc(
 		lapack.zhpev_(&jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -108,13 +106,13 @@ eigenvalues_packed_hermitian_complex :: proc(
 // ===================================================================================
 
 // Compute eigenvalues using divide-and-conquer (faster for large matrices)
-eigenvalues_packed_symmetric_dc :: proc {
-	eigenvalues_packed_symmetric_dc_real,
-	eigenvalues_packed_hermitian_dc_complex,
+pack_sym_eigen_dc :: proc {
+	pack_sym_eigen_dc_real,
+	pack_sym_eigen_dc_hermitian,
 }
 
 // Real symmetric packed eigenvalues with divide-and-conquer (f32/f64)
-eigenvalues_packed_symmetric_dc_real :: proc(
+pack_sym_eigen_dc_real :: proc(
 	AP: []$T, // Packed matrix (destroyed on output)
 	W: []T, // Pre-allocated eigenvalues (size n)
 	Z: []T, // Pre-allocated eigenvectors [n×n] (if jobz = .VALUES_AND_VECTORS)
@@ -129,7 +127,7 @@ eigenvalues_packed_symmetric_dc_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(W) >= n, "Eigenvalue array too small")
 
@@ -151,12 +149,11 @@ eigenvalues_packed_symmetric_dc_real :: proc(
 		lapack.dspevd_(&jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), &lwork_blas, raw_data(iwork), &liwork_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex Hermitian packed eigenvalues with divide-and-conquer (complex64/complex128)
-eigenvalues_packed_hermitian_dc_complex :: proc(
+pack_sym_eigen_dc_hermitian :: proc(
 	AP: []$T, // Packed matrix (destroyed on output)
 	W: []$Real, // Pre-allocated eigenvalues (size n, always real)
 	Z: []T, // Pre-allocated eigenvectors [n×n] (if jobz = .VALUES_AND_VECTORS)
@@ -196,8 +193,7 @@ eigenvalues_packed_hermitian_dc_complex :: proc(
 		lapack.zhpevd_(&jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), &lwork_blas, raw_data(rwork), &lrwork_blas, raw_data(iwork), &liwork_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -205,13 +201,13 @@ eigenvalues_packed_hermitian_dc_complex :: proc(
 // ===================================================================================
 
 // Compute selected eigenvalues and eigenvectors
-eigenvalues_packed_symmetric_select :: proc {
-	eigenvalues_packed_symmetric_select_real,
-	eigenvalues_packed_hermitian_select_complex,
+pack_sym_eigen_select :: proc {
+	pack_sym_eigen_select_real,
+	pack_sym_eigen_select_hermitian,
 }
 
 // Real symmetric packed selective eigenvalues (f32/f64)
-eigenvalues_packed_symmetric_select_real :: proc(
+pack_sym_eigen_select_real :: proc(
 	AP: []$T, // Packed matrix (destroyed on output)
 	W: []T, // Pre-allocated eigenvalues (size n)
 	Z: []T, // Pre-allocated eigenvectors [n×m] where m = number found
@@ -230,7 +226,7 @@ eigenvalues_packed_symmetric_select_real :: proc(
 	m: int,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(W) >= n, "Eigenvalue array too small")
 	assert(len(ifail) >= n, "Failure array too small")
@@ -257,13 +253,11 @@ eigenvalues_packed_symmetric_select_real :: proc(
 		lapack.dspevx_(&jobz_c, &range_c, &uplo_c, &n_blas, raw_data(AP), &vl, &vu, &il_blas, &iu_blas, &abstol, &m_blas, raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
 	}
 
-	m = int(m_blas)
-	ok = (info == 0)
-	return m, info, ok
+	return int(m_blas), info, info == 0
 }
 
 // Complex Hermitian packed selective eigenvalues (complex64/complex128)
-eigenvalues_packed_hermitian_select_complex :: proc(
+pack_sym_eigen_select_hermitian :: proc(
 	AP: []$T, // Packed matrix (destroyed on output)
 	W: []$Real, // Pre-allocated eigenvalues (size n, always real)
 	Z: []T, // Pre-allocated eigenvectors [n×m] where m = number found
@@ -311,9 +305,7 @@ eigenvalues_packed_hermitian_select_complex :: proc(
 		lapack.zhpevx_(&jobz_c, &range_c, &uplo_c, &n_blas, raw_data(AP), &vl, &vu, &il_blas, &iu_blas, &abstol, &m_blas, raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
 	}
 
-	m = int(m_blas)
-	ok = (info == 0)
-	return m, info, ok
+	return int(m_blas), info, info == 0
 }
 
 // ===================================================================================
@@ -321,13 +313,13 @@ eigenvalues_packed_hermitian_select_complex :: proc(
 // ===================================================================================
 
 // Reduce packed symmetric/Hermitian matrix to tridiagonal form
-reduce_packed_to_tridiagonal :: proc {
-	reduce_packed_symmetric_to_tridiagonal_real,
-	reduce_packed_hermitian_to_tridiagonal_complex,
+pack_sym_to_trid :: proc {
+	pack_sym_to_trid_real,
+	pack_sym_to_trid_hermitian,
 }
 
 // Real symmetric packed to tridiagonal reduction (f32/f64)
-reduce_packed_symmetric_to_tridiagonal_real :: proc(
+pack_sym_to_trid_real :: proc(
 	AP: []$T, // Packed matrix (modified to orthogonal matrix)
 	D: []T, // Pre-allocated diagonal elements (size n)
 	E: []T, // Pre-allocated off-diagonal elements (size n-1)
@@ -337,7 +329,7 @@ reduce_packed_symmetric_to_tridiagonal_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(D) >= n, "Diagonal array too small")
 	if n > 1 {
@@ -354,12 +346,11 @@ reduce_packed_symmetric_to_tridiagonal_real :: proc(
 		lapack.dsptrd_(&uplo_c, &n_blas, raw_data(AP), raw_data(D), raw_data(E), raw_data(tau), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex Hermitian packed to tridiagonal reduction (complex64/complex128)
-reduce_packed_hermitian_to_tridiagonal_complex :: proc(
+pack_sym_to_trid_hermitian :: proc(
 	AP: []$T, // Packed matrix (modified to unitary matrix)
 	D: []$Real, // Pre-allocated diagonal elements (size n, always real)
 	E: []Real, // Pre-allocated off-diagonal elements (size n-1, always real)
@@ -386,8 +377,7 @@ reduce_packed_hermitian_to_tridiagonal_complex :: proc(
 		lapack.zhptrd_(&uplo_c, &n_blas, raw_data(AP), raw_data(D), raw_data(E), raw_data(tau), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -395,13 +385,13 @@ reduce_packed_hermitian_to_tridiagonal_complex :: proc(
 // ===================================================================================
 
 // Solve generalized eigenvalue problem A*x = lambda*B*x
-eigenvalues_packed_generalized :: proc {
-	eigenvalues_packed_generalized_real,
-	eigenvalues_packed_hermitian_generalized_complex,
+pack_sym_eigen_generalized :: proc {
+	pack_sym_eigen_generalized_real,
+	pack_sym_eigen_generalized_hermitian,
 }
 
 // Real symmetric packed generalized eigenvalues (f32/f64)
-eigenvalues_packed_generalized_real :: proc(
+pack_sym_eigen_generalized_real :: proc(
 	AP: []$T, // Packed matrix A (destroyed on output)
 	BP: []T, // Packed matrix B (destroyed on output)
 	W: []T, // Pre-allocated eigenvalues (size n)
@@ -409,13 +399,13 @@ eigenvalues_packed_generalized_real :: proc(
 	work: []T, // Pre-allocated workspace (size 3*n)
 	n: int, // Matrix dimension
 	ldz: int, // Leading dimension of Z
-	itype: int = 1, // Problem type (1: A*x=lambda*B*x, 2: A*B*x=lambda*x, 3: B*A*x=lambda*x)
+	itype: int = 1, // Problem type (1: A*x=lambda*B*x, 2: A*B*x=lambda*x, 3: B*A*x=lambda*x) // FIXME ENUM
 	jobz: EigenJobOption = .VALUES_ONLY, // Compute eigenvectors?
 	uplo: MatrixRegion = .Upper, // Storage format
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "AP array too small")
 	assert(validate_packed_storage(n, len(BP)), "BP array too small")
 	assert(len(W) >= n, "Eigenvalue array too small")
@@ -439,12 +429,11 @@ eigenvalues_packed_generalized_real :: proc(
 		lapack.dspgv_(&itype_blas, &jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex Hermitian packed generalized eigenvalues (complex64/complex128)
-eigenvalues_packed_hermitian_generalized_complex :: proc(
+pack_sym_eigen_generalized_hermitian :: proc(
 	AP: []$T, // Packed matrix A (destroyed on output)
 	BP: []T, // Packed matrix B (destroyed on output)
 	W: []$Real, // Pre-allocated eigenvalues (size n, always real)
@@ -484,22 +473,15 @@ eigenvalues_packed_hermitian_generalized_complex :: proc(
 		lapack.zhpgv_(&itype_blas, &jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), raw_data(rwork), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
 // GENERALIZED REDUCTION
 // ===================================================================================
 
-// Reduce generalized eigenproblem to standard form
-reduce_packed_generalized :: proc {
-	reduce_packed_generalized_real,
-	reduce_packed_hermitian_generalized_complex,
-}
-
 // Real symmetric packed generalized reduction (f32/f64)
-reduce_packed_generalized_real :: proc(
+pack_sym_reduce_generalized :: proc(
 	AP: []$T, // Packed matrix A (modified on output)
 	BP: []T, // Packed Cholesky factor of B (from spptrf)
 	n: int, // Matrix dimension
@@ -508,7 +490,7 @@ reduce_packed_generalized_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) || is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "AP array too small")
 	assert(validate_packed_storage(n, len(BP)), "BP array too small")
 	assert(itype >= 1 && itype <= 3, "Invalid problem type")
@@ -521,39 +503,13 @@ reduce_packed_generalized_real :: proc(
 		lapack.sspgst_(&itype_blas, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), &info)
 	} else when T == f64 {
 		lapack.dspgst_(&itype_blas, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), &info)
-	}
-
-	ok = (info == 0)
-	return info, ok
-}
-
-// Complex Hermitian packed generalized reduction (complex64/complex128)
-reduce_packed_hermitian_generalized_complex :: proc(
-	AP: []$T, // Packed matrix A (modified on output)
-	BP: []T, // Packed Cholesky factor of B (from cpptrf/zpptrf)
-	n: int, // Matrix dimension
-	itype: int = 1, // Problem type (1: A*x=lambda*B*x, 2: A*B*x=lambda*x, 3: B*A*x=lambda*x)
-	uplo: MatrixRegion = .Upper, // Storage format
-) -> (
-	info: Info,
-	ok: bool,
-) where T == complex64 || T == complex128 {
-	assert(validate_packed_storage(n, len(AP)), "AP array too small")
-	assert(validate_packed_storage(n, len(BP)), "BP array too small")
-	assert(itype >= 1 && itype <= 3, "Invalid problem type")
-
-	itype_blas := Blas_Int(itype)
-	uplo_c := u8(uplo)
-	n_blas := Blas_Int(n)
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.chpgst_(&itype_blas, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), &info)
 	} else when T == complex128 {
 		lapack.zhpgst_(&itype_blas, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -561,13 +517,13 @@ reduce_packed_hermitian_generalized_complex :: proc(
 // ===================================================================================
 
 // Solve generalized eigenvalue problem A*x = lambda*B*x using divide-and-conquer
-eigenvalues_packed_generalized_dc :: proc {
-	eigenvalues_packed_generalized_dc_real,
-	eigenvalues_packed_hermitian_generalized_dc_complex,
+pack_sym_eigen_generalized_dc :: proc {
+	pack_sym_eigen_generalized_dc_real,
+	pack_sym_eigen_generalized_dc_hermitian,
 }
 
 // Real symmetric packed generalized eigenvalues with divide-and-conquer (f32/f64)
-eigenvalues_packed_generalized_dc_real :: proc(
+pack_sym_eigen_generalized_dc_real :: proc(
 	AP: []$T, // Packed matrix A (destroyed on output)
 	BP: []T, // Packed matrix B (destroyed on output)
 	W: []T, // Pre-allocated eigenvalues (size n)
@@ -584,7 +540,7 @@ eigenvalues_packed_generalized_dc_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "AP array too small")
 	assert(validate_packed_storage(n, len(BP)), "BP array too small")
 	assert(len(W) >= n, "Eigenvalue array too small")
@@ -609,12 +565,11 @@ eigenvalues_packed_generalized_dc_real :: proc(
 		lapack.dspgvd_(&itype_blas, &jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), &lwork_blas, raw_data(iwork), &liwork_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // Complex Hermitian packed generalized eigenvalues with divide-and-conquer (complex64/complex128)
-eigenvalues_packed_hermitian_generalized_dc_complex :: proc(
+pack_sym_eigen_generalized_dc_hermitian :: proc(
 	AP: []$Cmplx, // Packed matrix A (destroyed on output)
 	BP: []Cmplx, // Packed matrix B (destroyed on output)
 	W: []$Real, // Pre-allocated eigenvalues (size n, always real)
@@ -659,8 +614,7 @@ eigenvalues_packed_hermitian_generalized_dc_complex :: proc(
 		lapack.zhpgvd_(&itype_blas, &jobz_c, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), &lwork_blas, raw_data(rwork), &lrwork_blas, raw_data(iwork), &liwork_blas, &info)
 	}
 
-	ok = (info == 0)
-	return info, ok
+	return info, info == 0
 }
 
 // ===================================================================================
@@ -668,13 +622,13 @@ eigenvalues_packed_hermitian_generalized_dc_complex :: proc(
 // ===================================================================================
 
 // Solve generalized eigenvalue problem A*x = lambda*B*x for selected eigenvalues
-eigenvalues_packed_generalized_select :: proc {
-	eigenvalues_packed_generalized_select_real,
-	eigenvalues_packed_hermitian_generalized_select_complex,
+pack_sym_eigen_generalized_select :: proc {
+	pack_sym_eigen_generalized_select_real,
+	pack_sym_eigen_generalized_select_hermitian,
 }
 
 // Real symmetric packed generalized selective eigenvalues (f32/f64)
-eigenvalues_packed_generalized_select_real :: proc(
+pack_sym_eigen_generalized_select_real :: proc(
 	AP: []$T, // Packed matrix A (destroyed on output)
 	BP: []T, // Packed matrix B (destroyed on output)
 	W: []T, // Pre-allocated eigenvalues (size n)
@@ -695,7 +649,7 @@ eigenvalues_packed_generalized_select_real :: proc(
 	m: int,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	assert(validate_packed_storage(n, len(AP)), "AP array too small")
 	assert(validate_packed_storage(n, len(BP)), "BP array too small")
 	assert(len(W) >= n, "Eigenvalue array too small")
@@ -725,13 +679,11 @@ eigenvalues_packed_generalized_select_real :: proc(
 		lapack.dspgvx_(&itype_blas, &jobz_c, &range_c, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), &vl, &vu, &il_blas, &iu_blas, &abstol, &m_blas, raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
 	}
 
-	m = int(m_blas)
-	ok = (info == 0)
-	return m, info, ok
+	return int(m_blas), info, info == 0
 }
 
 // Complex Hermitian packed generalized selective eigenvalues (complex64/complex128)
-eigenvalues_packed_hermitian_generalized_select_complex :: proc(
+pack_sym_eigen_generalized_select_hermitian :: proc(
 	AP: []$Cmplx, // Packed matrix A (destroyed on output)
 	BP: []Cmplx, // Packed matrix B (destroyed on output)
 	W: []$Real, // Pre-allocated eigenvalues (size n, always real)
@@ -784,7 +736,5 @@ eigenvalues_packed_hermitian_generalized_select_complex :: proc(
 		lapack.zhpgvx_(&itype_blas, &jobz_c, &range_c, &uplo_c, &n_blas, raw_data(AP), raw_data(BP), &vl, &vu, &il_blas, &iu_blas, &abstol, &m_blas, raw_data(W), raw_data(Z), &ldz_blas, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
 	}
 
-	m = int(m_blas)
-	ok = (info == 0)
-	return m, info, ok
+	return int(m_blas), info, info == 0
 }

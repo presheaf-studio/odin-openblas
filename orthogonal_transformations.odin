@@ -7,41 +7,11 @@ import "core:math"
 import "core:mem"
 
 // ===================================================================================
-// ORTHOGONAL TRANSFORMATION FUNCTIONS
-// ===================================================================================
-
-// Apply random orthogonal transformation proc groups
-m_apply_random_orthogonal :: proc {
-	m_apply_random_orthogonal_f32_c64,
-	m_apply_random_orthogonal_f64_c128,
-}
-
-// Apply Givens rotation proc groups
-m_apply_givens_rotation :: proc {
-	m_apply_givens_rotation_f32_c64,
-	m_apply_givens_rotation_f64_c128,
-}
-
-// ===================================================================================
 // RANDOM ORTHOGONAL TRANSFORMATION (DLAROR/SLAROR/CLAROR/ZLAROR)
 // ===================================================================================
-
-// Apply random orthogonal transformation for f32/complex64
-m_apply_random_orthogonal_f32_c64 :: proc(A: ^Matrix($T), side: OrthogonalSide = .Left, init: OrthogonalInit = .None, seed: ^[4]i32) -> (info: Info) where T == f32 || T == complex64 {
-	// Validate input
-	assert(A != nil && A.data != nil, "Matrix A cannot be nil")
-	assert(seed != nil, "Seed cannot be nil")
-	assert(seed[3] % 2 == 1, "seed[3] must be odd")
-
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	lda := Blas_Int(A.ld)
-
-	// Convert enums to cstrings
-	side_c := cast(u8)side
-	init_c := cast(u8)init
-
-	// Allocate workspace
+query_workspace_dns_apply_random_orthogonal :: proc(A: ^Matrix($T), work: []T, side: OrthogonalSide = .Left, init: OrthogonalInit = .None) -> (work_size: int) {
+	m := A.rows
+	n := A.cols
 	work_size: Blas_Int
 	switch side {
 	case .Left:
@@ -51,85 +21,41 @@ m_apply_random_orthogonal_f32_c64 :: proc(A: ^Matrix($T), side: OrthogonalSide =
 	case .Both:
 		work_size = max(m, n)
 	}
+	return work_size
+}
+// Apply random orthogonal transformation for all types
+dns_apply_random_orthogonal :: proc(A: ^Matrix($T), work: []T, side: OrthogonalSide = .Left, init: OrthogonalInit = .None, seed: ^[4]i32) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
+	// Validate input
+	assert(A != nil && A.data != nil, "Matrix A cannot be nil")
+	assert(seed != nil, "Seed cannot be nil")
+	assert(seed[3] % 2 == 1, "seed[3] must be odd")
 
-	work := make([]T, work_size, context.temp_allocator)
-	defer delete(work, context.temp_allocator)
+	m := A.rows
+	n := A.cols
+	lda := A.ld
 
-	// Convert i32 seed to Blas_Int
-	seed_blas := [4]Blas_Int{Blas_Int(seed[0]), Blas_Int(seed[1]), Blas_Int(seed[2]), Blas_Int(seed[3])}
-
-	info_val: Info
+	side_c := cast(u8)side
+	init_c := cast(u8)init
 
 	when T == f32 {
-		lapack.slaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val)
+		lapack.slaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed[0], raw_data(work), &info)
+	} else when T == f64 {
+		lapack.dlaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed[0], raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.claror_(&side_c, &init_c, &m, &n, cast(^complex64)raw_data(A.data), &lda, &seed_blas[0], cast(^complex64)raw_data(work), &info_val)
-	}
-
-	// Update the original seed
-	seed[0] = i32(seed_blas[0])
-	seed[1] = i32(seed_blas[1])
-	seed[2] = i32(seed_blas[2])
-	seed[3] = i32(seed_blas[3])
-
-	return info_val
-}
-
-// Apply random orthogonal transformation for f64/complex128
-m_apply_random_orthogonal_f64_c128 :: proc(A: ^Matrix($T), side: OrthogonalSide = .Left, init: OrthogonalInit = .None, seed: ^[4]i32) -> (info: Info) where T == f64 || T == complex128 {
-	// Validate input
-	assert(A != nil && A.data != nil, "Matrix A cannot be nil")
-	assert(seed != nil, "Seed cannot be nil")
-	assert(seed[3] % 2 == 1, "seed[3] must be odd")
-
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
-	lda := Blas_Int(A.ld)
-
-	// Convert enums to cstrings
-	side_c := cast(u8)side
-	init_c := cast(u8)init
-
-	// Allocate workspace
-	work_size: Blas_Int
-	switch side {
-	case .Left:
-		work_size = m
-	case .Right:
-		work_size = n
-	case .Both:
-		work_size = max(m, n)
-	}
-
-	work := make([]T, work_size, context.temp_allocator)
-	defer delete(work, context.temp_allocator)
-
-	// Convert i32 seed to Blas_Int
-	seed_blas := [4]Blas_Int{Blas_Int(seed[0]), Blas_Int(seed[1]), Blas_Int(seed[2]), Blas_Int(seed[3])}
-
-	info_val: Info
-
-	when T == f64 {
-		lapack.dlaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed_blas[0], raw_data(work), &info_val)
+		lapack.claror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed[0], raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zlaror_(&side_c, &init_c, &m, &n, cast(^complex128)raw_data(A.data), &lda, &seed_blas[0], cast(^complex128)raw_data(work), &info_val)
+		lapack.zlaror_(&side_c, &init_c, &m, &n, raw_data(A.data), &lda, &seed[0], raw_data(work), &info)
 	}
 
-	// Update the original seed
-	seed[0] = i32(seed_blas[0])
-	seed[1] = i32(seed_blas[1])
-	seed[2] = i32(seed_blas[2])
-	seed[3] = i32(seed_blas[3])
-
-	return info_val
+	return info, info == 0
 }
 
 // ===================================================================================
 // GIVENS ROTATION APPLICATION (DLAROT/SLAROT/CLAROT/ZLAROT)
 // ===================================================================================
 
-// Apply Givens rotation to matrix row/column for f32/complex64
-m_apply_givens_rotation_f32_c64 :: proc(
+// Apply Givens rotation to matrix row/column for all types
+dns_apply_givens_rotation :: proc(
 	A: ^Matrix($T),
 	row_mode: bool, // true for row operation, false for column operation
 	left_rotation: bool, // Apply rotation on the left
@@ -141,15 +67,14 @@ m_apply_givens_rotation_f32_c64 :: proc(
 	start_col: int = 0, // Starting column index
 	xleft: ^RotType = nil, // Element rotated into A from the left
 	xright: ^RotType = nil, // Element rotated into A from the right
-) where (T == f32 && RotType == f32) || (T == complex64 && RotType == f32) {
-	// Convert parameters
+) where (T == f32 && RotType == f32) || (T == f64 && RotType == f64) || (T == complex64 && RotType == f32) || (T == complex128 && RotType == f64) {
 	lrows := row_mode ? Blas_Int(1) : Blas_Int(0)
 	lleft := left_rotation ? Blas_Int(1) : Blas_Int(0)
 	lright := right_rotation ? Blas_Int(1) : Blas_Int(0)
 	nl_val := Blas_Int(num_elements)
 	c_val := c
 	s_val := s
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	// Calculate starting position
 	start_ptr := &A.data[start_col * A.ld + start_row]
@@ -160,53 +85,12 @@ m_apply_givens_rotation_f32_c64 :: proc(
 
 	when T == f32 {
 		lapack.slarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
-	} else when T == complex64 {
-		lapack.clarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, cast(^complex64)start_ptr, &lda, &xleft_val, &xright_val)
-	}
-
-	// Update output parameters
-	if xleft != nil {
-		xleft^ = xleft_val
-	}
-	if xright != nil {
-		xright^ = xright_val
-	}
-}
-
-// Apply Givens rotation to matrix row/column for f64/complex128
-m_apply_givens_rotation_f64_c128 :: proc(
-	A: ^Matrix($T),
-	row_mode: bool, // true for row operation, false for column operation
-	left_rotation: bool, // Apply rotation on the left
-	right_rotation: bool, // Apply rotation on the right
-	num_elements: int, // Number of elements to rotate
-	c: $RotType, // Cosine of rotation angle
-	s: RotType, // Sine of rotation angle
-	start_row: int = 0, // Starting row index
-	start_col: int = 0, // Starting column index
-	xleft: ^RotType = nil, // Element rotated into A from the left
-	xright: ^RotType = nil, // Element rotated into A from the right
-) where (T == f64 && RotType == f64) || (T == complex128 && RotType == f64) {
-	// Convert parameters
-	lrows := row_mode ? Blas_Int(1) : Blas_Int(0)
-	lleft := left_rotation ? Blas_Int(1) : Blas_Int(0)
-	lright := right_rotation ? Blas_Int(1) : Blas_Int(0)
-	nl_val := Blas_Int(num_elements)
-	c_val := c
-	s_val := s
-	lda := Blas_Int(A.ld)
-
-	// Calculate starting position
-	start_ptr := &A.data[start_col * A.ld + start_row]
-
-	// Optional rotation elements
-	xleft_val := xleft != nil ? xleft^ : RotType(0)
-	xright_val := xright != nil ? xright^ : RotType(0)
-
-	when T == f64 {
+	} else when T == f64 {
 		lapack.dlarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
+	} else when T == complex64 {
+		lapack.clarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
 	} else when T == complex128 {
-		lapack.zlarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, cast(^complex128)start_ptr, &lda, &xleft_val, &xright_val)
+		lapack.zlarot_(&lrows, &lleft, &lright, &nl_val, &c_val, &s_val, start_ptr, &lda, &xleft_val, &xright_val)
 	}
 
 	// Update output parameters
@@ -223,21 +107,16 @@ m_apply_givens_rotation_f64_c128 :: proc(
 // ===================================================================================
 
 // Generate random orthogonal matrix
-m_generate_random_orthogonal :: proc(A: ^Matrix($T), seed: [4]i32 = {1, 2, 3, 4}) -> (info: Info) where is_float(T) || is_complex(T) {
+dns_generate_random_orthogonal :: proc(A: ^Matrix($T), seed: [4]i32 = {1, 2, 3, 4}) -> (info: Info) where is_float(T) || is_complex(T) {
 	assert(A.rows == A.cols, "Random orthogonal matrix must be square")
 
-	// Initialize matrix to identity
-	m_initialize_matrix(A, T(0), T(1), .Full)
+	initialize_matrix(A, T(0), T(1), .Full)
 
 	// Apply random orthogonal transformation
 	seed_copy := seed
 	seed_copy[3] = seed_copy[3] | 1 // Ensure seed[3] is odd
 
-	when T == f32 || T == complex64 {
-		return m_apply_random_orthogonal_f32_c64(A, .Left, .Identity, &seed_copy)
-	} else when T == f64 || T == complex128 {
-		return m_apply_random_orthogonal_f64_c128(A, .Left, .Identity, &seed_copy)
-	}
+	return dns_apply_random_orthogonal(A, .Left, .Identity, &seed_copy)
 }
 
 // Apply single Givens rotation to two rows/columns
@@ -253,10 +132,10 @@ apply_simple_givens_rotation :: proc(
 			xi := A.data[col * A.ld + i]
 			xj := A.data[col * A.ld + j]
 
-			when T == f32 || T == f64 {
+			when is_float(T) {
 				A.data[col * A.ld + i] = T(c) * xi + T(s) * xj
 				A.data[col * A.ld + j] = -T(s) * xi + T(c) * xj
-			} else when T == complex64 || T == complex128 {
+			} else when is_complex(T) {
 				A.data[col * A.ld + i] = T(complex(c, 0)) * xi + T(complex(s, 0)) * xj
 				A.data[col * A.ld + j] = -T(complex(s, 0)) * xi + T(complex(c, 0)) * xj
 			}
@@ -267,10 +146,10 @@ apply_simple_givens_rotation :: proc(
 			xi := A.data[i * A.ld + row]
 			xj := A.data[j * A.ld + row]
 
-			when T == f32 || T == f64 {
+			when is_float(T) {
 				A.data[i * A.ld + row] = T(c) * xi + T(s) * xj
 				A.data[j * A.ld + row] = -T(s) * xi + T(c) * xj
-			} else when T == complex64 || T == complex128 {
+			} else when is_complex(T) {
 				A.data[i * A.ld + row] = T(complex(c, 0)) * xi + T(complex(s, 0)) * xj
 				A.data[j * A.ld + row] = -T(complex(s, 0)) * xi + T(complex(c, 0)) * xj
 			}
@@ -284,13 +163,13 @@ apply_simple_givens_rotation :: proc(
 
 // Query workspace size for generating Q from QR factorization (ORGQR/UNGQR)
 query_workspace_generate_qr :: proc(A: ^Matrix($T), k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -308,13 +187,13 @@ query_workspace_generate_qr :: proc(A: ^Matrix($T), k: int) -> (lwork: int) wher
 
 // Query workspace size for generating Q from LQ factorization (ORGLQ/UNGLQ)
 query_workspace_generate_lq :: proc(A: ^Matrix($T), k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -331,17 +210,17 @@ query_workspace_generate_lq :: proc(A: ^Matrix($T), k: int) -> (lwork: int) wher
 }
 
 // Query workspace size for multiplying by Q from QR factorization (ORMQR/UNMQR)
-query_workspace_multiply_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -358,17 +237,17 @@ query_workspace_multiply_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: Multipl
 }
 
 // Query workspace size for multiplying by Q from LQ factorization (ORMLQ/UNMLQ)
-query_workspace_multiply_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -405,17 +284,16 @@ query_workspace_multiply_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: Multipl
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-m_generate_orthogonal_from_qr :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
+dns_orthogonal_from_qr :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -452,17 +330,16 @@ m_generate_orthogonal_from_qr :: proc(A: ^Matrix($T), tau: []T, k: int, work: []
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-m_generate_orthogonal_from_lq :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
+dns_orthogonal_from_lq :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -516,8 +393,7 @@ TransposeOperation :: enum u8 {
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-m_multiply_orthogonal_qr :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
+dns_orthogonal_apply_qr :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
@@ -525,11 +401,11 @@ m_multiply_orthogonal_qr :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: 
 
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -567,8 +443,7 @@ m_multiply_orthogonal_qr :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: 
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-m_multiply_orthogonal_lq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
+dns_orthogonal_apply_lq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
@@ -576,11 +451,11 @@ m_multiply_orthogonal_lq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: 
 
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -602,13 +477,13 @@ m_multiply_orthogonal_lq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: 
 
 // Query workspace size for generating Q from QR factorization (ORGQR/UNGQR)
 query_workspace_generate_q_from_qr :: proc(A: ^Matrix($T), k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -626,13 +501,13 @@ query_workspace_generate_q_from_qr :: proc(A: ^Matrix($T), k: int) -> (lwork: in
 
 // Query workspace size for generating Q from LQ factorization (ORGLQ/UNGLQ)
 query_workspace_generate_q_from_lq :: proc(A: ^Matrix($T), k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -649,17 +524,17 @@ query_workspace_generate_q_from_lq :: proc(A: ^Matrix($T), k: int) -> (lwork: in
 }
 
 // Query workspace size for multiplying by Q from QR factorization (ORMQR/UNMQR)
-query_workspace_multiply_q_from_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_q_from_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -672,21 +547,25 @@ query_workspace_multiply_q_from_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: 
 		lapack.zunmqr_(&side_c, &trans_c, &m, &n, &k_val, nil, &lda, nil, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
+	when is_float(T) {
+		return int(work_query)
+	}
 	return int(real(work_query))
 }
 
 // Query workspace size for multiplying by Q from LQ factorization (ORMLQ/UNMLQ)
-query_workspace_multiply_q_from_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_q_from_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -699,28 +578,10 @@ query_workspace_multiply_q_from_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: 
 		lapack.zunmlq_(&side_c, &trans_c, &m, &n, &k_val, nil, &lda, nil, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
+	when is_float(T) {
+		return int(work_query)
+	}
 	return int(real(work_query))
-}
-
-// ===================================================================================
-// HIGH-LEVEL WRAPPERS (UNIFIED REAL/COMPLEX API)
-// ===================================================================================
-
-// Proc groups for the four high-priority orthogonal functions
-generate_q_from_qr :: proc {
-	m_generate_orthogonal_from_qr,
-}
-
-generate_q_from_lq :: proc {
-	m_generate_orthogonal_from_lq,
-}
-
-multiply_q_from_qr :: proc {
-	m_multiply_orthogonal_qr,
-}
-
-multiply_q_from_lq :: proc {
-	m_multiply_orthogonal_lq,
 }
 
 // ===================================================================================
@@ -728,17 +589,17 @@ multiply_q_from_lq :: proc {
 // ===================================================================================
 
 // Query workspace size for multiplying by Q from QL factorization (ORMQL/UNMQL)
-query_workspace_multiply_q_from_ql :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_q_from_ql :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -773,7 +634,6 @@ query_workspace_multiply_q_from_ql :: proc(A: ^Matrix($T), C: ^Matrix(T), side: 
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 multiply_q_from_ql :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
@@ -781,11 +641,11 @@ multiply_q_from_ql :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: Multip
 
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -806,17 +666,17 @@ multiply_q_from_ql :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: Multip
 // ===================================================================================
 
 // Query workspace size for multiplying by Q from RQ factorization (ORMRQ/UNMRQ)
-query_workspace_multiply_q_from_rq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_q_from_rq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -851,7 +711,6 @@ query_workspace_multiply_q_from_rq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: 
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 multiply_q_from_rq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
@@ -859,11 +718,11 @@ multiply_q_from_rq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: Multip
 
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -885,13 +744,13 @@ multiply_q_from_rq :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: Multip
 
 // Query workspace size for generating Q from QL factorization (ORGQL/UNGQL)
 query_workspace_generate_q_from_ql :: proc(A: ^Matrix($T), k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -902,6 +761,10 @@ query_workspace_generate_q_from_ql :: proc(A: ^Matrix($T), k: int) -> (lwork: in
 		lapack.cungql_(&m, &n, &k_val, nil, &lda, nil, &work_query, &lwork_query, &info)
 	} else when T == complex128 {
 		lapack.zungql_(&m, &n, &k_val, nil, &lda, nil, &work_query, &lwork_query, &info)
+	}
+
+	when is_float(T) {
+		return int(work_query)
 	}
 
 	return int(real(work_query))
@@ -925,16 +788,15 @@ query_workspace_generate_q_from_ql :: proc(A: ^Matrix($T), k: int) -> (lwork: in
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 generate_q_from_ql :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -956,13 +818,13 @@ generate_q_from_ql :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info
 
 // Query workspace size for generating Q from RQ factorization (ORGRQ/UNGRQ)
 query_workspace_generate_q_from_rq :: proc(A: ^Matrix($T), k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -975,7 +837,11 @@ query_workspace_generate_q_from_rq :: proc(A: ^Matrix($T), k: int) -> (lwork: in
 		lapack.zungrq_(&m, &n, &k_val, nil, &lda, nil, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Generate orthogonal/unitary matrix Q from RQ factorization
@@ -996,16 +862,15 @@ query_workspace_generate_q_from_rq :: proc(A: ^Matrix($T), k: int) -> (lwork: in
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 generate_q_from_rq :: proc(A: ^Matrix($T), tau: []T, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1033,13 +898,13 @@ BidiagonalVectorType :: enum u8 {
 // Query workspace size for generating Q/P from bidiagonal reduction (ORGBR/UNGBR)
 query_workspace_generate_from_bidiagonal :: proc(A: ^Matrix($T), vect: BidiagonalVectorType, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	vect_c := cast(u8)vect
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1052,7 +917,11 @@ query_workspace_generate_from_bidiagonal :: proc(A: ^Matrix($T), vect: Bidiagona
 		lapack.zungbr_(&vect_c, &m, &n, &k_val, nil, &lda, nil, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Generate orthogonal/unitary matrix from bidiagonal reduction
@@ -1071,17 +940,16 @@ query_workspace_generate_from_bidiagonal :: proc(A: ^Matrix($T), vect: Bidiagona
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 generate_from_bidiagonal :: proc(A: ^Matrix($T), tau: []T, vect: BidiagonalVectorType, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
 	vect_c := cast(u8)vect
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
+	n := A.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1103,13 +971,13 @@ generate_from_bidiagonal :: proc(A: ^Matrix($T), tau: []T, vect: BidiagonalVecto
 
 // Query workspace size for generating Q from Hessenberg reduction (ORGHR/UNGHR)
 query_workspace_generate_from_hessenberg :: proc(A: ^Matrix($T), ilo, ihi: int) -> (lwork: int) where is_float(T) || is_complex(T) {
-	n := Blas_Int(A.rows)
+	n := A.rows
 	ilo_val := Blas_Int(ilo)
 	ihi_val := Blas_Int(ihi)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1122,7 +990,11 @@ query_workspace_generate_from_hessenberg :: proc(A: ^Matrix($T), ilo, ihi: int) 
 		lapack.zunghr_(&n, &ilo_val, &ihi_val, nil, &lda, nil, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Generate orthogonal/unitary matrix from Hessenberg reduction
@@ -1140,17 +1012,16 @@ query_workspace_generate_from_hessenberg :: proc(A: ^Matrix($T), ilo, ihi: int) 
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 generate_from_hessenberg :: proc(A: ^Matrix($T), tau: []T, ilo, ihi: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(A.rows == A.cols, "Matrix must be square for Hessenberg")
 	assert(ilo >= 1 && ihi <= A.rows && ilo <= ihi, "Invalid balancing range")
 	assert(len(tau) >= ihi - ilo, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
-	n := Blas_Int(A.rows)
+	n := A.rows
 	ilo_val := Blas_Int(ilo)
 	ihi_val := Blas_Int(ihi)
-	lda := Blas_Int(A.ld)
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1173,11 +1044,11 @@ generate_from_hessenberg :: proc(A: ^Matrix($T), tau: []T, ilo, ihi: int, work: 
 // Query workspace size for generating Q from tridiagonal reduction (ORGTR/UNGTR)
 query_workspace_generate_from_tridiagonal :: proc(A: ^Matrix($T), uplo: MatrixTriangle) -> (lwork: int) where is_float(T) || is_complex(T) {
 	uplo_c := cast(u8)uplo
-	n := Blas_Int(A.rows)
-	lda := Blas_Int(A.ld)
+	n := A.rows
+	lda := A.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1190,7 +1061,11 @@ query_workspace_generate_from_tridiagonal :: proc(A: ^Matrix($T), uplo: MatrixTr
 		lapack.zungtr_(&uplo_c, &n, nil, &lda, nil, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Generate orthogonal/unitary matrix from tridiagonal reduction
@@ -1208,15 +1083,14 @@ query_workspace_generate_from_tridiagonal :: proc(A: ^Matrix($T), uplo: MatrixTr
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 generate_from_tridiagonal :: proc(A: ^Matrix($T), tau: []T, uplo: MatrixTriangle, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0, "Matrix cannot be empty")
 	assert(A.rows == A.cols, "Matrix must be square for tridiagonal")
 	assert(len(tau) >= A.rows - 1, "tau array too small")
 	assert(len(work) > 0, "work array must be provided")
 
 	uplo_c := cast(u8)uplo
-	n := Blas_Int(A.rows)
-	lda := Blas_Int(A.ld)
+	n := A.rows
+	lda := A.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1237,18 +1111,18 @@ generate_from_tridiagonal :: proc(A: ^Matrix($T), tau: []T, uplo: MatrixTriangle
 // ===================================================================================
 
 // Query workspace size for multiplying by Q/P from bidiagonal (ORMBR/UNMBR)
-query_workspace_multiply_from_bidiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T), vect: BidiagonalVectorType, side: MultiplicationSide, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_from_bidiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T), vect: BidiagonalVectorType, side: MultiplicationSide, transpose: TransposeOperation, k: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	vect_c := cast(u8)vect
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1261,7 +1135,11 @@ query_workspace_multiply_from_bidiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T), 
 		lapack.zunmbr_(&vect_c, &side_c, &trans_c, &m, &n, &k_val, nil, &lda, nil, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Multiply by orthogonal/unitary matrix from bidiagonal reduction
@@ -1283,7 +1161,6 @@ query_workspace_multiply_from_bidiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T), 
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 multiply_from_bidiagonal :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), vect: BidiagonalVectorType, side: MultiplicationSide, transpose: TransposeOperation, k: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(k <= min(A.rows, A.cols), "k cannot exceed min(m,n)")
 	assert(len(tau) >= k, "tau array too small")
@@ -1292,11 +1169,11 @@ multiply_from_bidiagonal :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), vect: 
 	vect_c := cast(u8)vect
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1317,18 +1194,18 @@ multiply_from_bidiagonal :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), vect: 
 // ===================================================================================
 
 // Query workspace size for multiplying by Q from Hessenberg (ORMHR/UNMHR)
-query_workspace_multiply_from_hessenberg :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, ilo, ihi: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_from_hessenberg :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, ilo, ihi: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	ilo_val := Blas_Int(ilo)
 	ihi_val := Blas_Int(ihi)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1341,7 +1218,11 @@ query_workspace_multiply_from_hessenberg :: proc(A: ^Matrix($T), C: ^Matrix(T), 
 		lapack.zunmhr_(&side_c, &trans_c, &m, &n, &ilo_val, &ihi_val, nil, &lda, nil, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Multiply by orthogonal/unitary matrix from Hessenberg reduction
@@ -1362,7 +1243,6 @@ query_workspace_multiply_from_hessenberg :: proc(A: ^Matrix($T), C: ^Matrix(T), 
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 multiply_from_hessenberg :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, ilo, ihi: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(A.rows == A.cols, "A must be square for Hessenberg")
 	assert(ilo >= 1 && ihi <= A.rows && ilo <= ihi, "Invalid balancing range")
@@ -1371,12 +1251,12 @@ multiply_from_hessenberg :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: 
 
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	ilo_val := Blas_Int(ilo)
 	ihi_val := Blas_Int(ihi)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1397,18 +1277,18 @@ multiply_from_hessenberg :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: 
 // ===================================================================================
 
 // Query workspace size for multiplying by Q from RZ factorization (ORMRZ/UNMRZ)
-query_workspace_multiply_from_rz :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, k, l: int) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_from_rz :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k, l: int) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
 	l_val := Blas_Int(l)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1421,7 +1301,11 @@ query_workspace_multiply_from_rz :: proc(A: ^Matrix($T), C: ^Matrix(T), side: Mu
 		lapack.zunmrz_(&side_c, &trans_c, &m, &n, &k_val, &l_val, nil, &lda, nil, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Multiply by orthogonal/unitary matrix from RZ factorization
@@ -1443,7 +1327,6 @@ query_workspace_multiply_from_rz :: proc(A: ^Matrix($T), C: ^Matrix(T), side: Mu
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 multiply_from_rz :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, k, l: int, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(k <= A.rows && l <= A.cols, "Invalid k or l parameters")
 	assert(len(tau) >= k, "tau array too small")
@@ -1451,12 +1334,12 @@ multiply_from_rz :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: Multipli
 
 	side_c := cast(u8)side
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	k_val := Blas_Int(k)
 	l_val := Blas_Int(l)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1477,17 +1360,17 @@ multiply_from_rz :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: Multipli
 // ===================================================================================
 
 // Query workspace size for multiplying by Q from tridiagonal (ORMTR/UNMTR)
-query_workspace_multiply_from_tridiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, uplo: MatrixTriangle) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_from_tridiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation, uplo: MatrixTriangle) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
 	uplo_c := cast(u8)uplo
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
+	lda := A.ld
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 
 	when T == f32 {
@@ -1500,7 +1383,11 @@ query_workspace_multiply_from_tridiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T),
 		lapack.zunmtr_(&side_c, &uplo_c, &trans_c, &m, &n, nil, &lda, nil, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Multiply by orthogonal/unitary matrix from tridiagonal reduction
@@ -1521,7 +1408,6 @@ query_workspace_multiply_from_tridiagonal :: proc(A: ^Matrix($T), C: ^Matrix(T),
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
 multiply_from_tridiagonal :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side: MultiplicationSide, uplo: MatrixTriangle, transpose: TransposeOperation, work: []T) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	// Validate inputs
 	assert(len(A.data) > 0 && len(C.data) > 0, "Matrices cannot be empty")
 	assert(A.rows == A.cols, "A must be square for tridiagonal")
 	assert(len(tau) >= A.rows - 1, "tau array too small")
@@ -1530,10 +1416,10 @@ multiply_from_tridiagonal :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side:
 	side_c := cast(u8)side
 	uplo_c := cast(u8)uplo
 	trans_c := cast(u8)transpose
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	lda := Blas_Int(A.ld)
-	ldc := Blas_Int(C.ld)
+	m := C.rows
+	n := C.cols
+	lda := A.ld
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
@@ -1553,15 +1439,11 @@ multiply_from_tridiagonal :: proc(A: ^Matrix($T), tau: []T, C: ^Matrix(T), side:
 // TRIANGULAR-PENTAGONAL QR FACTORIZATION (TPQRT family)
 // ===================================================================================
 
-triangular_pentagonal_qr :: proc {
-	triangular_pentagonal_qr_unified,
-}
-
 // Query workspace size for triangular-pentagonal QR factorization
 query_workspace_triangular_pentagonal_qr :: proc(A: ^Matrix($T), B: ^Matrix(T), nb: int = 32) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(B.rows)
-	n := Blas_Int(B.cols)
-	l := Blas_Int(min(A.rows, A.cols))
+	m := B.rows
+	n := B.cols
+	l := min(A.rows, A.cols)
 	nb_val := Blas_Int(nb)
 
 	// Workspace size is n * nb for tpqrt
@@ -1576,7 +1458,7 @@ query_workspace_triangular_pentagonal_qr :: proc(A: ^Matrix($T), B: ^Matrix(T), 
 //     [ A1 ]  <-- n-by-n upper triangular
 //     [ A2 ]  <-- m-by-n general
 //
-triangular_pentagonal_qr_unified :: proc(
+triangular_pentagonal_qr :: proc(
 	A: ^Matrix($T), // Upper triangular matrix (n-by-n, overwritten with R)
 	B: ^Matrix(T), // Pentagonal matrix (m-by-n, overwritten with Q info)
 	T_out: ^Matrix(T), // T matrix for compact WY representation (nb-by-n, pre-allocated)
@@ -1587,16 +1469,16 @@ triangular_pentagonal_qr_unified :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	m := Blas_Int(B.rows)
-	n := Blas_Int(B.cols)
+	m := B.rows
+	n := B.cols
 	l_val := Blas_Int(l)
 	if l == 0 {
 		l_val = Blas_Int(min(int(m), int(n)))
 	}
 	nb_val := Blas_Int(nb)
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-	ldt := Blas_Int(T_out.ld)
+	lda := A.ld
+	ldb := B.ld
+	ldt := T_out.ld
 
 	assert(A.rows == A.cols, "A must be square")
 	assert(A.rows == n, "A dimension mismatch")
@@ -1621,18 +1503,13 @@ triangular_pentagonal_qr_unified :: proc(
 // MULTIPLY BY Q FROM TRIANGULAR-PENTAGONAL QR (TPMQRT family)
 // ===================================================================================
 
-multiply_q_triangular_pentagonal_qr :: proc {
-	multiply_q_triangular_pentagonal_qr_unified,
-}
-
 // Query workspace size for multiplying by Q from triangular-pentagonal QR
 query_workspace_multiply_triangular_pentagonal_qr :: proc(V: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, nb: int = 32) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	nb_val := Blas_Int(nb)
 
-	// Workspace size depends on side
-	when_side: switch side {
+	switch side {
 	case .Left:
 		lwork = int(n * nb_val)
 	case .Right:
@@ -1644,7 +1521,7 @@ query_workspace_multiply_triangular_pentagonal_qr :: proc(V: ^Matrix($T), C: ^Ma
 
 // Multiply by Q from triangular-pentagonal QR (unified real/complex)
 // Applies Q or Q**H from a triangular-pentagonal QR factorization to a matrix C
-multiply_q_triangular_pentagonal_qr_unified :: proc(
+multiply_q_triangular_pentagonal_qr :: proc(
 	V: ^Matrix($T), // Pentagonal matrix V from tpqrt (m-by-n)
 	T_mat: ^Matrix(T), // T matrix from tpqrt (nb-by-n)
 	A: ^Matrix(T), // Upper block of C (n-by-ncols or nrows-by-n)
@@ -1661,8 +1538,8 @@ multiply_q_triangular_pentagonal_qr_unified :: proc(
 ) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
 	trans_c := cast(u8)trans
-	m := Blas_Int(B.rows)
-	n := Blas_Int(B.cols)
+	m := B.rows
+	n := B.cols
 	k_val := Blas_Int(k)
 	if k == 0 {
 		k_val = Blas_Int(min(V.rows, V.cols))
@@ -1672,12 +1549,11 @@ multiply_q_triangular_pentagonal_qr_unified :: proc(
 		l_val = Blas_Int(min(int(m), int(k_val)))
 	}
 	nb_val := Blas_Int(nb)
-	ldv := Blas_Int(V.ld)
-	ldt := Blas_Int(T_mat.ld)
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
+	ldv := V.ld
+	ldt := T_mat.ld
+	lda := A.ld
+	ldb := B.ld
 
-	// Validate dimensions
 	assert(V.rows >= int(m), "V rows too small")
 	assert(len(work) > 0, "work array must be provided")
 
@@ -1698,14 +1574,9 @@ multiply_q_triangular_pentagonal_qr_unified :: proc(
 // TRIANGULAR-PENTAGONAL LQ FACTORIZATION (TPLQT family)
 // ===================================================================================
 
-triangular_pentagonal_lq :: proc {
-	triangular_pentagonal_lq_unified,
-}
-
 // Query workspace size for triangular-pentagonal LQ factorization
 query_workspace_triangular_pentagonal_lq :: proc(A: ^Matrix($T), B: ^Matrix(T), mb: int = 32) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+	m := A.rows
 	mb_val := Blas_Int(mb)
 
 	// Workspace size is m * mb for tplqt
@@ -1719,7 +1590,7 @@ query_workspace_triangular_pentagonal_lq :: proc(A: ^Matrix($T), B: ^Matrix(T), 
 //
 //     [ A1  A2 ]  where A1 is m-by-m lower triangular, A2 is m-by-n general
 //
-triangular_pentagonal_lq_unified :: proc(
+triangular_pentagonal_lq :: proc(
 	A: ^Matrix($T), // Lower triangular matrix (m-by-m, overwritten with L)
 	B: ^Matrix(T), // Pentagonal matrix (m-by-n, overwritten with Q info)
 	T_out: ^Matrix(T), // T matrix for compact WY representation (m-by-mb, pre-allocated)
@@ -1730,16 +1601,16 @@ triangular_pentagonal_lq_unified :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(B.cols)
+	m := A.rows
+	n := B.cols
 	l_val := Blas_Int(l)
 	if l == 0 {
-		l_val = Blas_Int(min(int(m), int(n)))
+		l_val = min(int(m), int(n))
 	}
 	mb_val := Blas_Int(mb)
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
-	ldt := Blas_Int(T_out.ld)
+	lda := A.ld
+	ldb := B.ld
+	ldt := T_out.ld
 
 	assert(A.rows == A.cols, "A must be square")
 	assert(A.cols == m, "A dimension mismatch")
@@ -1765,18 +1636,13 @@ triangular_pentagonal_lq_unified :: proc(
 // MULTIPLY BY Q FROM TRIANGULAR-PENTAGONAL LQ (TPMLQT family)
 // ===================================================================================
 
-multiply_q_triangular_pentagonal_lq :: proc {
-	multiply_q_triangular_pentagonal_lq_unified,
-}
-
 // Query workspace size for multiplying by Q from triangular-pentagonal LQ
 query_workspace_multiply_triangular_pentagonal_lq :: proc(V: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, mb: int = 32) -> (lwork: int) where is_float(T) || is_complex(T) {
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
+	m := C.rows
+	n := C.cols
 	mb_val := Blas_Int(mb)
 
-	// Workspace size depends on side
-	when_side: switch side {
+	switch side {
 	case .Left:
 		lwork = int(n * mb_val)
 	case .Right:
@@ -1788,7 +1654,7 @@ query_workspace_multiply_triangular_pentagonal_lq :: proc(V: ^Matrix($T), C: ^Ma
 
 // Multiply by Q from triangular-pentagonal LQ (unified real/complex)
 // Applies Q or Q**H from a triangular-pentagonal LQ factorization to a matrix C
-multiply_q_triangular_pentagonal_lq_unified :: proc(
+multiply_q_triangular_pentagonal_lq :: proc(
 	V: ^Matrix($T), // Pentagonal matrix V from tplqt (m-by-n)
 	T_mat: ^Matrix(T), // T matrix from tplqt (m-by-mb)
 	A: ^Matrix(T), // Left block of C (nrows-by-m or m-by-ncols)
@@ -1805,27 +1671,26 @@ multiply_q_triangular_pentagonal_lq_unified :: proc(
 ) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
 	trans_c := cast(u8)trans
-	m := Blas_Int(V.rows)
-	n := Blas_Int(V.cols)
+	m := V.rows
+	n := V.cols
 	k_val := Blas_Int(k)
 	if k == 0 {
-		k_val = Blas_Int(min(V.rows, V.cols))
+		k_val = min(V.rows, V.cols)
 	}
 	l_val := Blas_Int(l)
 	if l == 0 {
-		l_val = Blas_Int(min(int(m), int(n)))
+		l_val = min(m, n)
 	}
 	mb_val := Blas_Int(mb)
-	ldv := Blas_Int(V.ld)
-	ldt := Blas_Int(T_mat.ld)
-	lda := Blas_Int(A.ld)
-	ldb := Blas_Int(B.ld)
+	ldv := V.ld
+	ldt := T_mat.ld
+	lda := A.ld
+	ldb := B.ld
 
 	// Use dimensions from B for the actual operation
-	m_op := Blas_Int(B.rows)
-	n_op := Blas_Int(B.cols)
+	m_op := B.rows
+	n_op := B.cols
 
-	// Validate dimensions
 	assert(len(work) > 0, "work array must be provided")
 
 	when T == f32 {
@@ -1841,19 +1706,6 @@ multiply_q_triangular_pentagonal_lq_unified :: proc(
 	return info, info == 0
 }
 
-// ===================================================================================
-// COMPACT WY QR FACTORIZATION (GEQRT family)
-// ===================================================================================
-
-// QR factorization using compact WY representation
-qr_factorization_compact :: proc {
-	qr_factorization_compact_unified,
-}
-
-// Multiply by Q from compact WY QR factorization
-multiply_q_compact_qr :: proc {
-	multiply_q_compact_qr_unified,
-}
 
 // ===================================================================================
 // WORKSPACE QUERIES FOR COMPACT WY
@@ -1891,25 +1743,25 @@ query_workspace_multiply_compact_qr :: proc(m, n: int, nb: int = 32) -> (lwork: 
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-qr_factorization_compact_unified :: proc(A: ^Matrix($T), T: ^Matrix(T), work: []T, nb: int = 32) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
-	m := Blas_Int(A.rows)
-	n := Blas_Int(A.cols)
+qr_factorization_compact :: proc(A: ^Matrix($T), Tmat: ^Matrix(T), work: []T, nb: int = 32) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
+	m := A.rows
+	n := A.cols
 	nb_val := Blas_Int(nb)
-	lda := Blas_Int(A.ld)
-	ldt := Blas_Int(T.ld)
+	lda := A.ld
+	ldt := Tmat.ld
 
-	assert(T.rows >= nb, "T matrix must have at least nb rows")
-	assert(T.cols >= min(int(m), int(n)), "T matrix must have at least min(m,n) columns")
+	assert(Tmat.rows >= nb, "T matrix must have at least nb rows")
+	assert(Tmat.cols >= min(int(m), int(n)), "T matrix must have at least min(m,n) columns")
 	assert(len(work) >= nb * int(n), "work array too small")
 
 	when T == f32 {
-		lapack.sgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(T.data), &ldt, raw_data(work), &info)
+		lapack.sgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(Tmat.data), &ldt, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(T.data), &ldt, raw_data(work), &info)
+		lapack.dgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(Tmat.data), &ldt, raw_data(work), &info)
 	} else when T == complex64 {
-		lapack.cgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(T.data), &ldt, raw_data(work), &info)
+		lapack.cgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(Tmat.data), &ldt, raw_data(work), &info)
 	} else when T == complex128 {
-		lapack.zgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(T.data), &ldt, raw_data(work), &info)
+		lapack.zgeqrt_(&m, &n, &nb_val, raw_data(A.data), &lda, raw_data(Tmat.data), &ldt, raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -1942,16 +1794,16 @@ qr_factorization_compact_unified :: proc(A: ^Matrix($T), T: ^Matrix(T), work: []
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-multiply_q_compact_qr_unified :: proc(V: ^Matrix($T), T_mat: ^Matrix(T), C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, trans: MatrixTranspose = .None, nb: int = 32) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
+multiply_q_compact_qr :: proc(V: ^Matrix($T), T_mat: ^Matrix(T), C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, trans: MatrixTranspose = .None, nb: int = 32) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
 	trans_c := cast(u8)trans
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	k := Blas_Int(min(V.rows, V.cols))
+	m := C.rows
+	n := C.cols
+	k := min(V.rows, V.cols)
 	nb_val := Blas_Int(nb)
-	ldv := Blas_Int(V.ld)
-	ldt := Blas_Int(T_mat.ld)
-	ldc := Blas_Int(C.ld)
+	ldv := V.ld
+	ldt := T_mat.ld
+	ldc := C.ld
 
 	assert(len(work) > 0, "work array must be provided")
 
@@ -1969,36 +1821,22 @@ multiply_q_compact_qr_unified :: proc(V: ^Matrix($T), T_mat: ^Matrix(T), C: ^Mat
 }
 
 // ===================================================================================
-// FLEXIBLE/RECURSIVE Q MULTIPLICATION
-// ===================================================================================
-
-// Multiply by Q from flexible QR factorization
-multiply_q_flexible_qr :: proc {
-	multiply_q_flexible_qr_unified,
-}
-
-// Multiply by Q from flexible LQ factorization
-multiply_q_flexible_lq :: proc {
-	multiply_q_flexible_lq_unified,
-}
-
-// ===================================================================================
 // WORKSPACE QUERIES FOR FLEXIBLE/RECURSIVE
 // ===================================================================================
 
 // Query workspace for flexible QR multiplication
-query_workspace_multiply_flexible_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_flexible_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	k := Blas_Int(min(A.rows, A.cols))
-	lda := Blas_Int(A.ld)
-	tsize := Blas_Int(-1) // Query T size too
-	ldc := Blas_Int(C.ld)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
+	k := min(A.rows, A.cols)
+	lda := A.ld
+	tsize := QUERY_WORKSPACE
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 	tsize_query: T
 
@@ -2012,22 +1850,26 @@ query_workspace_multiply_flexible_qr :: proc(A: ^Matrix($T), C: ^Matrix(T), side
 		lapack.zgemqr_(&side_c, &trans_c, &m, &n, &k, raw_data(A.data), &lda, &tsize_query, &tsize, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // Query workspace for flexible LQ multiplication
-query_workspace_multiply_flexible_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide) -> (lwork: int) where is_float(T) || is_complex(T) {
+query_workspace_multiply_flexible_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side: MultiplicationSide, transpose: TransposeOperation) -> (lwork: int) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
-	trans_c: u8 = 'N'
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	k := Blas_Int(min(A.rows, A.cols))
-	lda := Blas_Int(A.ld)
-	tsize := Blas_Int(-1) // Query T size too
-	ldc := Blas_Int(C.ld)
+	trans_c := cast(u8)transpose
+	m := C.rows
+	n := C.cols
+	k := min(A.rows, A.cols)
+	lda := A.ld
+	tsize := QUERY_WORKSPACE
+	ldc := C.ld
 
 	info: Info
-	lwork_query: Blas_Int = -1
+	lwork_query := QUERY_WORKSPACE
 	work_query: T
 	tsize_query: T
 
@@ -2041,7 +1883,11 @@ query_workspace_multiply_flexible_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side
 		lapack.zgemlq_(&side_c, &trans_c, &m, &n, &k, raw_data(A.data), &lda, &tsize_query, &tsize, nil, &ldc, &work_query, &lwork_query, &info)
 	}
 
-	return int(real(work_query))
+	when is_float(T) {
+		return int(work_query)
+	} else {
+		return int(real(work_query))
+	}
 }
 
 // ===================================================================================
@@ -2071,15 +1917,15 @@ query_workspace_multiply_flexible_lq :: proc(A: ^Matrix($T), C: ^Matrix(T), side
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-multiply_q_flexible_qr_unified :: proc(A: ^Matrix($T), T_array: []T, C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
+multiply_q_flexible_qr :: proc(A: ^Matrix($T), T_array: []T, C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
 	trans_c := cast(u8)trans
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	k := Blas_Int(min(A.rows, A.cols))
-	lda := Blas_Int(A.ld)
+	m := C.rows
+	n := C.cols
+	k := min(A.rows, A.cols)
+	lda := A.ld
 	tsize := Blas_Int(len(T_array))
-	ldc := Blas_Int(C.ld)
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	assert(len(T_array) > 0, "T array must be provided")
@@ -2125,15 +1971,15 @@ multiply_q_flexible_qr_unified :: proc(A: ^Matrix($T), T_array: []T, C: ^Matrix(
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-multiply_q_flexible_lq_unified :: proc(A: ^Matrix($T), T_array: []T, C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
+multiply_q_flexible_lq :: proc(A: ^Matrix($T), T_array: []T, C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	side_c := cast(u8)side
 	trans_c := cast(u8)trans
-	m := Blas_Int(C.rows)
-	n := Blas_Int(C.cols)
-	k := Blas_Int(min(A.rows, A.cols))
-	lda := Blas_Int(A.ld)
+	m := C.rows
+	n := C.cols
+	k := min(A.rows, A.cols)
+	lda := A.ld
 	tsize := Blas_Int(len(T_array))
-	ldc := Blas_Int(C.ld)
+	ldc := C.ld
 	lwork := Blas_Int(len(work))
 
 	assert(len(T_array) > 0, "T array must be provided")
@@ -2150,23 +1996,6 @@ multiply_q_flexible_lq_unified :: proc(A: ^Matrix($T), T_array: []T, C: ^Matrix(
 	}
 
 	return info, info == 0
-}
-
-// ===================================================================================
-// PACKED SYMMETRIC/HERMITIAN HOUSEHOLDER TRANSFORMATIONS
-// ===================================================================================
-
-// Generate orthogonal Q from packed symmetric Householder reflectors (OPGTR)
-// Generate unitary Q from packed Hermitian Householder reflectors (UPGTR)
-generate_q_packed :: proc {
-	generate_q_packed_real,
-	generate_q_packed_complex,
-}
-
-// Multiply by orthogonal Q from packed Householder (OPMTR/UPMTR)
-multiply_q_packed :: proc {
-	multiply_q_packed_real,
-	multiply_q_packed_complex,
 }
 
 // ===================================================================================
@@ -2192,25 +2021,25 @@ query_workspace_multiply_q_packed :: proc(m, n: int, side: MultiplicationSide) -
 }
 
 // ===================================================================================
-// GENERATE Q FROM PACKED HOUSEHOLDER (OPGTR - Real)
+// GENERATE Q FROM PACKED HOUSEHOLDER (OPGTR/UPGTR - Unified)
 // ===================================================================================
 
-// Generate orthogonal matrix Q from packed symmetric Householder reflectors (OPGTR)
+// Generate orthogonal/unitary matrix Q from packed symmetric/Hermitian Householder reflectors
 //
-// This generates the orthogonal matrix Q from elementary reflectors returned by
-// the reduction of a symmetric matrix to tridiagonal form using packed storage.
+// This generates the orthogonal/unitary matrix Q from elementary reflectors returned by
+// the reduction of a symmetric/Hermitian matrix to tridiagonal form using packed storage.
 //
 // Parameters:
-//   AP: Packed symmetric matrix containing elementary reflectors (n*(n+1)/2 elements)
+//   AP: Packed symmetric/Hermitian matrix containing elementary reflectors (n*(n+1)/2 elements)
 //   tau: Scalar factors of elementary reflectors (length n-1)
-//   Q: Output orthogonal matrix Q (n-by-n)
+//   Q: Output orthogonal/unitary matrix Q (n-by-n)
 //   work: Workspace array (length n-1)
 //   uplo: Whether AP contains upper or lower triangle
 //
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-generate_q_packed_real :: proc(AP: []$T, tau: []T, Q: ^Matrix(T), work: []T, uplo: MatrixRegion = .Upper) -> (info: Info, ok: bool) where is_float(T) {
+generate_q_packed :: proc(AP: []$T, tau: []T, Q: ^Matrix(T), work: []T, uplo: MatrixRegion = .Upper) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	n := Q.rows
 	assert(Q.rows == Q.cols, "Q must be square")
 	assert(len(AP) >= n * (n + 1) / 2, "AP array too small for packed storage")
@@ -2219,50 +2048,15 @@ generate_q_packed_real :: proc(AP: []$T, tau: []T, Q: ^Matrix(T), work: []T, upl
 
 	uplo_c := cast(u8)uplo
 	n_val := Blas_Int(n)
-	ldq := Blas_Int(Q.ld)
+	ldq := Q.ld
 
 	when T == f32 {
 		lapack.sopgtr_(&uplo_c, &n_val, raw_data(AP), raw_data(tau), raw_data(Q.data), &ldq, raw_data(work), &info)
 	} else when T == f64 {
 		lapack.dopgtr_(&uplo_c, &n_val, raw_data(AP), raw_data(tau), raw_data(Q.data), &ldq, raw_data(work), &info)
-	}
-
-	return info, info == 0
-}
-
-// ===================================================================================
-// GENERATE Q FROM PACKED HOUSEHOLDER (UPGTR - Complex)
-// ===================================================================================
-
-// Generate unitary matrix Q from packed Hermitian Householder reflectors (UPGTR)
-//
-// This generates the unitary matrix Q from elementary reflectors returned by
-// the reduction of a Hermitian matrix to tridiagonal form using packed storage.
-//
-// Parameters:
-//   AP: Packed Hermitian matrix containing elementary reflectors (n*(n+1)/2 elements)
-//   tau: Scalar factors of elementary reflectors (length n-1)
-//   Q: Output unitary matrix Q (n-by-n)
-//   work: Workspace array (length n-1)
-//   uplo: Whether AP contains upper or lower triangle
-//
-// Returns:
-//   info: 0 on success, < 0 if argument i had illegal value
-//   ok: true if successful
-generate_q_packed_complex :: proc(AP: []$Cmplx, tau: []Cmplx, Q: ^Matrix(Cmplx), work: []Cmplx, uplo: MatrixRegion = .Upper) -> (info: Info, ok: bool) where is_complex(Cmplx) {
-	n := Q.rows
-	assert(Q.rows == Q.cols, "Q must be square")
-	assert(len(AP) >= n * (n + 1) / 2, "AP array too small for packed storage")
-	assert(len(tau) >= n - 1, "tau array too small")
-	assert(len(work) >= n - 1, "work array too small")
-
-	uplo_c := cast(u8)uplo
-	n_val := Blas_Int(n)
-	ldq := Blas_Int(Q.ld)
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cupgtr_(&uplo_c, &n_val, raw_data(AP), raw_data(tau), raw_data(Q.data), &ldq, raw_data(work), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zupgtr_(&uplo_c, &n_val, raw_data(AP), raw_data(tau), raw_data(Q.data), &ldq, raw_data(work), &info)
 	}
 
@@ -2270,33 +2064,33 @@ generate_q_packed_complex :: proc(AP: []$Cmplx, tau: []Cmplx, Q: ^Matrix(Cmplx),
 }
 
 // ===================================================================================
-// MULTIPLY BY Q FROM PACKED HOUSEHOLDER (OPMTR - Real)
+// MULTIPLY BY Q FROM PACKED HOUSEHOLDER (OPMTR/UPMTR - Unified)
 // ===================================================================================
 
-// Multiply by orthogonal matrix Q from packed symmetric Householder reflectors (OPMTR)
+// Multiply by orthogonal/unitary matrix Q from packed symmetric/Hermitian Householder reflectors
 //
-// This multiplies a matrix C by the orthogonal matrix Q from elementary reflectors
-// returned by the reduction of a symmetric matrix to tridiagonal form using packed storage.
+// This multiplies a matrix C by the orthogonal/unitary matrix Q from elementary reflectors
+// returned by the reduction of a symmetric/Hermitian matrix to tridiagonal form using packed storage.
 //
 // Computes:
-//   - C := Q * C    (side = .Left, trans = .None)
-//   - C := Q**T * C (side = .Left, trans = .Transpose)
-//   - C := C * Q    (side = .Right, trans = .None)
-//   - C := C * Q**T (side = .Right, trans = .Transpose)
+//   - C := Q * C      (side = .Left, trans = .None)
+//   - C := Q**T/H * C (side = .Left, trans = .Transpose/.ConjugateTranspose)
+//   - C := C * Q      (side = .Right, trans = .None)
+//   - C := C * Q**T/H (side = .Right, trans = .Transpose/.ConjugateTranspose)
 //
 // Parameters:
-//   AP: Packed symmetric matrix containing elementary reflectors (n*(n+1)/2 elements)
+//   AP: Packed symmetric/Hermitian matrix containing elementary reflectors (n*(n+1)/2 elements)
 //   tau: Scalar factors of elementary reflectors (length n-1)
 //   C: Matrix to multiply (m-by-n)
 //   work: Workspace array (length n if side=Left, m if side=Right)
 //   side: Multiply from left or right
 //   uplo: Whether AP contains upper or lower triangle
-//   trans: Apply Q or Q**T
+//   trans: Apply Q or Q**T (Q**H for complex)
 //
 // Returns:
 //   info: 0 on success, < 0 if argument i had illegal value
 //   ok: true if successful
-multiply_q_packed_real :: proc(AP: []$T, tau: []T, C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, uplo: MatrixRegion = .Upper, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_float(T) {
+multiply_q_packed :: proc(AP: []$T, tau: []T, C: ^Matrix(T), work: []T, side: MultiplicationSide = .Left, uplo: MatrixRegion = .Upper, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_float(T) || is_complex(T) {
 	m := C.rows
 	n := C.cols
 	nq := side == .Left ? m : n // Dimension of Q
@@ -2312,65 +2106,15 @@ multiply_q_packed_real :: proc(AP: []$T, tau: []T, C: ^Matrix(T), work: []T, sid
 	trans_c := cast(u8)trans
 	m_val := Blas_Int(m)
 	n_val := Blas_Int(n)
-	ldc := Blas_Int(C.ld)
+	ldc := C.ld
 
 	when T == f32 {
 		lapack.sopmtr_(&side_c, &uplo_c, &trans_c, &m_val, &n_val, raw_data(AP), raw_data(tau), raw_data(C.data), &ldc, raw_data(work), &info)
 	} else when T == f64 {
 		lapack.dopmtr_(&side_c, &uplo_c, &trans_c, &m_val, &n_val, raw_data(AP), raw_data(tau), raw_data(C.data), &ldc, raw_data(work), &info)
-	}
-
-	return info, info == 0
-}
-
-// ===================================================================================
-// MULTIPLY BY Q FROM PACKED HOUSEHOLDER (UPMTR - Complex)
-// ===================================================================================
-
-// Multiply by unitary matrix Q from packed Hermitian Householder reflectors (UPMTR)
-//
-// This multiplies a matrix C by the unitary matrix Q from elementary reflectors
-// returned by the reduction of a Hermitian matrix to tridiagonal form using packed storage.
-//
-// Computes:
-//   - C := Q * C      (side = .Left, trans = .None)
-//   - C := Q**H * C   (side = .Left, trans = .ConjugateTranspose)
-//   - C := C * Q      (side = .Right, trans = .None)
-//   - C := C * Q**H   (side = .Right, trans = .ConjugateTranspose)
-//
-// Parameters:
-//   AP: Packed Hermitian matrix containing elementary reflectors (n*(n+1)/2 elements)
-//   tau: Scalar factors of elementary reflectors (length n-1)
-//   C: Matrix to multiply (m-by-n)
-//   work: Workspace array (length n if side=Left, m if side=Right)
-//   side: Multiply from left or right
-//   uplo: Whether AP contains upper or lower triangle
-//   trans: Apply Q or Q**H
-//
-// Returns:
-//   info: 0 on success, < 0 if argument i had illegal value
-//   ok: true if successful
-multiply_q_packed_complex :: proc(AP: []$Cmplx, tau: []Cmplx, C: ^Matrix(Cmplx), work: []Cmplx, side: MultiplicationSide = .Left, uplo: MatrixRegion = .Upper, trans: MatrixTranspose = .None) -> (info: Info, ok: bool) where is_complex(Cmplx) {
-	m := C.rows
-	n := C.cols
-	nq := side == .Left ? m : n // Dimension of Q
-
-	assert(len(AP) >= nq * (nq + 1) / 2, "AP array too small for packed storage")
-	assert(len(tau) >= nq - 1, "tau array too small")
-
-	work_required := side == .Left ? n : m
-	assert(len(work) >= work_required, "work array too small")
-
-	side_c := cast(u8)side
-	uplo_c := cast(u8)uplo
-	trans_c := cast(u8)trans
-	m_val := Blas_Int(m)
-	n_val := Blas_Int(n)
-	ldc := Blas_Int(C.ld)
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cupmtr_(&side_c, &uplo_c, &trans_c, &m_val, &n_val, raw_data(AP), raw_data(tau), raw_data(C.data), &ldc, raw_data(work), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zupmtr_(&side_c, &uplo_c, &trans_c, &m_val, &n_val, raw_data(AP), raw_data(tau), raw_data(C.data), &ldc, raw_data(work), &info)
 	}
 

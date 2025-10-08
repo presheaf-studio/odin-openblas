@@ -47,8 +47,8 @@ query_workspace_dmd :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	ldx := Blas_Int(X.ld)
-	ldy := Blas_Int(Y.ld)
+	ldx := X.ld
+	ldy := Y.ld
 	k_int := Blas_Int(k)
 
 	// Set job parameters
@@ -66,10 +66,11 @@ query_workspace_dmd :: proc(
 	nrnk_int: Blas_Int
 	tol: T = 0
 	info: Info
+	iwork_query: Blas_Int
+	work_query: T
+	rwork_size = 0
 
 	when T == f32 {
-		work_query: f32
-		iwork_query: Blas_Int
 		lapack.sgedmd_(
 			&jobs_c,
 			&jobz_c,
@@ -104,10 +105,7 @@ query_workspace_dmd :: proc(
 		)
 		work_size = max(1, int(work_query))
 		iwork_size = max(1, int(iwork_query))
-		rwork_size = 0
 	} else when T == f64 {
-		work_query: f64
-		iwork_query: Blas_Int
 		lapack.dgedmd_(
 			&jobs_c,
 			&jobz_c,
@@ -142,11 +140,8 @@ query_workspace_dmd :: proc(
 		)
 		work_size = max(1, int(work_query))
 		iwork_size = max(1, int(iwork_query))
-		rwork_size = 0
 	} else when T == complex64 {
-		zwork_query: complex64
-		work_query: f32
-		iwork_query: Blas_Int
+		rwork_query: f32
 		lapack.cgedmd_(
 			&jobs_c,
 			&jobz_c,
@@ -155,9 +150,9 @@ query_workspace_dmd :: proc(
 			&options.svd_method,
 			&m_int,
 			&n_int,
-			cast(^complex64)raw_data(X.data),
+			raw_data(X.data),
 			&ldx,
-			cast(^complex64)raw_data(Y.data),
+			raw_data(Y.data),
 			&ldy,
 			&nrnk_int,
 			&tol,
@@ -172,21 +167,19 @@ query_workspace_dmd :: proc(
 			&ldw,
 			nil, // S
 			&lds,
-			&zwork_query,
-			&lwork,
 			&work_query,
+			&lwork,
+			&rwork_query,
 			&lwork,
 			&iwork_query,
 			&liwork,
 			&info,
 		)
-		work_size = int(real(zwork_query))
+		work_size = int(real(work_query))
 		iwork_size = int(iwork_query)
-		rwork_size = int(work_query)
+		rwork_size = int(rwork_query)
 	} else when T == complex128 {
-		zwork_query: complex128
 		rwork_query: f64
-		iwork_query: Blas_Int
 		lapack.zgedmd_(
 			&jobs_c,
 			&jobz_c,
@@ -195,9 +188,9 @@ query_workspace_dmd :: proc(
 			&options.svd_method,
 			&m_int,
 			&n_int,
-			cast(^complex128)raw_data(X.data),
+			raw_data(X.data),
 			&ldx,
-			cast(^complex128)raw_data(Y.data),
+			raw_data(Y.data),
 			&ldy,
 			&nrnk_int,
 			&tol,
@@ -212,7 +205,7 @@ query_workspace_dmd :: proc(
 			&ldw,
 			nil, // S
 			&lds,
-			&zwork_query,
+			&work_query,
 			&lwork,
 			&rwork_query,
 			&lwork,
@@ -220,7 +213,7 @@ query_workspace_dmd :: proc(
 			&liwork,
 			&info,
 		)
-		work_size = max(1, int(real(zwork_query)))
+		work_size = max(1, int(real(work_query)))
 		iwork_size = max(1, int(iwork_query))
 		rwork_size = max(1, int(rwork_query))
 	}
@@ -235,9 +228,13 @@ query_workspace_dmd :: proc(
 
 // Compute Dynamic Mode Decomposition (non-allocating API)
 // Analyzes time series data to extract dynamical modes
+m_dmd :: proc {
+	m_dmd_real,
+	m_dmd_complex,
+}
 
 // DMD for f32/f64
-m_dmd_f32_f64 :: proc(
+m_dmd_real :: proc(
 	X: ^Matrix($T), // Snapshot matrix X = [x0, x1, ..., xn-1]
 	Y: ^Matrix(T), // Shifted snapshots Y = [x1, x2, ..., xn]
 	eigenvalues_real: []T, // Pre-allocated real part of eigenvalues (size k)
@@ -275,8 +272,8 @@ m_dmd_f32_f64 :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	ldx := Blas_Int(X.ld)
-	ldy := Blas_Int(Y.ld)
+	ldx := X.ld
+	ldy := Y.ld
 	k_int := Blas_Int(k)
 
 	// Set job parameters
@@ -292,7 +289,7 @@ m_dmd_f32_f64 :: proc(
 	lwork := Blas_Int(len(work))
 	liwork := Blas_Int(len(iwork))
 	nrnk_int: Blas_Int
-	tol_copy := tol
+	tol := tol
 
 	when T == f32 {
 		lapack.sgedmd_(
@@ -308,7 +305,7 @@ m_dmd_f32_f64 :: proc(
 			raw_data(Y.data),
 			&ldy,
 			&nrnk_int,
-			&tol_copy,
+			&tol,
 			&k_int,
 			raw_data(eigenvalues_real),
 			raw_data(eigenvalues_imag),
@@ -345,7 +342,7 @@ m_dmd_f32_f64 :: proc(
 			raw_data(Y.data),
 			&ldy,
 			&nrnk_int,
-			&tol_copy,
+			&tol,
 			&k_int,
 			raw_data(eigenvalues_real),
 			raw_data(eigenvalues_imag),
@@ -376,27 +373,26 @@ m_dmd_f32_f64 :: proc(
 }
 
 // DMD for complex64/complex128
-m_dmd_c64_c128 :: proc(
-	X: ^Matrix($T), // Snapshot matrix
-	Y: ^Matrix(T), // Shifted snapshots
-	eigenvalues: []T, // Pre-allocated eigenvalues (size k)
-	modes: ^Matrix(T), // Pre-allocated DMD modes matrix (m x k) - optional
-	residuals: []$R, // Pre-allocated residuals (size k) - optional
-	B: ^Matrix(T), // Pre-allocated DMD approximation matrix (k x n)
-	W: ^Matrix(T), // Pre-allocated modes in full space (m x k)
-	S: ^Matrix(T), // Pre-allocated low-rank operator (k x k)
-	zwork: []T, // Pre-allocated complex workspace
-	rwork: []R, // Pre-allocated real workspace
+m_dmd_complex :: proc(
+	X: ^Matrix($Cmplx), // Snapshot matrix
+	Y: ^Matrix(Cmplx), // Shifted snapshots
+	eigenvalues: []Cmplx, // Pre-allocated eigenvalues (size k)
+	modes: ^Matrix(Cmplx), // Pre-allocated DMD modes matrix (m x k) - optional
+	residuals: []$Real, // Pre-allocated residuals (size k) - optional
+	B: ^Matrix(Cmplx), // Pre-allocated DMD approximation matrix (k x n)
+	W: ^Matrix(Cmplx), // Pre-allocated modes in full space (m x k)
+	S: ^Matrix(Cmplx), // Pre-allocated low-rank operator (k x k)
+	zwork: []Cmplx, // Pre-allocated complex workspace
+	rwork: []Real, // Pre-allocated real workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace
 	k: int, // Target rank
-	tol: R, // Tolerance for rank truncation
+	tol: Real, // Tolerance for rank truncation
 	options: DMDOptions = {compute_modes = true, compute_eigenvalues = true, svd_method = 1, rank_method = .Tolerance},
 ) -> (
 	nrnk: int,
 	info: Info,
 	ok: bool, // Effective rank (output)
-) where is_complex(T),
-	R == real_type_of(T) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := X.rows
 	n := X.cols
 
@@ -414,8 +410,8 @@ m_dmd_c64_c128 :: proc(
 
 	m_int := Blas_Int(m)
 	n_int := Blas_Int(n)
-	ldx := Blas_Int(X.ld)
-	ldy := Blas_Int(Y.ld)
+	ldx := X.ld
+	ldy := Y.ld
 	k_int := Blas_Int(k)
 	method := options.svd_method
 
@@ -433,7 +429,7 @@ m_dmd_c64_c128 :: proc(
 	lrwork := Blas_Int(len(rwork))
 	liwork := Blas_Int(len(iwork))
 	nrnk_int: Blas_Int
-	tol_copy := tol
+	tol := tol
 
 	when T == complex64 {
 		lapack.cgedmd_(
@@ -444,24 +440,24 @@ m_dmd_c64_c128 :: proc(
 			&method,
 			&m_int,
 			&n_int,
-			cast(^complex64)raw_data(X.data),
+			raw_data(X.data),
 			&ldx,
-			cast(^complex64)raw_data(Y.data),
+			raw_data(Y.data),
 			&ldy,
 			&nrnk_int,
-			&tol_copy,
+			&tol,
 			&k_int,
-			cast(^complex64)raw_data(eigenvalues),
-			options.compute_modes ? cast(^complex64)raw_data(modes.data) : nil,
+			raw_data(eigenvalues),
+			options.compute_modes ? raw_data(modes.data) : nil,
 			&ldz,
 			options.compute_residuals ? raw_data(residuals) : nil,
-			cast(^complex64)raw_data(B.data),
+			raw_data(B.data),
 			&ldb,
-			cast(^complex64)raw_data(W.data),
+			raw_data(W.data),
 			&ldw,
-			cast(^complex64)raw_data(S.data),
+			raw_data(S.data),
 			&lds,
-			cast(^complex64)raw_data(zwork),
+			raw_data(zwork),
 			&lzwork,
 			raw_data(rwork),
 			&lrwork,
@@ -482,24 +478,24 @@ m_dmd_c64_c128 :: proc(
 			&method,
 			&m_int,
 			&n_int,
-			cast(^complex128)raw_data(X.data),
+			raw_data(X.data),
 			&ldx,
-			cast(^complex128)raw_data(Y.data),
+			raw_data(Y.data),
 			&ldy,
 			&nrnk_int,
-			&tol_copy,
+			&tol,
 			&k_int,
-			cast(^complex128)raw_data(eigenvalues),
-			options.compute_modes ? cast(^complex128)raw_data(modes.data) : nil,
+			raw_data(eigenvalues),
+			options.compute_modes ? raw_data(modes.data) : nil,
 			&ldz,
 			options.compute_residuals ? raw_data(residuals) : nil,
-			cast(^complex128)raw_data(B.data),
+			raw_data(B.data),
 			&ldb,
-			cast(^complex128)raw_data(W.data),
+			raw_data(W.data),
 			&ldw,
-			cast(^complex128)raw_data(S.data),
+			raw_data(S.data),
 			&lds,
-			cast(^complex128)raw_data(zwork),
+			raw_data(zwork),
 			&lzwork,
 			raw_data(rwork),
 			&lrwork,
@@ -509,13 +505,5 @@ m_dmd_c64_c128 :: proc(
 		)
 	}
 
-	nrnk = int(nrnk_int)
-	ok = info == 0
-	return nrnk, info, ok
-}
-
-// Procedure group for DMD computation
-m_dmd :: proc {
-	m_dmd_f32_f64,
-	m_dmd_c64_c128,
+	return int(nrnk_int), info, info == 0
 }

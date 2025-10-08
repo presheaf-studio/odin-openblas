@@ -9,23 +9,6 @@ import lapack "./f77"
 // ===================================================================================
 // GENERAL SVD (SINGULAR VALUE DECOMPOSITION) FOR DENSE MATRICES
 // ===================================================================================
-//
-// This file provides comprehensive SVD implementations for general dense matrices.
-// All functions work with the standard Matrix type and provide various algorithms
-// and options for different use cases:
-//
-// ALGORITHMS AVAILABLE:
-// - Standard SVD (gesvd): Basic, reliable SVD implementation
-// - QR-based SVD (gesvdq): High accuracy and rank-revealing
-// - Divide-and-Conquer SVD (gesdd): Fast for large matrices
-// - Selective SVD (gesvdx): Compute subset of singular values/vectors
-// - Jacobi SVD (gejsv): Highest accuracy, especially for small matrices
-// - Jacobi Variant SVD (gesvj): Alternative Jacobi implementation
-//
-// For specialized matrix formats, see:
-// - svd_bidiagonal.odin: SVD for bidiagonal matrices and CS decomposition
-// - bidiagonal.odin: Conversion to bidiagonal form
-// ===================================================================================
 
 // ===================================================================================
 // SVD JOB CONTROL ENUMS
@@ -123,36 +106,36 @@ SVD_Select_Job :: enum u8 {
 // SVD PROCEDURE GROUPS
 // ===================================================================================
 
-svd :: proc {
-	svd_real,
-	svd_complex,
+dns_svd_simple :: proc {
+	dns_svd_simple_real,
+	dns_svd_simple_complex,
 }
 
-svd_qr :: proc {
-	svd_qr_real,
-	svd_qr_complex,
+dns_svd_qr :: proc {
+	dns_svd_qr_real,
+	dns_svd_qr_complex,
 }
 
-svd_dc :: proc {
-	svd_dc_real,
-	svd_dc_complex,
+dns_svd_dc :: proc {
+	dns_svd_dc_real,
+	dns_svd_dc_complex,
 }
 
-svd_select :: proc {
-	svd_select_real,
-	svd_select_complex,
+dns_svd_select :: proc {
+	dns_svd_select_real,
+	dns_svd_select_complex,
 }
 
 // Compute SVD using Jacobi method (highest accuracy)
 // Especially good for small matrices and when high accuracy is needed
-svd_jacobi :: proc {
-	svd_jacobi_real,
-	svd_jacobi_complex,
+dns_svd_jacobi :: proc {
+	dns_svd_jacobi_real,
+	dns_svd_jacobi_complex,
 }
 
-svd_jacobi_variant :: proc {
-	svd_jacobi_variant_real,
-	svd_jacobi_variant_complex,
+dns_svd_jacobi_variant :: proc {
+	dns_svd_jacobi_variant_real,
+	dns_svd_jacobi_variant_complex,
 }
 
 // ===================================================================================
@@ -160,7 +143,7 @@ svd_jacobi_variant :: proc {
 // ===================================================================================
 
 // Query result sizes for SVD
-query_result_sizes_svd :: proc(m: int, n: int, jobu: SVD_Job = .Some, jobvt: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
+query_result_sizes_dns_svd_simple :: proc(m: int, n: int, jobu: SVD_Job = .Some, jobvt: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
 	assert(!(jobu == .Overwrite && jobvt == .Overwrite), "Cannot store U and VT in A")
 	min_mn := min(m, n)
 
@@ -181,7 +164,7 @@ query_result_sizes_svd :: proc(m: int, n: int, jobu: SVD_Job = .Some, jobvt: SVD
 
 // Query workspace size for SVD (both real and complex)
 // For real types, rwork_size will be 0
-query_workspace_svd :: proc(A: ^Matrix($T), jobu: SVD_Job = .Some, jobvt: SVD_Job = .Some) -> (work_size: int, rwork_size: int, info: Info) where is_float(T) || is_complex(T) {
+query_workspace_dns_svd_simple :: proc(A: ^Matrix($T), jobu: SVD_Job = .Some, jobvt: SVD_Job = .Some) -> (work_size: int, rwork_size: int, info: Info) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -206,14 +189,14 @@ query_workspace_svd :: proc(A: ^Matrix($T), jobu: SVD_Job = .Some, jobvt: SVD_Jo
 		lapack.dgesvd_(&jobu_c, &jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &info)
 		work_size = int(work_query)
 		rwork_size = 0 // Not used for real types
-	} else when Cmplx == complex64 {
+	} else when T == complex64 {
 		work_query: complex64
 		dummy_rwork := [1]f32{}
 
 		lapack.cgesvd_(&jobu_c, &jobvt_c, &m, &n, raw_data(A.data), &lda, &dummy_s[0], nil, &ldu, nil, &ldvt, &work_query, &lwork, &dummy_rwork[0], &info)
 		work_size = int(real(work_query))
 		rwork_size = 5 * int(min_mn) // Complex types need real workspace
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		work_query: complex128
 		dummy_rwork := [1]f64{}
 
@@ -227,7 +210,7 @@ query_workspace_svd :: proc(A: ^Matrix($T), jobu: SVD_Job = .Some, jobvt: SVD_Jo
 
 // Compute SVD using standard algorithm
 // A = U * Sigma * V^T
-svd_real :: proc(
+dns_svd_simple_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	S: []T, // Singular values (pre-allocated)
 	U: ^Matrix(T), // Left singular vectors (pre-allocated, optional)
@@ -279,7 +262,7 @@ svd_real :: proc(
 	return info, info == 0
 }
 
-svd_complex :: proc(
+dns_svd_simple_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	S: []$Real, // Singular values (pre-allocated) - f32 for complex64, f64 for complex128
 	U: ^Matrix(Cmplx), // Left singular vectors (pre-allocated, optional)
@@ -291,8 +274,7 @@ svd_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -326,9 +308,9 @@ svd_complex :: proc(
 
 	assert(len(rwork) >= 5 * int(min_mn), "rwork array too small (need at least 5*min(m,n))")
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cgesvd_(&jobu_c, &jobvt_c, &m, &n, raw_data(A.data), &lda, raw_data(S), ptr_u, &ldu, ptr_vt, &ldvt, raw_data(work), &lwork, raw_data(rwork), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgesvd_(&jobu_c, &jobvt_c, &m, &n, raw_data(A.data), &lda, raw_data(S), ptr_u, &ldu, ptr_vt, &ldvt, raw_data(work), &lwork, raw_data(rwork), &info)
 	}
 
@@ -340,7 +322,7 @@ svd_complex :: proc(
 // ===================================================================================
 
 // Query result sizes for QR-based SVD
-query_result_sizes_svd_qr :: proc(m: int, n: int, jobu: SVD_Job = .All, jobv: SVD_Job = .All) -> (S_size: int, U_rows: int, U_cols: int, V_rows: int, V_cols: int, iwork_size: int) {
+query_result_sizes_dns_svd_qr :: proc(m: int, n: int, jobu: SVD_Job = .All, jobv: SVD_Job = .All) -> (S_size: int, U_rows: int, U_cols: int, V_rows: int, V_cols: int, iwork_size: int) {
 	min_mn := min(m, n)
 	S_size = min_mn
 
@@ -362,7 +344,7 @@ query_result_sizes_svd_qr :: proc(m: int, n: int, jobu: SVD_Job = .All, jobv: SV
 
 // Query workspace sizes for QR-based SVD
 // For real types, rwork also used (unlike standard SVD)
-query_workspace_svd_qr :: proc(A: ^Matrix($T), jobu: SVD_QR_JobU = .All, jobv: SVD_QR_JobV = .All, accuracy: SVD_Accuracy = .High, pivot: bool = true, rank_reveal: bool = true) -> (work_size: int, rwork_size: int, iwork_size: int, info: Info) where is_float(T) || is_complex(T) {
+query_workspace_dns_svd_qr :: proc(A: ^Matrix($T), jobu: SVD_QR_JobU = .All, jobv: SVD_QR_JobV = .All, accuracy: SVD_Accuracy = .High, pivot: bool = true, rank_reveal: bool = true) -> (work_size: int, rwork_size: int, iwork_size: int, info: Info) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -405,7 +387,7 @@ query_workspace_svd_qr :: proc(A: ^Matrix($T), jobu: SVD_QR_JobU = .All, jobv: S
 		work_size = int(work_query)
 		rwork_size = int(rwork_query)
 
-	} else when Cmplx == complex64 {
+	} else when T == complex64 {
 		cwork_query: complex64
 		rwork_query: f32
 		dummy_s := [1]f32{}
@@ -415,7 +397,7 @@ query_workspace_svd_qr :: proc(A: ^Matrix($T), jobu: SVD_QR_JobU = .All, jobv: S
 		work_size = int(real(cwork_query))
 		rwork_size = int(rwork_query)
 
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		zwork_query: complex128
 		rwork_query: f64
 		dummy_s := [1]f64{}
@@ -437,7 +419,7 @@ query_workspace_svd_qr :: proc(A: ^Matrix($T), jobu: SVD_QR_JobU = .All, jobv: S
 // SVD using QR factorization with column pivoting
 // High accuracy and rank-revealing, especially for rank-deficient matrices
 // Note: Caller should resize S, U.cols, V.cols based on numrank if rank_reveal is true
-svd_qr_real :: proc(
+dns_svd_qr_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	S: []T, // Singular values (pre-allocated)
 	U: ^Matrix(T), // Left singular vectors (pre-allocated, optional)
@@ -503,7 +485,7 @@ svd_qr_real :: proc(
 
 // Combined complex64 and complex128 SVD with QR (pre-allocated arrays)
 // Note: Caller should resize S, U.cols, V.cols based on numrank if rank_reveal is true
-svd_qr_complex :: proc(
+dns_svd_qr_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	S: []$Real, // Singular values (pre-allocated) - f32 for complex64, f64 for complex128
 	U: ^Matrix(Cmplx), // Left singular vectors (pre-allocated, optional)
@@ -520,8 +502,7 @@ svd_qr_complex :: proc(
 	numrank: Blas_Int,
 	info: Info,
 	ok: bool, // Numerical rank
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -559,9 +540,9 @@ svd_qr_complex :: proc(
 	lwork := Blas_Int(len(work))
 	lrwork := Blas_Int(len(rwork))
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cgesvdq_(joba_c, jobp_c, jobr_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), u_ptr, &ldu, v_ptr, &ldv, &numrank, raw_data(iwork), &liwork, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgesvdq_(joba_c, jobp_c, jobr_c, jobu_c, jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), u_ptr, &ldu, v_ptr, &ldv, &numrank, raw_data(iwork), &liwork, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info)
 	}
 
@@ -574,7 +555,7 @@ svd_qr_complex :: proc(
 
 // Query result sizes for divide-and-conquer SVD
 // Same as regular SVD result sizes
-query_result_sizes_svd_dc :: proc(m: int, n: int, jobz: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
+query_result_sizes_dns_svd_dc :: proc(m: int, n: int, jobz: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
 	min_mn := min(m, n)
 
 	S_size = min_mn
@@ -606,7 +587,7 @@ query_result_sizes_svd_dc :: proc(m: int, n: int, jobz: SVD_Job = .Some) -> (S_s
 }
 
 // Query workspace size for divide-and-conquer SVD
-query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_size: int, rwork_size: int, iwork_size: int, info: Info) where is_float(T) || is_complex(T) {
+query_workspace_dns_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_size: int, rwork_size: int, iwork_size: int, info: Info) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -637,11 +618,11 @@ query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_s
 
 	lwork: Blas_Int = QUERY_WORKSPACE
 	dummy_iwork := [1]Blas_Int{}
+	work_query: T
+	dummy_s := [1]T{}
+	rwork_size = 0
 
 	when T == f32 {
-		work_query: f32
-		dummy_s := [1]f32{}
-
 		lapack.sgesdd_(
 			&jobz_c,
 			&m,
@@ -659,12 +640,8 @@ query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_s
 			&info,
 		)
 		work_size = int(work_query)
-		rwork_size = 0 // Real version doesn't need rwork
 
 	} else when T == f64 {
-		work_query: f64
-		dummy_s := [1]f64{}
-
 		lapack.dgesdd_(
 			&jobz_c,
 			&m,
@@ -682,13 +659,8 @@ query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_s
 			&info,
 		)
 		work_size = int(work_query)
-		rwork_size = 0 // Real version doesn't need rwork
-
-	} else when Cmplx == complex64 {
-		cwork_query: complex64
-		dummy_s := [1]f32{}
+	} else when T == complex64 {
 		dummy_rwork := [1]f32{}
-
 		lapack.cgesdd_(
 			&jobz_c,
 			&m,
@@ -700,24 +672,21 @@ query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_s
 			&ldu,
 			nil, // VT
 			&ldvt,
-			&cwork_query,
+			&work_query,
 			&lwork,
 			&dummy_rwork[0],
 			&dummy_iwork[0],
 			&info,
 		)
-		work_size = int(real(cwork_query))
+		work_size = int(real(work_query))
 		// Complex version needs real workspace
 		rwork_size = int(min_mn * max(5 * min_mn + 7, 2 * min_mn + 1))
 		if jobz == .All {
 			rwork_size = max(rwork_size, int(5 * min_mn * min_mn + 5 * min_mn))
 		}
 
-	} else when Cmplx == complex128 {
-		zwork_query: complex128
-		dummy_s := [1]f64{}
+	} else when T == complex128 {
 		dummy_rwork := [1]f64{}
-
 		lapack.zgesdd_(
 			&jobz_c,
 			&m,
@@ -729,13 +698,13 @@ query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_s
 			&ldu,
 			nil, // VT
 			&ldvt,
-			&zwork_query,
+			&work_query,
 			&lwork,
 			&dummy_rwork[0],
 			&dummy_iwork[0],
 			&info,
 		)
-		work_size = int(real(zwork_query))
+		work_size = int(real(work_query))
 		// Complex version needs real workspace
 		rwork_size = int(min_mn * max(5 * min_mn + 7, 2 * min_mn + 1))
 		if jobz == .All {
@@ -749,13 +718,13 @@ query_workspace_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (work_s
 // Compute SVD using divide-and-conquer algorithm
 // Faster than standard SVD for large matrices
 // Combined f32 real and complex64 divide-and-conquer SVD
-svd_dc_real :: proc(
+dns_svd_dc_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	S: []T, // Singular values (pre-allocated)
 	U: ^Matrix(T), // Left singular vectors (pre-allocated, optional)
 	VT: ^Matrix(T), // Right singular vectors transposed (pre-allocated, optional)
 	iwork: []Blas_Int, // Integer workspace (pre-allocated)
-	work: []Cmplx, // Workspace (pre-allocated)
+	work: []T, // Workspace (pre-allocated)
 	rwork: []T = nil, // Real workspace (pre-allocated, optional)
 	jobz: SVD_Job = .Some,
 ) -> (
@@ -828,7 +797,7 @@ svd_dc_real :: proc(
 }
 
 // Combined f64 real and complex128 divide-and-conquer SVD
-svd_dc_complex :: proc(
+dns_svd_dc_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	S: []$Real, // Singular values (pre-allocated) - f32 for complex64, f64 for complex128
 	U: ^Matrix(Cmplx), // Left singular vectors (pre-allocated, optional)
@@ -840,8 +809,7 @@ svd_dc_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -897,7 +865,7 @@ svd_dc_complex :: proc(
 	assert(len(work) > 0, "work array must be provided (use query_workspace_svd_dc to get size)")
 	lwork := Blas_Int(len(work))
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		rwork_size := min_mn * max(5 * min_mn + 7, 2 * min_mn + 1)
 		if jobz == .All {
 			rwork_size = max(rwork_size, 5 * min_mn * min_mn + 5 * min_mn)
@@ -905,7 +873,7 @@ svd_dc_complex :: proc(
 		assert(len(rwork) >= int(rwork_size), "rwork array too small for complex divide-and-conquer SVD")
 
 		lapack.cgesdd_(&jobz_c, &m, &n, raw_data(A.data), &lda, raw_data(S), u_ptr, &ldu, vt_ptr, &ldvt, raw_data(work), &lwork, raw_data(rwork), raw_data(iwork), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		rwork_size := min_mn * max(5 * min_mn + 7, 2 * min_mn + 1)
 		if jobz == .All {
 			rwork_size = max(rwork_size, 5 * min_mn * min_mn + 5 * min_mn)
@@ -924,7 +892,7 @@ svd_dc_complex :: proc(
 // Query result sizes for selective SVD
 // Returns sizes based on the selection criteria
 // max_ns: Maximum number of singular values that could be found
-query_result_sizes_svd_select :: proc(
+query_result_sizes_dns_svd_select :: proc(
 	m: int,
 	n: int,
 	range_mode: SVD_Range_Option = .All,
@@ -974,11 +942,11 @@ query_result_sizes_svd_select :: proc(
 }
 
 // Query workspace size for selective SVD
-query_workspace_svd_select :: proc(
+query_workspace_dns_svd_select :: proc(
 	A: ^Matrix($T),
 	range_mode: SVD_Range_Option = .All,
-	vl: $Real, // Lower bound (for range=.Value)
-	vu: Real, // Upper bound (for range=.Value)
+	vl: $Real, // Lower bound (for range=.Value) - no default value possible for generic types
+	vu: Real, // Upper bound (for range=.Value) - no default value possible for generic types
 	il: Blas_Int = 1, // Lower index (for range=.Index)
 	iu: Blas_Int = -1, // Upper index (for range=.Index, -1 = min(m,n))
 	jobu: SVD_Select_Job = .Vectors,
@@ -1095,7 +1063,7 @@ query_workspace_svd_select :: proc(
 		work_size = int(work_query)
 		rwork_size = 0 // Real version doesn't need rwork
 
-	} else when Cmplx == complex64 {
+	} else when T == complex64 {
 		cwork_query: complex64
 		dummy_s := [1]f32{}
 		dummy_rwork := [1]f32{}
@@ -1129,7 +1097,7 @@ query_workspace_svd_select :: proc(
 		work_size = int(real(cwork_query))
 		rwork_size = int(min_mn * max(5 * min_mn + 7, 2 * max_ns * (3 * max_ns + 1)))
 
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		zwork_query: complex128
 		dummy_s := [1]f64{}
 		dummy_rwork := [1]f64{}
@@ -1169,13 +1137,13 @@ query_workspace_svd_select :: proc(
 // Compute selected singular values and vectors
 // Can compute subset by index range or value range
 // Combined f32/f64 real selective SVD
-svd_select_real :: proc(
+dns_svd_select_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	S: []T, // Singular values (pre-allocated)
 	U: ^Matrix(T), // Left singular vectors (pre-allocated, optional)
 	VT: ^Matrix(T), // Right singular vectors transposed (pre-allocated, optional)
 	iwork: []Blas_Int, // Integer workspace (pre-allocated)
-	work: []Cmplx, // Workspace (pre-allocated)
+	work: []T, // Workspace (pre-allocated)
 	range_mode: SVD_Range_Option = .All,
 	vl: T, // Lower bound (for range=.Value)
 	vu: T, // Upper bound (for range=.Value)
@@ -1247,7 +1215,7 @@ svd_select_real :: proc(
 }
 
 // Combined complex64/complex128 selective SVD
-svd_select_complex :: proc(
+dns_svd_select_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	S: []$Real, // Singular values (pre-allocated)
 	U: ^Matrix(Cmplx), // Left singular vectors (pre-allocated, optional)
@@ -1266,8 +1234,7 @@ svd_select_complex :: proc(
 	ns: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -1319,9 +1286,9 @@ svd_select_complex :: proc(
 	max_rwork := min_mn * max(5 * min_mn + 7, 2 * max_ns * (3 * max_ns + 1))
 	assert(len(rwork) >= int(max_rwork), "rwork array too small for complex selective SVD")
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cgesvdx_(&jobu_c, &jobvt_c, &range_c, &m, &n, raw_data(A.data), &lda, &vl, &vu, &il, &iu_val, &ns, raw_data(S), u_ptr, &ldu, vt_ptr, &ldvt, raw_data(work), &lwork, raw_data(rwork), raw_data(iwork), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgesvdx_(&jobu_c, &jobvt_c, &range_c, &m, &n, raw_data(A.data), &lda, &vl, &vu, &il, &iu_val, &ns, raw_data(S), u_ptr, &ldu, vt_ptr, &ldvt, raw_data(work), &lwork, raw_data(rwork), raw_data(iwork), &info)
 	}
 
@@ -1335,7 +1302,7 @@ svd_select_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for Jacobi SVD (high accuracy)
-query_workspace_svd_jacobi :: proc(
+query_workspace_dns_svd_jacobi :: proc(
 	A: ^Matrix($T),
 	jobu: SVD_Jacobi_Job = .Compute,
 	jobv: SVD_Jacobi_Job = .Vectors,
@@ -1368,10 +1335,10 @@ query_workspace_svd_jacobi :: proc(
 	ldu: Blas_Int = 1
 	ldv: Blas_Int = 1
 	lwork: Blas_Int = QUERY_WORKSPACE
+	work_query: T
+	rwork_size = 0
 
 	when T == f32 {
-		work_query: f32
-
 		lapack.sgejsv_(
 			&joba_c,
 			&jobu_c,
@@ -1394,11 +1361,7 @@ query_workspace_svd_jacobi :: proc(
 			&info,
 		)
 		work_size = int(work_query)
-		rwork_size = 0
-
 	} else when T == f64 {
-		work_query: f64
-
 		lapack.dgejsv_(
 			&joba_c,
 			&jobu_c,
@@ -1421,10 +1384,7 @@ query_workspace_svd_jacobi :: proc(
 			&info,
 		)
 		work_size = int(work_query)
-		rwork_size = 0
-
-	} else when Cmplx == complex64 {
-		work_query: complex64
+	} else when T == complex64 {
 		rwork_query: f32
 		lrwork: Blas_Int = -1
 
@@ -1454,8 +1414,7 @@ query_workspace_svd_jacobi :: proc(
 		work_size = int(real(work_query))
 		rwork_size = int(rwork_query)
 
-	} else when Cmplx == complex128 {
-		work_query: complex128
+	} else when T == complex128 {
 		rwork_query: f64
 		lrwork: Blas_Int = -1
 
@@ -1490,7 +1449,7 @@ query_workspace_svd_jacobi :: proc(
 }
 
 // Query result sizes for Jacobi SVD
-query_result_sizes_svd_jacobi :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Job = .Compute, jobv: SVD_Jacobi_Job = .Vectors) -> (s_size: int, u_rows: int, u_cols: int, v_rows: int, v_cols: int, work_stat_size: int) where is_float(T) || is_complex(T) {
+query_result_sizes_dns_svd_jacobi :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Job = .Compute, jobv: SVD_Jacobi_Job = .Vectors) -> (s_size: int, u_rows: int, u_cols: int, v_rows: int, v_cols: int, work_stat_size: int) where is_float(T) || is_complex(T) {
 	m := int(A.rows)
 	n := int(A.cols)
 	min_mn := min(m, n)
@@ -1512,12 +1471,12 @@ query_result_sizes_svd_jacobi :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Job = .Co
 }
 
 // Combined f32/f64 real Jacobi SVD (pre-allocated arrays)
-svd_jacobi_real :: proc(
+dns_svd_jacobi_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	S: []T, // Singular values (pre-allocated)
 	U: ^Matrix(T) = nil, // Left singular vectors (pre-allocated, optional)
-	V: ^Matrix(Cmplx) = nil, // Right singular vectors NOT transposed (pre-allocated, optional)
-	work: []Cmplx, // Workspace (pre-allocated)
+	V: ^Matrix(T) = nil, // Right singular vectors NOT transposed (pre-allocated, optional)
+	work: []T, // Workspace (pre-allocated)
 	iwork: []Blas_Int, // Integer workspace (pre-allocated)
 	work_stat: []T, // Statistics array (pre-allocated, size 7)
 	jobu: SVD_Jacobi_Job = .Compute,
@@ -1579,7 +1538,7 @@ svd_jacobi_real :: proc(
 }
 
 // Combined complex64/complex128 Jacobi SVD (pre-allocated arrays)
-svd_jacobi_complex :: proc(
+dns_svd_jacobi_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	S: []$Real, // Singular values (pre-allocated)
 	U: ^Matrix(Cmplx) = nil, // Left singular vectors (pre-allocated, optional)
@@ -1597,8 +1556,7 @@ svd_jacobi_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -1635,12 +1593,12 @@ svd_jacobi_complex :: proc(
 	assert(len(rwork) > 0, "rwork array must be provided for complex types")
 	lrwork := Blas_Int(len(rwork))
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cgejsv_(&joba_c, &jobu_c, &jobv_c, &jobr_c, &jobt_c, &jobp_c, &m, &n, raw_data(A.data), &lda, raw_data(S), u_ptr, &ldu, v_ptr, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &info)
 
 		// Extract statistics from rwork array
 		copy(work_stat, rwork[:7])
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgejsv_(&joba_c, &jobu_c, &jobv_c, &jobr_c, &jobt_c, &jobp_c, &m, &n, raw_data(A.data), &lda, raw_data(S), u_ptr, &ldu, v_ptr, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &info)
 
 		// Extract statistics from rwork array
@@ -1657,7 +1615,7 @@ svd_jacobi_complex :: proc(
 
 // Query workspace size for Jacobi SVD variant (gesvj)
 // rwork_size: For complex types only
-query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Variant_Job = .Compute, jobv: SVD_Jacobi_Variant_Job = .Vectors, joba: SVD_Jacobi_Variant_Matrix = .General) -> (work_size: int, rwork_size: int, info: Info) where is_float(T) || is_complex(T) {
+query_workspace_dns_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Variant_Job = .Compute, jobv: SVD_Jacobi_Variant_Job = .Vectors, joba: SVD_Jacobi_Variant_Matrix = .General) -> (work_size: int, rwork_size: int, info: Info) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -1678,11 +1636,11 @@ query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Vari
 	lwork: Blas_Int = -1
 
 	// Dummy arrays for queries
-	dummy_s := [1]f64{}
+	dummy_s := [1]T{}
+	work_query: T
+	rwork_size = 0
 
 	when T == f32 {
-		work_query: f32
-
 		lapack.sgesvj_(
 			&joba_c,
 			&jobu_c,
@@ -1691,7 +1649,7 @@ query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Vari
 			&n,
 			nil, // A data
 			&lda,
-			cast(^f32)&dummy_s[0],
+			&dummy_s[0],
 			&mv,
 			nil, // V data
 			&ldv,
@@ -1700,11 +1658,7 @@ query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Vari
 			&info,
 		)
 		work_size = int(work_query)
-		rwork_size = 0
-
 	} else when T == f64 {
-		work_query: f64
-
 		lapack.dgesvj_(
 			&joba_c,
 			&jobu_c,
@@ -1722,12 +1676,8 @@ query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Vari
 			&info,
 		)
 		work_size = int(work_query)
-		rwork_size = 0
-
-	} else when Cmplx == complex64 {
-		work_query: complex64
+	} else when T == complex64 {
 		rwork_size = max(6, int(m + n)) // Real workspace for complex variant
-
 		lapack.cgesvj_(
 			&joba_c,
 			&jobu_c,
@@ -1746,11 +1696,8 @@ query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Vari
 			&info,
 		)
 		work_size = int(real(work_query))
-
-	} else when Cmplx == complex128 {
-		work_query: complex128
+	} else when T == complex128 {
 		rwork_size = max(6, int(m + n)) // Real workspace for complex variant
-
 		lapack.zgesvj_(
 			&joba_c,
 			&jobu_c,
@@ -1775,7 +1722,7 @@ query_workspace_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Vari
 }
 
 // Query result sizes for Jacobi SVD variant
-query_result_sizes_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Variant_Job = .Compute, jobv: SVD_Jacobi_Variant_Job = .Vectors) -> (s_size: int, u_rows: int, u_cols: int, v_rows: int, v_cols: int) where is_float(T) || is_complex(T) {
+query_result_sizes_dns_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_Variant_Job = .Compute, jobv: SVD_Jacobi_Variant_Job = .Vectors) -> (s_size: int, u_rows: int, u_cols: int, v_rows: int, v_cols: int) where is_float(T) || is_complex(T) {
 	m := int(A.rows)
 	n := int(A.cols)
 
@@ -1801,12 +1748,12 @@ query_result_sizes_svd_jacobi_variant :: proc(A: ^Matrix($T), jobu: SVD_Jacobi_V
 // Computes the SVD directly with V instead of V^T
 // Good for matrices with well-conditioned columns
 // Combined f32/f64 real Jacobi variant SVD (pre-allocated arrays)
-svd_jacobi_variant_real :: proc(
+dns_svd_jacobi_variant_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	S: []T, // Singular values (pre-allocated)
 	U: ^Matrix(T) = nil, // Left singular vectors (pre-allocated, optional)
-	V: ^Matrix(Cmplx) = nil, // Right singular vectors (pre-allocated, optional)
-	work: []Cmplx, // Workspace (pre-allocated)
+	V: ^Matrix(T) = nil, // Right singular vectors (pre-allocated, optional)
+	work: []T, // Workspace (pre-allocated)
 	jobu: SVD_Jacobi_Variant_Job = .Compute,
 	jobv: SVD_Jacobi_Variant_Job = .Vectors,
 	joba: SVD_Jacobi_Variant_Matrix = .General,
@@ -1861,7 +1808,7 @@ svd_jacobi_variant_real :: proc(
 }
 
 // Combined complex64/complex128 Jacobi variant SVD (pre-allocated arrays)
-svd_jacobi_variant_complex :: proc(
+dns_svd_jacobi_variant_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	S: []$Real, // Singular values (pre-allocated)
 	U: ^Matrix(Cmplx) = nil, // Left singular vectors (pre-allocated, optional)
@@ -1874,8 +1821,7 @@ svd_jacobi_variant_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -1911,9 +1857,9 @@ svd_jacobi_variant_complex :: proc(
 	assert(len(rwork) > 0, "rwork array must be provided for complex types")
 	lrwork := Blas_Int(len(rwork))
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cgesvj_(&joba_c, &jobu_c, &jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, v_ptr, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgesvj_(&joba_c, &jobu_c, &jobv_c, &m, &n, raw_data(A.data), &lda, raw_data(S), &mv, v_ptr, &ldv, raw_data(work), &lwork, raw_data(rwork), &lrwork, &info)
 	}
 
@@ -1979,9 +1925,9 @@ query_workspace_gsvd_blocked :: proc($T: typeid, m, n, p: int, jobu := GSVD_Job.
 		lapack.sggsvd3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &n_int, &p_int, &k, &l, nil, &m_int, nil, &p_int, nil, nil, nil, &m_int, nil, &p_int, nil, &n_int, &work_query, &lwork, nil, &info)
 	} else when T == f64 {
 		lapack.dggsvd3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &n_int, &p_int, &k, &l, nil, &m_int, nil, &p_int, nil, nil, nil, &m_int, nil, &p_int, nil, &n_int, &work_query, &lwork, nil, &info)
-	} else when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cggsvd3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &n_int, &p_int, &k, &l, nil, &m_int, nil, &p_int, nil, nil, nil, &m_int, nil, &p_int, nil, &n_int, &work_query, &lwork, nil, nil, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zggsvd3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &n_int, &p_int, &k, &l, nil, &m_int, nil, &p_int, nil, nil, nil, &m_int, nil, &p_int, nil, &n_int, &work_query, &lwork, nil, nil, &info)
 	}
 
@@ -1996,20 +1942,20 @@ query_workspace_gsvd_blocked :: proc($T: typeid, m, n, p: int, jobu := GSVD_Job.
 }
 
 // Blocked/improved version of generalized SVD
-gsvd_blocked :: proc {
-	gsvd_blocked_real,
-	gsvd_blocked_complex,
+dns_svd_generalized_blocked :: proc {
+	dns_svd_generalized_blocked_real,
+	dns_svd_generalized_blocked_complex,
 }
 
-gsvd_blocked_real :: proc(
+dns_svd_generalized_blocked_real :: proc(
 	A: ^Matrix($T),
 	B: ^Matrix(T),
 	alpha: []T, // Pre-allocated output singular values (size n)
 	beta: []T, // Pre-allocated output singular values (size n)
-	U: ^Matrix(Cmplx) = nil, // Pre-allocated left transformation matrix (m x m)
-	V: ^Matrix(Cmplx) = nil, // Pre-allocated middle transformation matrix (p x p)
-	Q: ^Matrix(Cmplx) = nil, // Pre-allocated right transformation matrix (n x n)
-	work: []Cmplx, // Pre-allocated workspace
+	U: ^Matrix(T) = nil, // Pre-allocated left transformation matrix (m x m)
+	V: ^Matrix(T) = nil, // Pre-allocated middle transformation matrix (p x p)
+	Q: ^Matrix(T) = nil, // Pre-allocated right transformation matrix (n x n)
+	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size n)
 	jobu: GSVD_Job = .Compute,
 	jobv: GSVD_Job = .Full,
@@ -2069,7 +2015,7 @@ gsvd_blocked_real :: proc(
 }
 
 // Complex generalized SVD (complex64/complex128)
-gsvd_blocked_complex :: proc(
+dns_svd_generalized_blocked_complex :: proc(
 	A: ^Matrix($Cmplx),
 	B: ^Matrix(Cmplx),
 	alpha: []$Real, // Pre-allocated output singular values (size n)
@@ -2087,8 +2033,7 @@ gsvd_blocked_complex :: proc(
 	k, l: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	p := B.rows
@@ -2130,9 +2075,9 @@ gsvd_blocked_complex :: proc(
 
 	lwork := Blas_Int(len(work))
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cggsvd3_(&jobu_c, &jobv_c, &jobq_c, &m, &n, &p, &k, &l, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alpha), raw_data(beta), u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(work), &lwork, raw_data(rwork), raw_data(iwork), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zggsvd3_(&jobu_c, &jobv_c, &jobq_c, &m, &n, &p, &k, &l, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alpha), raw_data(beta), u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(work), &lwork, raw_data(rwork), raw_data(iwork), &info)
 	}
 
@@ -2161,20 +2106,20 @@ query_workspace_gsvd :: proc($T: typeid, m, n, p: int) -> (work_size: int, rwork
 }
 
 // Compute generalized SVD: U^H*A*Q = D1*[0 R], V^H*B*Q = D2*[0 R]
-gsvd :: proc {
-	gsvd_real,
-	gsvd_complex,
+dns_svd_generalized :: proc {
+	dns_svd_generalized_real,
+	dns_svd_generalized_complex,
 }
 
-gsvd_real :: proc(
+dns_svd_generalized_real :: proc(
 	A: ^Matrix($T),
 	B: ^Matrix(T),
 	alpha: []T, // Pre-allocated output singular values (size n)
 	beta: []T, // Pre-allocated output singular values (size n)
-	U: ^Matrix(Cmplx) = nil, // Pre-allocated left transformation matrix (m x m)
-	V: ^Matrix(Cmplx) = nil, // Pre-allocated middle transformation matrix (p x p)
-	Q: ^Matrix(Cmplx) = nil, // Pre-allocated right transformation matrix (n x n)
-	work: []Cmplx, // Pre-allocated workspace
+	U: ^Matrix(T) = nil, // Pre-allocated left transformation matrix (m x m)
+	V: ^Matrix(T) = nil, // Pre-allocated middle transformation matrix (p x p)
+	Q: ^Matrix(T) = nil, // Pre-allocated right transformation matrix (n x n)
+	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size n)
 	jobu: GSVD_Job = .Compute,
 	jobv: GSVD_Job = .Full,
@@ -2233,7 +2178,7 @@ gsvd_real :: proc(
 }
 
 // Complex generalized SVD (complex64/complex128)
-gsvd_complex :: proc(
+dns_svd_generalized_complex :: proc(
 	A: ^Matrix($Cmplx),
 	B: ^Matrix(Cmplx),
 	alpha: []$Real, // Pre-allocated output singular values (size n)
@@ -2251,8 +2196,7 @@ gsvd_complex :: proc(
 	k, l: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	p := B.rows
@@ -2293,9 +2237,9 @@ gsvd_complex :: proc(
 		assert(Q.rows >= n && Q.cols >= n, "Q must be at least n x n")
 	}
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cggsvd_(&jobu_c, &jobv_c, &jobq_c, &m, &n, &p, &k, &l, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alpha), raw_data(beta), u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(work), raw_data(rwork), raw_data(iwork), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zggsvd_(&jobu_c, &jobv_c, &jobq_c, &m, &n, &p, &k, &l, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alpha), raw_data(beta), u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(work), raw_data(rwork), raw_data(iwork), &info)
 	}
 
@@ -2324,21 +2268,21 @@ query_workspace_gsvd_preprocess :: proc($T: typeid, m, p, n: int) -> (work_size:
 }
 
 // Preprocessing for generalized SVD - reduce to standard form
-gsvd_preprocess :: proc {
-	gsvd_preprocess_real,
-	gsvd_preprocess_complex,
+dns_svd_generalized_preprocess :: proc {
+	dns_svd_generalized_preprocess_real,
+	dns_svd_generalized_preprocess_complex,
 }
 
-gsvd_preprocess_real :: proc(
+dns_svd_generalized_preprocess_real :: proc(
 	A: ^Matrix($T),
 	B: ^Matrix(T),
 	tola: T,
 	tolb: T,
-	U: ^Matrix(Cmplx) = nil, // Pre-allocated left transformation matrix (m x m)
-	V: ^Matrix(Cmplx) = nil, // Pre-allocated middle transformation matrix (p x p)
-	Q: ^Matrix(Cmplx) = nil, // Pre-allocated right transformation matrix (n x n)
-	tau: []Cmplx, // Pre-allocated tau array (size n)
-	work: []Cmplx, // Pre-allocated workspace
+	U: ^Matrix(T) = nil, // Pre-allocated left transformation matrix (m x m)
+	V: ^Matrix(T) = nil, // Pre-allocated middle transformation matrix (p x p)
+	Q: ^Matrix(T) = nil, // Pre-allocated right transformation matrix (n x n)
+	tau: []T, // Pre-allocated tau array (size n)
+	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size n)
 	jobu: GSVD_Job = .Compute,
 	jobv: GSVD_Job = .Full,
@@ -2398,7 +2342,7 @@ gsvd_preprocess_real :: proc(
 }
 
 // Complex generalized SVD preprocessing
-gsvd_preprocess_complex :: proc(
+dns_svd_generalized_preprocess_complex :: proc(
 	A: ^Matrix($Cmplx),
 	B: ^Matrix(Cmplx),
 	tola: $Real,
@@ -2417,8 +2361,7 @@ gsvd_preprocess_complex :: proc(
 	k, l: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	p := A.cols
 	n := B.cols
@@ -2460,9 +2403,9 @@ gsvd_preprocess_complex :: proc(
 		assert(Q.rows >= n && Q.cols >= n, "Q must be at least n x n")
 	}
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cggsvp_(&jobu_c, &jobv_c, &jobq_c, &m, &p, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &tola_actual, &tolb_actual, &k, &l, u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(iwork), raw_data(rwork), raw_data(tau), raw_data(work), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zggsvp_(&jobu_c, &jobv_c, &jobq_c, &m, &p, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &tola_actual, &tolb_actual, &k, &l, u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(iwork), raw_data(rwork), raw_data(tau), raw_data(work), &info)
 	}
 
@@ -2500,9 +2443,9 @@ query_workspace_gsvd_preprocess_blocked :: proc($T: typeid, m, p, n: int, jobu :
 		lapack.sggsvp3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &p_int, &n_int, nil, &m_int, nil, &p_int, &tola_default, &tolb_default, &k, &l, nil, &m_int, nil, &p_int, nil, &n_int, nil, nil, &work_query, &lwork, &info)
 	} else when T == f64 {
 		lapack.dggsvp3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &p_int, &n_int, nil, &m_int, nil, &p_int, &tola_default, &tolb_default, &k, &l, nil, &m_int, nil, &p_int, nil, &n_int, nil, nil, &work_query, &lwork, &info)
-	} else when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cggsvp3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &p_int, &n_int, nil, &m_int, nil, &p_int, &tola_default, &tolb_default, &k, &l, nil, &m_int, nil, &p_int, nil, &n_int, nil, nil, nil, &work_query, &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zggsvp3_(&jobu_c, &jobv_c, &jobq_c, &m_int, &p_int, &n_int, nil, &m_int, nil, &p_int, &tola_default, &tolb_default, &k, &l, nil, &m_int, nil, &p_int, nil, &n_int, nil, nil, nil, &work_query, &lwork, &info)
 	}
 
@@ -2517,21 +2460,21 @@ query_workspace_gsvd_preprocess_blocked :: proc($T: typeid, m, p, n: int, jobu :
 }
 
 // Improved/blocked version of generalized SVD preprocessing
-gsvd_preprocess_blocked :: proc {
-	gsvd_preprocess_blocked_real,
-	gsvd_preprocess_blocked_complex,
+dns_svd_generalized_preprocess_blocked :: proc {
+	dns_svd_generalized_preprocess_blocked_real,
+	dns_svd_generalized_preprocess_blocked_complex,
 }
 
-gsvd_preprocess_blocked_real :: proc(
+dns_svd_generalized_preprocess_blocked_real :: proc(
 	A: ^Matrix($T),
 	B: ^Matrix(T),
 	tola: T,
 	tolb: T,
-	U: ^Matrix(Cmplx) = nil, // Pre-allocated left transformation matrix (m x m)
-	V: ^Matrix(Cmplx) = nil, // Pre-allocated middle transformation matrix (p x p)
-	Q: ^Matrix(Cmplx) = nil, // Pre-allocated right transformation matrix (n x n)
-	tau: []Cmplx, // Pre-allocated tau array (size n)
-	work: []Cmplx, // Pre-allocated workspace
+	U: ^Matrix(T) = nil, // Pre-allocated left transformation matrix (m x m)
+	V: ^Matrix(T) = nil, // Pre-allocated middle transformation matrix (p x p)
+	Q: ^Matrix(T) = nil, // Pre-allocated right transformation matrix (n x n)
+	tau: []T, // Pre-allocated tau array (size n)
+	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size n)
 	jobu: GSVD_Job = .Compute,
 	jobv: GSVD_Job = .Full,
@@ -2605,7 +2548,7 @@ gsvd_preprocess_blocked_real :: proc(
 	return k, l, info, info == 0
 }
 
-gsvd_preprocess_blocked_complex :: proc(
+dns_svd_generalized_preprocess_blocked_complex :: proc(
 	A: ^Matrix($Cmplx),
 	B: ^Matrix(Cmplx),
 	tola: $Real,
@@ -2624,12 +2567,11 @@ gsvd_preprocess_blocked_complex :: proc(
 	k, l: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_complex(T),
-	R ==
-	real_type_of(T) {
-	m := Blas_Int(A.rows)
-	p := Blas_Int(A.cols)
-	n := Blas_Int(B.cols)
+) where (Cmplx == complex64 && Real == f32) ||
+	(Cmplx == complex128 && Real == f64) {
+	m := A.rows
+	p := A.cols
+	n := B.cols
 
 	lda := A.ld
 	ldb := B.ld
@@ -2655,9 +2597,9 @@ gsvd_preprocess_blocked_complex :: proc(
 
 	lwork := Blas_Int(len(work))
 
-	when Cmplx == complex64 {
+	when T == complex64 {
 		lapack.cggsvp3_(&jobu_c, &jobv_c, &jobq_c, &m, &p, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &tola_actual, &tolb_actual, &k, &l, u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(iwork), raw_data(rwork), raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zggsvp3_(&jobu_c, &jobv_c, &jobq_c, &m, &p, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &tola_actual, &tolb_actual, &k, &l, u_ptr, &ldu, v_ptr, &ldv, q_ptr, &ldq, raw_data(iwork), raw_data(rwork), raw_data(tau), raw_data(work), &lwork, &info)
 	}
 

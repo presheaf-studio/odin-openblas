@@ -13,10 +13,10 @@ import "core:math"
 // for an n×n matrix.
 //
 // Conversion operations:
-// - pack_triangular: Convert full matrix to packed storage
-// - unpack_triangular: Convert packed storage to full matrix
-// - create_packed_triangular: Allocating conversion from full to PackedTriangular
-// - extract_full_triangular: Allocating conversion from PackedTriangular to full
+// - pack_tri_from_dns: Convert full matrix to packed storage
+// - dns_from_pack_tri: Convert packed storage to full matrix
+// - pack_tri_make: Allocating conversion from full to PackedTriangular
+// - pack_tri_extract_full: Allocating conversion from PackedTriangular to full
 // - convert_packed_to_full_triangular: LAPACK conversion to full format
 // - convert_packed_to_rfp_triangular: LAPACK conversion to RFP format
 
@@ -26,7 +26,7 @@ import "core:math"
 
 // Convert full triangular matrix to packed storage
 // Non-allocating version: requires pre-allocated packed array
-pack_triangular :: proc(
+pack_tri_from_dns :: proc(
 	A: []$T, // Full matrix (n×n) in column-major order
 	AP: []T, // Pre-allocated packed array (n*(n+1)/2 elements)
 	n: int, // Matrix dimension
@@ -61,7 +61,7 @@ pack_triangular :: proc(
 
 // Extract triangular matrix from packed format to full matrix
 // Non-allocating version: requires pre-allocated full matrix
-unpack_triangular :: proc(
+dns_from_pack_tri :: proc(
 	AP: []$T, // Packed array
 	A: []T, // Pre-allocated full matrix (n×n)
 	n: int, // Matrix dimension
@@ -117,7 +117,7 @@ unpack_triangular :: proc(
 // ===================================================================================
 
 // Create PackedTriangular from full matrix (allocating version for convenience)
-create_packed_triangular :: proc(
+pack_tri_from_dns_alloc :: proc(
 	A: []$T, // Full matrix
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
@@ -125,16 +125,16 @@ create_packed_triangular :: proc(
 	diag: DiagonalType = .NonUnit,
 	allocator := context.allocator,
 ) -> PackedTriangular(T) {
-	packed_size := packed_storage_size(n)
+	packed_size := pack_tri_storage_size(n)
 	data := make([]T, packed_size, allocator)
 
-	pack_triangular(A, data, n, lda, uplo)
+	pack_tri_from_dns(A, data, n, lda, uplo)
 
 	return PackedTriangular(T){data = data, n = n, uplo = uplo, diag = diag}
 }
 
 // Extract full matrix from PackedTriangular (allocating version for convenience)
-extract_full_triangular :: proc(
+pack_tri_extract_full :: proc(
 	packed: ^PackedTriangular($T),
 	lda: int, // Leading dimension for output
 	allocator := context.allocator,
@@ -144,7 +144,7 @@ extract_full_triangular :: proc(
 	}
 
 	A := make([]T, packed.n * lda, allocator)
-	unpack_triangular(packed.data, A, packed.n, lda, packed.uplo, packed.diag)
+	dns_from_pack_tri(packed.data, A, packed.n, lda, packed.uplo, packed.diag)
 
 	return A
 }
@@ -230,7 +230,7 @@ batch_extract_packed_triangular :: proc(packed_matrices: []^PackedTriangular($T)
 	results := make([][]T, len(packed_matrices), allocator)
 
 	for i, packed in packed_matrices {
-		results[i] = extract_full_triangular(packed, lda, allocator)
+		results[i] = pack_tri_extract_full(packed, lda, allocator)
 	}
 
 	return results
@@ -241,7 +241,7 @@ batch_create_packed_triangular :: proc(full_matrices: [][]$T, n: int, lda: int, 
 	results := make([]PackedTriangular(T), len(full_matrices), allocator)
 
 	for i, A in full_matrices {
-		results[i] = create_packed_triangular(A, n, lda, uplo, diag, allocator)
+		results[i] = pack_tri_from_dns_alloc(A, n, lda, uplo, diag, allocator)
 	}
 
 	return results
@@ -253,7 +253,7 @@ batch_create_packed_triangular :: proc(full_matrices: [][]$T, n: int, lda: int, 
 
 // Convert upper triangle storage to lower triangle storage (or vice versa)
 // This operation modifies the packed matrix in-place
-transpose_packed_storage :: proc(packed: ^PackedTriangular($T)) {
+pack_tri_transpose :: proc(packed: ^PackedTriangular($T)) {
 	n := packed.n
 	temp_data := make([]T, len(packed.data))
 	defer delete(temp_data)
@@ -295,7 +295,7 @@ transpose_packed_storage :: proc(packed: ^PackedTriangular($T)) {
 // by converting to full and checking triangular property
 verify_packed_triangular :: proc(packed: ^PackedTriangular($T), tolerance: T) -> bool {
 	// Extract to full matrix
-	A := extract_full_triangular(packed, packed.n)
+	A := pack_tri_extract_full(packed, packed.n)
 	defer delete(A)
 
 	// Check triangular property
@@ -305,25 +305,13 @@ verify_packed_triangular :: proc(packed: ^PackedTriangular($T), tolerance: T) ->
 
 			if packed.uplo == .Upper && i > j {
 				// Upper triangular: below diagonal should be zero
-				when is_complex(T) {
-					if abs(element) > tolerance {
-						return false
-					}
-				} else {
-					if abs(element) > tolerance {
-						return false
-					}
+				if abs(element) > tolerance {
+					return false
 				}
 			} else if packed.uplo == .Lower && i < j {
 				// Lower triangular: above diagonal should be zero
-				when is_complex(T) {
-					if abs(element) > tolerance {
-						return false
-					}
-				} else {
-					if abs(element) > tolerance {
-						return false
-					}
+				if abs(element) > tolerance {
+					return false
 				}
 			}
 		}
@@ -333,7 +321,7 @@ verify_packed_triangular :: proc(packed: ^PackedTriangular($T), tolerance: T) ->
 }
 
 // Compare packed and full representations for equivalence
-compare_packed_full :: proc(packed: ^PackedTriangular($T), A: []T, lda: int, tolerance: T) -> bool {
+pack_tri_compare_full :: proc(packed: ^PackedTriangular($T), A: []T, lda: int, tolerance: T) -> bool {
 	if lda < packed.n {
 		return false
 	}
@@ -354,14 +342,8 @@ compare_packed_full :: proc(packed: ^PackedTriangular($T), A: []T, lda: int, tol
 				full_val := A[i + j * lda]
 
 				diff := packed_val - full_val
-				when is_complex(T) {
-					if abs(diff) > tolerance {
-						return false
-					}
-				} else {
-					if abs(diff) > tolerance {
-						return false
-					}
+				if abs(diff) > tolerance {
+					return false
 				}
 			}
 		}

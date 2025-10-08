@@ -12,7 +12,7 @@ import "core:slice"
 // Symmetric matrices have the property: A[i,j] = A[j,i]
 
 // Check if a matrix is symmetric (within tolerance)
-is_symmetric :: proc(A: ^Matrix($T), tolerance: T) -> bool where is_float(T) || is_complex(T) {
+dns_is_symmetric :: proc(A: ^Matrix($T), tolerance: T) -> bool where is_float(T) || is_complex(T) {
 	if A.rows != A.cols {
 		return false
 	}
@@ -40,7 +40,7 @@ is_symmetric :: proc(A: ^Matrix($T), tolerance: T) -> bool where is_float(T) || 
 }
 
 // Check if a matrix is Hermitian (complex version of symmetric)
-is_hermitian :: proc(A: ^Matrix($T), tolerance: T) -> bool where is_complex(T) {
+dns_is_hermitian :: proc(A: ^Matrix($T), tolerance: T) -> bool where is_complex(T) {
 	if A.rows != A.cols {
 		return false
 	}
@@ -70,9 +70,9 @@ is_hermitian :: proc(A: ^Matrix($T), tolerance: T) -> bool where is_complex(T) {
 }
 
 // Convert a general matrix to symmetric format by averaging upper and lower triangles
-make_symmetric :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) where is_float(T) {
+dns_make_symmetric :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) where is_float(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
-
+	// FIXME: should we really be averaging here??
 	n := A.rows
 	for i in 0 ..< n {
 		for j in i + 1 ..< n {
@@ -92,7 +92,7 @@ make_symmetric :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) where is_floa
 }
 
 // Convert a general matrix to Hermitian format
-make_hermitian :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) where is_complex(T) {
+dns_make_hermitian :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) where is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 
 	n := A.rows
@@ -117,7 +117,7 @@ make_hermitian :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) where is_comp
 }
 
 // Copy only the specified triangle of a symmetric matrix
-copy_symmetric_triangle :: proc(src: ^Matrix($T), dst: ^Matrix(T), uplo := MatrixRegion.Upper) {
+dns_copy_symmetric_triangle :: proc(src: ^Matrix($T), dst: ^Matrix(T), uplo := MatrixRegion.Upper) {
 	assert(src.rows == src.cols && dst.rows == dst.cols, "Matrices must be square")
 	assert(src.rows == dst.rows, "Matrix dimensions must match")
 
@@ -149,7 +149,7 @@ copy_symmetric_triangle :: proc(src: ^Matrix($T), dst: ^Matrix(T), uplo := Matri
 }
 
 // Copy only the specified triangle of a Hermitian matrix
-copy_hermitian_triangle :: proc(src: ^Matrix($T), dst: ^Matrix(T), uplo := MatrixRegion.Upper) where is_complex(T) {
+dns_copy_hermitian_triangle :: proc(src: ^Matrix($T), dst: ^Matrix(T), uplo := MatrixRegion.Upper) where is_complex(T) {
 	assert(src.rows == src.cols && dst.rows == dst.cols, "Matrices must be square")
 	assert(src.rows == dst.rows, "Matrix dimensions must match")
 
@@ -181,101 +181,14 @@ copy_hermitian_triangle :: proc(src: ^Matrix($T), dst: ^Matrix(T), uplo := Matri
 	}
 }
 
-// Convert full storage symmetric matrix to packed storage
-symmetric_to_packed :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper, allocator := context.allocator) -> PackedMatrix(T) where is_float(T) || is_complex(T) {
-	assert(A.rows == A.cols, "Matrix must be square")
-
-	n := A.rows
-	pm := make_packed_matrix(n, uplo, T, allocator)
-	pm.symmetric = true
-
-	if uplo == .Upper {
-		for j in 0 ..< n {
-			for i in 0 ..= j {
-				idx := i + j * (j + 1) / 2
-				pm.data[idx] = matrix_get(A, i, j)
-			}
-		}
-	} else {
-		for j in 0 ..< n {
-			for i in j ..< n {
-				idx := i + (2 * n - j - 1) * j / 2
-				pm.data[idx] = matrix_get(A, i, j)
-			}
-		}
-	}
-
-	return pm
-}
-
-// Convert packed storage to full storage symmetric matrix
-packed_to_symmetric :: proc(pm: ^PackedMatrix($T), allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
-	A := make_matrix(pm.n, pm.n, T, allocator)
-
-	if pm.uplo == .Upper {
-		for j in 0 ..< pm.n {
-			for i in 0 ..= j {
-				idx := i + j * (j + 1) / 2
-				val := pm.data[idx]
-				matrix_set(&A, i, j, val)
-				if i != j && pm.symmetric {
-					when is_complex(T) {
-						if pm.symmetric {
-							matrix_set(&A, j, i, val) // Symmetric
-						} else {
-							matrix_set(&A, j, i, conj(val)) // Hermitian
-						}
-					} else {
-						matrix_set(&A, j, i, val) // Symmetric
-					}
-				}
-			}
-		}
-	} else {
-		for j in 0 ..< pm.n {
-			for i in j ..< pm.n {
-				idx := i + (2 * pm.n - j - 1) * j / 2
-				val := pm.data[idx]
-				matrix_set(&A, i, j, val)
-				if i != j && pm.symmetric {
-					when is_complex(T) {
-						if pm.symmetric {
-							matrix_set(&A, j, i, val) // Symmetric
-						} else {
-							matrix_set(&A, j, i, conj(val)) // Hermitian
-						}
-					} else {
-						matrix_set(&A, j, i, val) // Symmetric
-					}
-				}
-			}
-		}
-	}
-
-	return A
-}
-
-// Transpose a symmetric matrix in-place (no-op, but useful for API consistency)
-transpose_symmetric :: proc(A: ^Matrix($T)) where is_float(T) || is_complex(T) {
-	// For symmetric matrices, A^T = A, so this is a no-op
-	// This function exists for API consistency
-}
-
-// Conjugate transpose (Hermitian transpose) a Hermitian matrix in-place (no-op)
-hermitian_transpose :: proc(A: ^Matrix($T)) where is_complex(T) {
-	// For Hermitian matrices, A^H = A, so this is a no-op
-	// This function exists for API consistency
-}
-
 // Scale a symmetric matrix by a scalar (preserves symmetry)
-scale_symmetric :: proc(A: ^Matrix($T), alpha: T) where is_float(T) || is_complex(T) {
+dns_scale_symmetric :: proc(A: ^Matrix($T), alpha: T) where is_float(T) || is_complex(T) {
 	// For symmetric matrices, scaling preserves symmetry
 	matrix_scale(A, alpha)
 }
 
 // Scale a Hermitian matrix by a real scalar (preserves Hermitian property)
-scale_hermitian :: proc(A: ^Matrix($Cmplx), alpha: $Real) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+dns_scale_hermitian :: proc(A: ^Matrix($Cmplx), alpha: $Real) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	// For Hermitian matrices, scaling by real number preserves Hermitian property
 	alpha_complex := complex(alpha, 0)
 	matrix_scale(A, alpha_complex)
@@ -286,32 +199,9 @@ scale_hermitian :: proc(A: ^Matrix($Cmplx), alpha: $Real) where is_complex(Cmplx
 // MATRIX PROPERTY QUERIES
 // ============================================================================
 
-// Estimate the condition number of a symmetric matrix using 1-norm
-// Note: This is a rough estimate, not as accurate as expert drivers
-estimate_symmetric_condition :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) -> T where is_float(T) {
-	// Simple estimate using Frobenius norm ratio
-	// For accurate condition numbers, use expert drivers
-
-	n := A.rows
-	max_diag: T = 0
-	min_diag: T = max(T)
-
-	for i in 0 ..< n {
-		val := abs(matrix_get(A, i, i))
-		max_diag = max(max_diag, val)
-		min_diag = min(min_diag, val)
-	}
-
-	if min_diag == 0 {
-		return max(T) // Infinite condition number
-	}
-
-	return max_diag / min_diag
-}
-
 // Check if a symmetric matrix is positive definite (rough check using diagonal)
 // Note: This is not a rigorous check - use Cholesky factorization for certainty
-is_likely_positive_definite :: proc(A: ^Matrix($T)) -> bool where is_float(T) || is_complex(T) {
+dns_is_likely_positive_definite :: proc(A: ^Matrix($T)) -> bool where is_float(T) || is_complex(T) {
 	assert(A.rows == A.cols, "Matrix must be square")
 
 	n := A.rows

@@ -18,19 +18,19 @@ import "core:slice"
 // Factorize positive definite tridiagonal matrix using Cholesky factorization
 // For real matrices: T = L*D*L^T where L is unit lower triangular, D is diagonal
 // For complex matrices: T = L*D*L^H where L is unit lower triangular, D is real diagonal
-positive_definite_tridiagonal_factorize :: proc {
-	positive_definite_tridiagonal_factorize_f32_f64,
-	positive_definite_tridiagonal_factorize_c64_c128,
+trid_pd_factorize :: proc {
+	trid_pd_factorize_real,
+	trid_pd_factorize_complex,
 }
 
 // Factorize positive definite tridiagonal matrix for f32/f64
-positive_definite_tridiagonal_factorize_f32_f64 :: proc(
+trid_pd_factorize_real :: proc(
 	d: []$T, // Diagonal elements (modified to factorized diagonal)
 	e: []T, // Off-diagonal elements (modified to factorized off-diagonal)
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
@@ -46,7 +46,7 @@ positive_definite_tridiagonal_factorize_f32_f64 :: proc(
 }
 
 // Factorize positive definite tridiagonal matrix for c64/c128
-positive_definite_tridiagonal_factorize_c64_c128 :: proc(
+trid_pd_factorize_complex :: proc(
 	d: []$R, // Diagonal elements (real, modified to factorized diagonal)
 	e: []$T, // Off-diagonal elements (complex, modified to factorized off-diagonal)
 ) -> (
@@ -72,20 +72,20 @@ positive_definite_tridiagonal_factorize_c64_c128 :: proc(
 // ===================================================================================
 
 // Solve positive definite tridiagonal system using factorization from PTTRF
-positive_definite_tridiagonal_solve_factorized :: proc {
-	positive_definite_tridiagonal_solve_factorized_f32_f64,
-	positive_definite_tridiagonal_solve_factorized_c64_c128,
+trid_pd_solve_factorized :: proc {
+	trid_pd_solve_factorized_real,
+	trid_pd_solve_factorized_complex,
 }
 
 // Solve factorized positive definite tridiagonal system for f32/f64
-positive_definite_tridiagonal_solve_factorized_f32_f64 :: proc(
+trid_pd_solve_factorized_real :: proc(
 	d: []$T, // Factorized diagonal from PTTRF
 	e: []T, // Factorized off-diagonal from PTTRF
 	B: ^Matrix(T), // Right-hand side matrix (overwritten with solution)
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	nrhs := B.cols
 	assert(B.rows >= n, "B matrix too small")
@@ -105,7 +105,7 @@ positive_definite_tridiagonal_solve_factorized_f32_f64 :: proc(
 }
 
 // Solve factorized positive definite tridiagonal system for c64/c128
-positive_definite_tridiagonal_solve_factorized_c64_c128 :: proc(
+trid_pd_solve_factorized_complex :: proc(
 	d: []$R, // Factorized diagonal from PTTRF (real)
 	e: []$T, // Factorized off-diagonal from PTTRF (complex)
 	B: ^Matrix(T), // Right-hand side matrix (overwritten with solution)
@@ -138,20 +138,20 @@ positive_definite_tridiagonal_solve_factorized_c64_c128 :: proc(
 // ===================================================================================
 
 // Solve positive definite tridiagonal system directly (factorization + solve in one call)
-positive_definite_tridiagonal_solve :: proc {
-	positive_definite_tridiagonal_solve_f32_f64,
-	positive_definite_tridiagonal_solve_c64_c128,
+trid_pd_solve :: proc {
+	trid_pd_solve_real,
+	trid_pd_solve_complex,
 }
 
 // Solve positive definite tridiagonal system directly for f32/f64
-positive_definite_tridiagonal_solve_f32_f64 :: proc(
+trid_pd_solve_real :: proc(
 	d: []$T, // Diagonal elements (modified during factorization)
 	e: []T, // Off-diagonal elements (modified during factorization)
 	B: ^Matrix(T), // Right-hand side matrix (overwritten with solution)
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	nrhs := B.cols
 	assert(B.rows >= n, "B matrix too small")
@@ -171,7 +171,7 @@ positive_definite_tridiagonal_solve_f32_f64 :: proc(
 }
 
 // Solve positive definite tridiagonal system directly for c64/c128
-positive_definite_tridiagonal_solve_c64_c128 :: proc(
+trid_pd_solve_complex :: proc(
 	d: []$R, // Diagonal elements (real, modified during factorization)
 	e: []$T, // Off-diagonal elements (complex, modified during factorization)
 	B: ^Matrix(T), // Right-hand side matrix (overwritten with solution)
@@ -202,8 +202,8 @@ positive_definite_tridiagonal_solve_c64_c128 :: proc(
 // ===================================================================================
 
 // Query workspace for condition number estimation
-query_workspace_positive_definite_tridiagonal_condition :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) {
-	when T == f32 || T == f64 {
+query_workspace_trid_pd_condition :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int) {
+	when is_float(T) {
 		// Real types need work array
 		return n, 0
 	} else {
@@ -213,13 +213,13 @@ query_workspace_positive_definite_tridiagonal_condition :: proc($T: typeid, n: i
 }
 
 // Estimate condition number of factorized positive definite tridiagonal matrix
-positive_definite_tridiagonal_condition :: proc {
-	positive_definite_tridiagonal_condition_f32_f64,
-	positive_definite_tridiagonal_condition_c64_c128,
+trid_pd_condition :: proc {
+	trid_pd_condition_real,
+	trid_pd_condition_complex,
 }
 
 // Estimate condition number for f32/f64
-positive_definite_tridiagonal_condition_f32_f64 :: proc(
+trid_pd_condition_real :: proc(
 	d: []$T, // Factorized diagonal from PTTRF
 	e: []T, // Factorized off-diagonal from PTTRF
 	anorm: T, // 1-norm of original matrix
@@ -228,7 +228,7 @@ positive_definite_tridiagonal_condition_f32_f64 :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 	assert(len(work) >= n, "Work array too small")
@@ -246,7 +246,7 @@ positive_definite_tridiagonal_condition_f32_f64 :: proc(
 }
 
 // Estimate condition number for c64/c128
-positive_definite_tridiagonal_condition_c64_c128 :: proc(
+trid_pd_condition_complex :: proc(
 	d: []$R, // Factorized diagonal from PTTRF (real)
 	e: []$T, // Factorized off-diagonal from PTTRF (complex)
 	anorm: R, // 1-norm of original matrix
@@ -277,8 +277,8 @@ positive_definite_tridiagonal_condition_c64_c128 :: proc(
 // ===================================================================================
 
 // Query workspace for iterative refinement
-query_workspace_positive_definite_tridiagonal_refinement :: proc($T: typeid, nrhs: int) -> (work_size: int, rwork_size: int, ferr_size: int, berr_size: int) {
-	when T == f32 || T == f64 {
+query_workspace_trid_pd_refine :: proc($T: typeid, nrhs: int) -> (work_size: int, rwork_size: int, ferr_size: int, berr_size: int) {
+	when is_float(T) {
 		// Real types need work array
 		return nrhs, 0, nrhs, nrhs
 	} else {
@@ -288,13 +288,13 @@ query_workspace_positive_definite_tridiagonal_refinement :: proc($T: typeid, nrh
 }
 
 // Perform iterative refinement for positive definite tridiagonal system
-positive_definite_tridiagonal_refine :: proc {
-	positive_definite_tridiagonal_refine_f32_f64,
-	positive_definite_tridiagonal_refine_c64_c128,
+trid_pd_refine :: proc {
+	trid_pd_refine_real,
+	trid_pd_refine_complex,
 }
 
 // Iterative refinement for f32/f64
-positive_definite_tridiagonal_refine_f32_f64 :: proc(
+trid_pd_refine_real :: proc(
 	d: []$T, // Original diagonal
 	e: []T, // Original off-diagonal
 	df: []T, // Factorized diagonal from PTTRF
@@ -307,7 +307,7 @@ positive_definite_tridiagonal_refine_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	nrhs := B.cols
 	assert(B.rows >= n && X.rows >= n, "Matrix dimensions incorrect")
@@ -330,7 +330,7 @@ positive_definite_tridiagonal_refine_f32_f64 :: proc(
 }
 
 // Iterative refinement for c64/c128
-positive_definite_tridiagonal_refine_c64_c128 :: proc(
+trid_pd_refine_complex :: proc(
 	d: []$R, // Original diagonal (real)
 	e: []$T, // Original off-diagonal (complex)
 	df: []R, // Factorized diagonal from PTTRF (real)
@@ -375,13 +375,13 @@ positive_definite_tridiagonal_refine_c64_c128 :: proc(
 
 // Expert driver for solving positive definite tridiagonal systems with optional
 // factorization, condition estimation, and error bounds
-positive_definite_tridiagonal_solve_expert :: proc {
-	positive_definite_tridiagonal_solve_expert_f32_f64,
-	positive_definite_tridiagonal_solve_expert_c64_c128,
+trid_pd_solve_expert :: proc {
+	trid_pd_solve_expert_real,
+	trid_pd_solve_expert_complex,
 }
 
 // Expert driver for f32/f64
-positive_definite_tridiagonal_solve_expert_f32_f64 :: proc(
+trid_pd_solve_expert_real :: proc(
 	d: []$T, // Diagonal elements
 	e: []T, // Off-diagonal elements
 	df: []T, // Factorized diagonal (output if fact='N', input if fact='F')
@@ -396,7 +396,7 @@ positive_definite_tridiagonal_solve_expert_f32_f64 :: proc(
 	rcond: T,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	nrhs := B.cols
 	assert(B.rows >= n && X.rows >= n, "Matrix dimensions incorrect")
@@ -419,7 +419,7 @@ positive_definite_tridiagonal_solve_expert_f32_f64 :: proc(
 }
 
 // Expert driver for c64/c128
-positive_definite_tridiagonal_solve_expert_c64_c128 :: proc(
+trid_pd_solve_expert_complex :: proc(
 	d: []$R, // Diagonal elements (real)
 	e: []$T, // Off-diagonal elements (complex)
 	df: []R, // Factorized diagonal (output if fact='N', input if fact='F')
@@ -462,7 +462,7 @@ positive_definite_tridiagonal_solve_expert_c64_c128 :: proc(
 // ===================================================================================
 
 // Query workspace for positive definite tridiagonal eigenvalue computation
-query_workspace_positive_definite_tridiagonal_eigenvalues :: proc($T: typeid, n: int) -> (work_size: int) {
+query_workspace_trid_pd_eigen :: proc($T: typeid, n: int) -> (work_size: int) {
 	// PTEQR requires 4*n workspace for real types
 	when T == f32 || T == complex64 {
 		return 4 * n
@@ -471,25 +471,17 @@ query_workspace_positive_definite_tridiagonal_eigenvalues :: proc($T: typeid, n:
 	}
 }
 
-// Compute eigenvalues/eigenvectors of positive definite tridiagonal matrix
-positive_definite_tridiagonal_eigenvalues :: proc {
-	positive_definite_tridiagonal_eigenvalues_f32,
-	positive_definite_tridiagonal_eigenvalues_f64,
-	positive_definite_tridiagonal_eigenvalues_c64,
-	positive_definite_tridiagonal_eigenvalues_c128,
-}
-
-// Eigenvalue computation for f32
-positive_definite_tridiagonal_eigenvalues_f32 :: proc(
-	d: []f32, // Diagonal elements (modified to eigenvalues on output)
-	e: []f32, // Off-diagonal elements (destroyed)
-	Z: ^Matrix(f32) = nil, // Eigenvector matrix (optional output)
-	work: []f32, // Pre-allocated workspace (size 4*n)
+// Generic eigenvalue computation for all types
+trid_pd_eigen_generic :: proc(
+	d: []$Real, // Diagonal elements (real, modified to eigenvalues on output)
+	e: []Real, // Off-diagonal elements (real, destroyed)
+	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional output)
+	work: []Real, // Pre-allocated workspace (size 4*n)
 	compz := CompzOption.None, // Eigenvector computation mode
 ) -> (
 	info: Info,
 	ok: bool,
-) {
+) where (Real == f32 && (T == f32 || T == complex64)) || (Real == f64 && (T == f64 || T == complex128)) {
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 	assert(len(work) >= 4 * n, "Insufficient workspace")
@@ -503,118 +495,22 @@ positive_definite_tridiagonal_eigenvalues_f32 :: proc(
 
 	// Handle eigenvector matrix
 	ldz := Blas_Int(1)
-	z_ptr: ^f32 = nil
+	z_ptr: ^T = nil
 	if Z != nil && compz != .None {
 		ldz = Z.ld
 		z_ptr = raw_data(Z.data)
 	}
 
-	lapack.spteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
-
-	return info, info == 0
-}
-
-// Eigenvalue computation for f64
-positive_definite_tridiagonal_eigenvalues_f64 :: proc(
-	d: []f64, // Diagonal elements (modified to eigenvalues on output)
-	e: []f64, // Off-diagonal elements (destroyed)
-	Z: ^Matrix(f64) = nil, // Eigenvector matrix (optional output)
-	work: []f64, // Pre-allocated workspace (size 4*n)
-	compz := CompzOption.None, // Eigenvector computation mode
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(work) >= 4 * n, "Insufficient workspace")
-
-	if compz != .None {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
+	// Dispatch to appropriate LAPACK routine
+	when Real == f32 && T == f32 {
+		lapack.spteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
+	} else when Real == f64 && T == f64 {
+		lapack.dpteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
+	} else when Real == f32 && T == complex64 {
+		lapack.cpteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
+	} else when Real == f64 && T == complex128 {
+		lapack.zpteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
 	}
-
-	compz_c := cast(u8)compz
-	n_int := Blas_Int(n)
-
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^f64 = nil
-	if Z != nil && compz != .None {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
-
-	lapack.dpteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
-
-	return info, info == 0
-}
-
-// Eigenvalue computation for c64
-positive_definite_tridiagonal_eigenvalues_c64 :: proc(
-	d: []f32, // Diagonal elements (real, modified to eigenvalues on output)
-	e: []f32, // Off-diagonal elements (real, destroyed)
-	Z: ^Matrix(complex64) = nil, // Eigenvector matrix (optional output)
-	work: []f32, // Pre-allocated workspace (size 4*n)
-	compz := CompzOption.None, // Eigenvector computation mode
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(work) >= 4 * n, "Insufficient workspace")
-
-	if compz != .None {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
-	}
-
-	compz_c := cast(u8)compz
-	n_int := Blas_Int(n)
-
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^complex64 = nil
-	if Z != nil && compz != .None {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
-
-	lapack.cpteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
-
-	return info, info == 0
-}
-
-// Eigenvalue computation for c128
-positive_definite_tridiagonal_eigenvalues_c128 :: proc(
-	d: []f64, // Diagonal elements (real, modified to eigenvalues on output)
-	e: []f64, // Off-diagonal elements (real, destroyed)
-	Z: ^Matrix(complex128) = nil, // Eigenvector matrix (optional output)
-	work: []f64, // Pre-allocated workspace (size 4*n)
-	compz := CompzOption.None, // Eigenvector computation mode
-) -> (
-	info: Info,
-	ok: bool,
-) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(work) >= 4 * n, "Insufficient workspace")
-
-	if compz != .None {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
-	}
-
-	compz_c := cast(u8)compz
-	n_int := Blas_Int(n)
-
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^complex128 = nil
-	if Z != nil && compz != .None {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
-
-	lapack.zpteqr_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &info)
 
 	return info, info == 0
 }

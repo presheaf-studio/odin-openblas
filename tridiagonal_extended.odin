@@ -166,12 +166,12 @@ query_workspace_tridiagonal_stemr :: proc($T: typeid, n: int, jobz: EigenJobOpti
 
 // Extended MRRR algorithm with control over accuracy
 tridiagonal_extended_mrrr :: proc {
-	tridiagonal_extended_mrrr_f32_f64,
-	tridiagonal_extended_mrrr_c64_c128,
+	trid_eigen_extended_mrrr_real,
+	trid_eigen_extended_mrrr_complex,
 }
 
 // Extended MRRR for f32/f64
-tridiagonal_extended_mrrr_f32_f64 :: proc(
+trid_eigen_extended_mrrr_real :: proc(
 	d: []$T, // Diagonal (modified to eigenvalues)
 	e: []T, // Off-diagonal (destroyed)
 	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional)
@@ -181,8 +181,8 @@ tridiagonal_extended_mrrr_f32_f64 :: proc(
 	iwork: []Blas_Int, // Pre-allocated integer workspace
 	jobz := EigenJobOption.VALUES_ONLY,
 	range := EigenRangeOption.ALL,
-	vl: T = 0, // Lower bound (if range == VALUE)
-	vu: T = 0, // Upper bound (if range == VALUE)
+	vl: T, // Lower bound (if range == VALUE)
+	vu: T, // Upper bound (if range == VALUE)
 	il: int = 0, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
 	nzc: int = 0, // Number of eigenvectors to compute (0 = automatic)
@@ -192,7 +192,7 @@ tridiagonal_extended_mrrr_f32_f64 :: proc(
 	nzc_out: int,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -237,7 +237,7 @@ tridiagonal_extended_mrrr_f32_f64 :: proc(
 }
 
 // Extended MRRR for c64/c128
-tridiagonal_extended_mrrr_c64_c128 :: proc(
+trid_eigen_extended_mrrr_complex :: proc(
 	d: []$R, // Diagonal (modified to eigenvalues, always real)
 	e: []R, // Off-diagonal (destroyed, always real)
 	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
@@ -247,8 +247,8 @@ tridiagonal_extended_mrrr_c64_c128 :: proc(
 	iwork: []Blas_Int, // Pre-allocated integer workspace
 	jobz := EigenJobOption.VALUES_ONLY,
 	range := EigenRangeOption.ALL,
-	vl: R = 0, // Lower bound (if range == VALUE)
-	vu: R = 0, // Upper bound (if range == VALUE)
+	vl: R, // Lower bound (if range == VALUE)
+	vu: R, // Upper bound (if range == VALUE)
 	il: int = 0, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
 	nzc: int = 0, // Number of eigenvectors to compute (0 = automatic)
@@ -317,12 +317,12 @@ query_workspace_tridiagonal_qr :: proc($T: typeid, n: int, compz: CompzOption) -
 
 // QR iteration for tridiagonal eigenproblems
 tridiagonal_qr_iteration :: proc {
-	tridiagonal_qr_iteration_f32_f64,
-	tridiagonal_qr_iteration_c64_c128,
+	trid_eigen_qr_real,
+	trid_eigen_qr_complex,
 }
 
 // QR iteration for f32/f64
-tridiagonal_qr_iteration_f32_f64 :: proc(
+trid_eigen_qr_real :: proc(
 	d: []$T, // Diagonal (modified to eigenvalues on output)
 	e: []T, // Off-diagonal (destroyed)
 	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional)
@@ -331,7 +331,7 @@ tridiagonal_qr_iteration_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
@@ -362,7 +362,7 @@ tridiagonal_qr_iteration_f32_f64 :: proc(
 }
 
 // QR iteration for c64/c128
-tridiagonal_qr_iteration_c64_c128 :: proc(
+trid_eigen_qr_complex :: proc(
 	d: []$R, // Diagonal (modified to eigenvalues on output, always real)
 	e: []R, // Off-diagonal (destroyed, always real)
 	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
@@ -564,12 +564,12 @@ query_workspace_tridiagonal_stegr :: proc($T: typeid, n: int, jobz: EigenJobOpti
 
 // General MRRR algorithm for tridiagonal matrices
 tridiagonal_general_mrrr :: proc {
-	tridiagonal_general_mrrr_f32_f64,
-	tridiagonal_general_mrrr_c64_c128,
+	trid_eigen_general_mrrr_real,
+	trid_eigen_general_mrrr_complex,
 }
 
 // General MRRR for f32/f64
-tridiagonal_general_mrrr_f32_f64 :: proc(
+trid_eigen_general_mrrr_real :: proc(
 	d: []$T, // Diagonal (modified to eigenvalues)
 	e: []T, // Off-diagonal (destroyed)
 	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional)
@@ -579,16 +579,16 @@ tridiagonal_general_mrrr_f32_f64 :: proc(
 	iwork: []Blas_Int, // Pre-allocated integer workspace
 	jobz := EigenJobOption.VALUES_ONLY,
 	range := EigenRangeOption.ALL,
-	vl: T = 0, // Lower bound (if range == VALUE)
-	vu: T = 0, // Upper bound (if range == VALUE)
+	vl: T, // Lower bound (if range == VALUE)
+	vu: T, // Upper bound (if range == VALUE)
 	il: int = 0, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T = 0, // Absolute tolerance (0 = machine precision)
+	abstol: T, // Absolute tolerance (0 = machine precision)
 ) -> (
 	m: int,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 	assert(len(w) >= n, "Eigenvalue array too small")
@@ -629,7 +629,7 @@ tridiagonal_general_mrrr_f32_f64 :: proc(
 }
 
 // General MRRR for c64/c128
-tridiagonal_general_mrrr_c64_c128 :: proc(
+trid_eigen_general_mrrr_complex :: proc(
 	d: []$R, // Diagonal (modified to eigenvalues, always real)
 	e: []R, // Off-diagonal (destroyed, always real)
 	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
@@ -639,11 +639,11 @@ tridiagonal_general_mrrr_c64_c128 :: proc(
 	iwork: []Blas_Int, // Pre-allocated integer workspace
 	jobz := EigenJobOption.VALUES_ONLY,
 	range := EigenRangeOption.ALL,
-	vl: R = 0, // Lower bound (if range == VALUE)
-	vu: R = 0, // Upper bound (if range == VALUE)
+	vl: R, // Lower bound (if range == VALUE)
+	vu: R, // Upper bound (if range == VALUE)
 	il: int = 0, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: R = 0, // Absolute tolerance (0 = machine precision)
+	abstol: R, // Absolute tolerance (0 = machine precision)
 ) -> (
 	m: int,
 	info: Info,
@@ -703,7 +703,7 @@ query_workspace_inverse_iteration :: proc(
 	ifail_size: int,
 ) {
 	// STEIN requires 5*n real workspace, n integer workspace, m ifail array
-	when T == f32 || T == f64 || T == complex64 || T == complex128 {
+	when is_float(T) || is_complex(T) {
 		work_size = 5 * n
 		iwork_size = n
 		ifail_size = m
@@ -713,12 +713,12 @@ query_workspace_inverse_iteration :: proc(
 
 // Compute eigenvectors using inverse iteration
 tridiagonal_inverse_iteration :: proc {
-	tridiagonal_inverse_iteration_f32_f64,
-	tridiagonal_inverse_iteration_c64_c128,
+	trid_eigen_inverse_iteration_real,
+	trid_eigen_inverse_iteration_complex,
 }
 
 // Inverse iteration for f32/f64
-tridiagonal_inverse_iteration_f32_f64 :: proc(
+trid_eigen_inverse_iteration_real :: proc(
 	d: []$T, // Diagonal elements
 	e: []T, // Off-diagonal elements
 	w: []T, // Eigenvalues
@@ -732,7 +732,7 @@ tridiagonal_inverse_iteration_f32_f64 :: proc(
 	nfailed: int,
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := len(d)
 	m := len(w)
 	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
@@ -758,7 +758,7 @@ tridiagonal_inverse_iteration_f32_f64 :: proc(
 }
 
 // Inverse iteration for c64/c128
-tridiagonal_inverse_iteration_c64_c128 :: proc(
+trid_eigen_inverse_iteration_complex :: proc(
 	d: []$R, // Diagonal elements (always real)
 	e: []R, // Off-diagonal elements (always real)
 	w: []R, // Eigenvalues (always real)

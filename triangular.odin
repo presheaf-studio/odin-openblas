@@ -2,6 +2,7 @@ package openblas
 
 import lapack "./f77"
 import "base:intrinsics"
+import "core:math"
 
 // ===================================================================================
 // TRIANGULAR MATRIX OPERATIONS
@@ -45,7 +46,7 @@ triangular_storage_size :: proc(n, lda: int) -> int {
 }
 
 // Create triangular matrix view (non-allocating)
-make_triangular :: proc(data: []$T, n, lda: int, uplo: MatrixRegion = .Upper, diag: DiagonalType = .NonUnit) -> (tri: Triangular(T), ok: bool) {
+into_triangular :: proc(data: []$T, n, lda: int, uplo: MatrixRegion = .Upper, diag: DiagonalType = .NonUnit) -> (tri: Triangular(T), ok: bool) {
 	if !validate_triangular(n, lda, len(data)) {
 		return {}, false
 	}
@@ -109,14 +110,14 @@ triangular_set :: proc(tri: ^Triangular($T), i, j: int, value: T) {
 }
 
 // Copy triangular matrix to full matrix (non-allocating)
-triangular_to_full :: proc(tri: ^Triangular($T), A: []T, lda_full: int) {
-	assert(len(A) >= tri.n * lda_full, "Full matrix array too small")
-	assert(lda_full >= tri.n, "Leading dimension too small")
+triangular_to_full :: proc(tri: ^Triangular($T), A: Matrix(T)) {
+	assert(len(A.data) >= tri.n * A.ld, "Full matrix array too small")
+	assert(A.ld >= tri.n, "Leading dimension too small")
 
 	// Initialize to zero
 	for i in 0 ..< tri.n {
 		for j in 0 ..< tri.n {
-			A[i + j * lda_full] = T(0)
+			A.data[i + j * A.ld] = T(0)
 		}
 	}
 
@@ -126,9 +127,9 @@ triangular_to_full :: proc(tri: ^Triangular($T), A: []T, lda_full: int) {
 		for j in 0 ..< tri.n {
 			for i in 0 ..= j {
 				if tri.diag == .Unit && i == j {
-					A[i + j * lda_full] = T(1)
+					A.data[i + j * A.ld] = T(1)
 				} else {
-					A[i + j * lda_full] = tri.data[i + j * tri.lda]
+					A.data[i + j * A.ld] = tri.data[i + j * tri.lda]
 				}
 			}
 		}
@@ -136,9 +137,9 @@ triangular_to_full :: proc(tri: ^Triangular($T), A: []T, lda_full: int) {
 		for j in 0 ..< tri.n {
 			for i in j ..< tri.n {
 				if tri.diag == .Unit && i == j {
-					A[i + j * lda_full] = T(1)
+					A.data[i + j * A.ld] = T(1)
 				} else {
-					A[i + j * lda_full] = tri.data[i + j * tri.lda]
+					A.data[i + j * A.ld] = tri.data[i + j * tri.lda]
 				}
 			}
 		}
@@ -148,16 +149,16 @@ triangular_to_full :: proc(tri: ^Triangular($T), A: []T, lda_full: int) {
 }
 
 // Copy full matrix to triangular (extracting the relevant triangle)
-full_to_triangular :: proc(A: []$T, lda_full: int, tri: ^Triangular(T)) {
-	assert(len(A) >= tri.n * lda_full, "Full matrix array too small")
-	assert(lda_full >= tri.n, "Leading dimension too small")
+full_to_triangular :: proc(A: Matrix($T), tri: ^Triangular(T)) {
+	assert(len(A.data) >= tri.n * A.ld, "Full matrix array too small")
+	assert(A.ld >= tri.n, "Leading dimension too small")
 
 	switch tri.uplo {
 	case .Upper:
 		for j in 0 ..< tri.n {
 			for i in 0 ..= j {
 				if !(tri.diag == .Unit && i == j) {
-					tri.data[i + j * tri.lda] = A[i + j * lda_full]
+					tri.data[i + j * tri.lda] = A.data[i + j * A.ld]
 				}
 			}
 		}
@@ -165,7 +166,7 @@ full_to_triangular :: proc(A: []$T, lda_full: int, tri: ^Triangular(T)) {
 		for j in 0 ..< tri.n {
 			for i in j ..< tri.n {
 				if !(tri.diag == .Unit && i == j) {
-					tri.data[i + j * tri.lda] = A[i + j * lda_full]
+					tri.data[i + j * tri.lda] = A.data[i + j * A.ld]
 				}
 			}
 		}
@@ -175,7 +176,7 @@ full_to_triangular :: proc(A: []$T, lda_full: int, tri: ^Triangular(T)) {
 }
 
 // Check if triangular matrix is well-conditioned (rough estimate)
-is_well_conditioned_triangular_rough :: proc(tri: ^Triangular($T), threshold: T) -> bool where is_float(T) {
+is_well_conditioned_triangular_approx :: proc(tri: ^Triangular($T), threshold: T) -> bool where is_float(T) {
 	// Simple check: examine diagonal elements
 	if tri.diag == .Unit {
 		return true // Unit triangular matrices are always well-conditioned
@@ -218,12 +219,12 @@ make_identity_triangular :: proc(data: []$T, n, lda: int, uplo: MatrixRegion = .
 }
 
 // Compute frobenius norm of triangular matrix
-frobenius_norm_triangular :: proc {
-	frobenius_norm_triangular_real,
-	frobenius_norm_triangular_complex,
+tri_frobenius_norm :: proc {
+	tri_frobenius_norm_real,
+	tri_frobenius_norm_complex,
 }
 
-frobenius_norm_triangular_real :: proc(tri: ^Triangular($T)) -> T where is_float(T) {
+tri_frobenius_norm_real :: proc(tri: ^Triangular($T)) -> T where is_float(T) {
 	sum := T(0)
 
 	switch tri.uplo {
@@ -253,11 +254,10 @@ frobenius_norm_triangular_real :: proc(tri: ^Triangular($T)) -> T where is_float
 		panic("Full storage not supported for triangular matrices")
 	}
 
-	return sqrt(sum)
+	return math.sqrt(sum)
 }
 
-frobenius_norm_triangular_complex :: proc(tri: ^Triangular($Cmplx)) -> $Real where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+tri_frobenius_norm_complex :: proc(tri: ^Triangular($Cmplx), sum_out: ^$Real) where is_complex(Cmplx) && ((Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64)) {
 	sum := Real(0)
 
 	switch tri.uplo {
@@ -287,5 +287,5 @@ frobenius_norm_triangular_complex :: proc(tri: ^Triangular($Cmplx)) -> $Real whe
 		panic("Full storage not supported for triangular matrices")
 	}
 
-	return sqrt(sum)
+	sum_out^ = math.sqrt(sum)
 }

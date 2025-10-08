@@ -26,10 +26,12 @@ import "core:mem"
 
 // Convert a dense matrix to banded format
 // Only elements within the specified band are copied
-dense_to_banded :: proc(source: ^Matrix($T), kl, ku: int, allocator := context.allocator) -> BandedMatrix(T) where is_float(T) || is_complex(T) {
+band_from_dns :: proc(source: ^Matrix($T), kl, ku: int, allocator := context.allocator) -> BandedMatrix(T) where is_float(T) || is_complex(T) {
 	assert(source.format == .General, "Source matrix must be in general format")
 
-	dest := make_banded_matrix(int(source.rows), int(source.cols), kl, ku, T, allocator)
+	dest := band_make(int(source.rows), int(source.cols), kl, ku, T, allocator)
+
+	// FIXME: LAPACK COPY??
 
 	// Copy elements within the band
 	for j in 0 ..< int(source.cols) {
@@ -41,8 +43,7 @@ dense_to_banded :: proc(source: ^Matrix($T), kl, ku: int, allocator := context.a
 			src_idx := i + j * int(source.ld)
 			value := source.data[src_idx]
 
-			// Store in banded format
-			banded_set(&dest, i, j, value)
+			band_set(&dest, i, j, value)
 		}
 	}
 
@@ -50,11 +51,11 @@ dense_to_banded :: proc(source: ^Matrix($T), kl, ku: int, allocator := context.a
 }
 
 // Convert a dense symmetric/Hermitian matrix to symmetric banded format
-dense_symmetric_to_banded :: proc(source: ^Matrix($T), kd: int, uplo: UpLo, allocator := context.allocator) -> BandedMatrix(T) where is_float(T) || is_complex(T) {
+band_from_dns_symmetric :: proc(source: ^Matrix($T), kd: int, uplo: UpLo, allocator := context.allocator) -> BandedMatrix(T) where is_float(T) || is_complex(T) {
 	assert(source.format == .Symmetric || source.format == .Hermitian, "Source matrix must be symmetric or Hermitian")
 	assert(source.rows == source.cols, "Source matrix must be square")
 
-	dest := make_symmetric_banded_matrix(int(source.rows), kd, uplo, T, allocator)
+	dest := band_make_symmetric(int(source.rows), kd, uplo, T, allocator)
 
 	n := int(source.rows)
 	ldab := int(dest.ldab)
@@ -98,7 +99,7 @@ dense_symmetric_to_banded :: proc(source: ^Matrix($T), kd: int, uplo: UpLo, allo
 
 // Convert banded matrix back to dense format
 // Zero elements outside the band
-banded_to_dense :: proc(source: ^BandedMatrix($T), allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
+dns_from_band :: proc(source: ^BandedMatrix($T), allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
 	rows := int(source.rows)
 	cols := int(source.cols)
 
@@ -110,12 +111,8 @@ banded_to_dense :: proc(source: ^BandedMatrix($T), allocator := context.allocato
 		format = .General,
 	}
 
-	// Initialize to zero
-	for i in 0 ..< len(dest.data) {
-		dest.data[i] = T{}
-	}
+	// TODO: explicit zero or rely on ZII??
 
-	// Copy elements from band storage
 	kl := int(source.kl)
 	ku := int(source.ku)
 	ldab := int(source.ldab)
@@ -138,7 +135,7 @@ banded_to_dense :: proc(source: ^BandedMatrix($T), allocator := context.allocato
 }
 
 // Convert symmetric banded matrix to full dense symmetric matrix
-symmetric_banded_to_dense :: proc(source: ^BandedMatrix($T), uplo: UpLo, allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
+dns_from_band_symmetric :: proc(source: ^BandedMatrix($T), uplo: UpLo, allocator := context.allocator) -> Matrix(T) where is_float(T) || is_complex(T) {
 	assert(source.symmetric, "Source matrix must be symmetric")
 	assert(source.rows == source.cols, "Source matrix must be square")
 
@@ -152,10 +149,7 @@ symmetric_banded_to_dense :: proc(source: ^BandedMatrix($T), uplo: UpLo, allocat
 		uplo   = uplo,
 	}
 
-	// Initialize to zero
-	for i in 0 ..< len(dest.data) {
-		dest.data[i] = T{}
-	}
+	// TODO: explicit zero or rely on ZII??
 
 	kd := int(source.ku) // For symmetric, ku = kd or kl = kd
 	if source.kl > 0 {
@@ -213,7 +207,7 @@ symmetric_banded_to_dense :: proc(source: ^BandedMatrix($T), uplo: UpLo, allocat
 // ===================================================================================
 
 // Check if a dense matrix has banded structure with given bandwidth
-is_matrix_banded :: proc(mat: ^Matrix($T), kl, ku: int, tolerance: f64 = 1e-12) -> bool {
+band_is_banded :: proc(mat: ^Matrix($T), kl, ku: int, tolerance: f64 = 1e-12) -> bool {
 	if mat.format != .General {
 		return false
 	}
@@ -229,14 +223,8 @@ is_matrix_banded :: proc(mat: ^Matrix($T), kl, ku: int, tolerance: f64 = 1e-12) 
 				src_idx := i + j * int(mat.ld)
 				value := mat.data[src_idx]
 
-				when is_float(T) {
-					if abs(value) > T(tolerance) {
-						return false
-					}
-				} else when is_complex(T) {
-					if abs(value) > T(tolerance) {
-						return false
-					}
+				if abs(value) > T(tolerance) {
+					return false
 				}
 			}
 		}
@@ -246,7 +234,7 @@ is_matrix_banded :: proc(mat: ^Matrix($T), kl, ku: int, tolerance: f64 = 1e-12) 
 }
 
 // Get effective bandwidth of a dense matrix
-get_dense_matrix_bandwidth :: proc(mat: ^Matrix($T), tolerance: f64 = 1e-12) -> (kl, ku: int) {
+dns_get_bandwidth :: proc(mat: ^Matrix($T), tolerance: f64 = 1e-12) -> (kl, ku: int) {
 	assert(mat.format == .General, "Matrix must be in general format")
 
 	rows := int(mat.rows)
@@ -258,12 +246,7 @@ get_dense_matrix_bandwidth :: proc(mat: ^Matrix($T), tolerance: f64 = 1e-12) -> 
 			src_idx := i + j * int(mat.ld)
 			value := mat.data[src_idx]
 
-			is_nonzero := false
-			when is_float(T) {
-				is_nonzero = abs(value) > T(tolerance)
-			} else when is_complex(T) {
-				is_nonzero = abs(value) > T(tolerance)
-			}
+			is_nonzero := abs(value) > T(tolerance)
 
 			if is_nonzero {
 				if i > j {
@@ -284,12 +267,12 @@ get_dense_matrix_bandwidth :: proc(mat: ^Matrix($T), tolerance: f64 = 1e-12) -> 
 
 // Convert BandedMatrix to LAPACK AB format (for GB routines)
 // The matrix is already in the correct format, just extract parameters
-banded_to_lapack_gb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, m, n, kl, ku, ldab: Blas_Int) {
+band_to_lapack_gb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, m, n, kl, ku, ldab: Blas_Int) {
 	return bm.data, bm.rows, bm.cols, bm.kl, bm.ku, bm.ldab
 }
 
 // Convert BandedMatrix to LAPACK SB/HB format (for symmetric/Hermitian band routines)
-banded_to_lapack_sb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, n, kd, ldab: Blas_Int) {
+band_to_lapack_sb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, n, kd, ldab: Blas_Int) {
 	assert(bm.symmetric, "Matrix must be symmetric for SB format")
 	assert(bm.rows == bm.cols, "Matrix must be square for SB format")
 
@@ -308,7 +291,7 @@ banded_to_lapack_sb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, n, k
 }
 
 // Convert BandedMatrix to LAPACK TB format (for triangular band routines)
-banded_to_lapack_tb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, diag: Diag, n, k, ldab: Blas_Int) {
+band_to_lapack_tb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, diag: Diag, n, k, ldab: Blas_Int) {
 	assert(bm.rows == bm.cols, "Matrix must be square for TB format")
 
 	uplo_val: UpLo
@@ -323,7 +306,7 @@ banded_to_lapack_tb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, diag
 	}
 
 	// Default to non-unit diagonal
-	diag_val := Diag.NonUnit
+	diag_val := Diag.NonUnit // FIXME: check into this
 
 	return bm.data, uplo_val, diag_val, bm.rows, k_val, bm.ldab
 }
@@ -333,7 +316,7 @@ banded_to_lapack_tb :: proc(bm: ^BandedMatrix($T)) -> (ab: []T, uplo: UpLo, diag
 // ===================================================================================
 
 // Copy data from one banded matrix to another (must have compatible dimensions)
-copy_banded_matrix :: proc(dest: ^BandedMatrix($T), src: ^BandedMatrix(T)) {
+band_copy :: proc(dest: ^BandedMatrix($T), src: ^BandedMatrix(T)) {
 	assert(dest.rows == src.rows && dest.cols == src.cols, "Matrices must have same dimensions")
 	assert(dest.kl >= src.kl && dest.ku >= src.ku, "Destination must have at least as much bandwidth")
 	assert(len(dest.data) >= len(src.data), "Destination data array too small")
@@ -344,28 +327,19 @@ copy_banded_matrix :: proc(dest: ^BandedMatrix($T), src: ^BandedMatrix(T)) {
 		return
 	}
 
+	// FIXME: copy routines??
+
 	// General case: copy element by element
 	for j in 0 ..< int(src.cols) {
 		for i in max(0, j - int(src.ku)) ..< min(int(src.rows), j + int(src.kl) + 1) {
-			if value, stored := banded_get(src, i, j); stored {
-				banded_set(dest, i, j, value)
+			if value, stored := band_get(src, i, j); stored {
+				band_set(dest, i, j, value)
 			}
 		}
 	}
 }
 
 // Zero out a banded matrix
-zero_banded_matrix :: proc(bm: ^BandedMatrix($T)) {
-	for i in 0 ..< len(bm.data) {
-		bm.data[i] = T{}
-	}
-}
-
-// ===================================================================================
-// HELPER FUNCTIONS
-// ===================================================================================
-
-// Complex conjugate helper
-conj :: proc(z: $T) -> T where T == complex64 || T == complex128 {
-	return complex(real(z), -imag(z))
+band_zero :: proc(bm: ^BandedMatrix($T)) {
+	mem.zero(bm.data, len(bm.data))
 }

@@ -41,10 +41,10 @@ foreign lib {
 		                 <0: -ith argument had illegal value
 		                 >0: ith diagonal element of triangular factor of A is zero (A does not have full rank)
 	*/
-	cgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, work: ^complex64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	dgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	sgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	zgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, work: ^complex128, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	cgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, work: [^]complex64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	dgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, work: [^]f64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	sgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, work: [^]f32, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	zgels_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, work: [^]complex128, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
 
 	// GELST - Least squares solver using complete orthogonal factorization (most robust for rank-deficient)
 	/*
@@ -67,10 +67,10 @@ foreign lib {
 		Note: GELST uses complete orthogonal factorization for maximum numerical stability
 		      with rank-deficient matrices. Added in LAPACK 3.9.0
 	*/
-	cgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, jpvt: ^blasint, rcond: ^f32, rank: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, info: ^Info, l_trans: c.size_t = 1) ---
-	dgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, jpvt: ^blasint, rcond: ^f64, rank: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	sgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, jpvt: ^blasint, rcond: ^f32, rank: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	zgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, jpvt: ^blasint, rcond: ^f64, rank: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, info: ^Info, l_trans: c.size_t = 1) ---
+	cgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, jpvt: [^]blasint, rcond: ^f32, rank: ^blasint, work: [^]complex64, lwork: ^blasint, rwork: [^]f32, info: ^Info, l_trans: c.size_t = 1) ---
+	dgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, jpvt: [^]blasint, rcond: ^f64, rank: ^blasint, work: [^]f64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	sgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, jpvt: [^]blasint, rcond: ^f32, rank: ^blasint, work: [^]f32, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	zgelst_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, jpvt: [^]blasint, rcond: ^f64, rank: ^blasint, work: [^]complex128, lwork: ^blasint, rwork: [^]f64, info: ^Info, l_trans: c.size_t = 1) ---
 
 
 	// GELSS - Least squares solver using SVD (slower than GELSD, less memory)
@@ -90,10 +90,10 @@ foreign lib {
 		rwork: []Real [out] (complex only) real workspace array, dimension at least 5*min(m,n)
 		info: ^Info [out] 0:Success; <0: -ith arg illegal; >0: SVD algorithm failed to converge
 	*/
-	cgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, S: ^f32, rcond: ^f32, rank: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, info: ^Info) ---
-	dgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, S: ^f64, rcond: ^f64, rank: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info) ---
-	sgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, S: ^f32, rcond: ^f32, rank: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info) ---
-	zgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, S: ^f64, rcond: ^f64, rank: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, info: ^Info) ---
+	cgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, S: [^]f32, rcond: ^f32, rank: ^blasint, work: [^]complex64, lwork: ^blasint, rwork: [^]f32, info: ^Info) ---
+	dgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, S: [^]f64, rcond: ^f64, rank: ^blasint, work: [^]f64, lwork: ^blasint, info: ^Info) ---
+	sgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, S: [^]f32, rcond: ^f32, rank: ^blasint, work: [^]f32, lwork: ^blasint, info: ^Info) ---
+	zgelss_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, S: [^]f64, rcond: ^f64, rank: ^blasint, work: [^]complex128, lwork: ^blasint, rwork: [^]f64, info: ^Info) ---
 
 	// GELSD - Least squares solver using SVD with divide-and-conquer (fastest, most memory)
 	/*
@@ -113,10 +113,10 @@ foreign lib {
 		iwork: []blasint [out] integer workspace array, dimension at least LIWORK >= max(1, 3*min(m,n)*nlvl + 11*min(m,n))
 		info: ^Info [out] 0:Success; <0: -ith arg illegal; >0: SVD algorithm failed to converge
 	*/
-	cgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, S: ^f32, rcond: ^f32, rank: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, iwork: ^blasint, info: ^Info) ---
-	dgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, S: ^f64, rcond: ^f64, rank: ^blasint, work: ^f64, lwork: ^blasint, iwork: ^blasint, info: ^Info) ---
-	sgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, S: ^f32, rcond: ^f32, rank: ^blasint, work: ^f32, lwork: ^blasint, iwork: ^blasint, info: ^Info) ---
-	zgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, S: ^f64, rcond: ^f64, rank: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, iwork: ^blasint, info: ^Info) ---
+	cgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, S: [^]f32, rcond: ^f32, rank: ^blasint, work: [^]complex64, lwork: ^blasint, rwork: [^]f32, iwork: [^]blasint, info: ^Info) ---
+	dgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, S: [^]f64, rcond: ^f64, rank: ^blasint, work: [^]f64, lwork: ^blasint, iwork: [^]blasint, info: ^Info) ---
+	sgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, S: [^]f32, rcond: ^f32, rank: ^blasint, work: [^]f32, lwork: ^blasint, iwork: [^]blasint, info: ^Info) ---
+	zgelsd_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, S: [^]f64, rcond: ^f64, rank: ^blasint, work: [^]complex128, lwork: ^blasint, rwork: [^]f64, iwork: [^]blasint, info: ^Info) ---
 
 
 	// GELSY - Least squares solver using complete orthogonal factorization (good compromise between speed and accuracy)
@@ -137,10 +137,10 @@ foreign lib {
 		rwork: []Real [out] (complex only) real workspace array, dimension at least 2*N
 		info: ^Info [out] 0:Success; <0: -ith arg illegal
 	*/
-	cgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, JPVT: ^blasint, rcond: ^f32, rank: ^blasint, work: ^complex64, lwork: ^blasint, rwork: ^f32, info: ^Info) ---
-	dgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, JPVT: ^blasint, rcond: ^f64, rank: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info) ---
-	sgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, JPVT: ^blasint, rcond: ^f32, rank: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info) ---
-	zgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, JPVT: ^blasint, rcond: ^f64, rank: ^blasint, work: ^complex128, lwork: ^blasint, rwork: ^f64, info: ^Info) ---
+	cgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, JPVT: [^]blasint, rcond: ^f32, rank: ^blasint, work: [^]complex64, lwork: ^blasint, rwork: [^]f32, info: ^Info) ---
+	dgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, JPVT: [^]blasint, rcond: ^f64, rank: ^blasint, work: [^]f64, lwork: ^blasint, info: ^Info) ---
+	sgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, JPVT: [^]blasint, rcond: ^f32, rank: ^blasint, work: [^]f32, lwork: ^blasint, info: ^Info) ---
+	zgelsy_ :: proc(m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, JPVT: [^]blasint, rcond: ^f64, rank: ^blasint, work: [^]complex128, lwork: ^blasint, rwork: [^]f64, info: ^Info) ---
 
 	// GETSLS - Least squares solver using tall-skinny or short-wide QR/LQ factorization with column pivoting
 	/*
@@ -156,24 +156,24 @@ foreign lib {
 		lwork: ^blasint [in] dimension of work array. Use -1 for workspace query
 		info: ^Info [out] 0:Success; <0: -ith arg illegal; >0: A does not have full rank
 	*/
-	cgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, work: ^complex64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	dgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	sgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
-	zgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, work: ^complex128, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	cgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, work: [^]complex64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	dgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, work: [^]f64, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	sgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, work: [^]f32, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
+	zgetsls_ :: proc(trans: ^char, m: ^blasint, n: ^blasint, nrhs: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, work: [^]complex128, lwork: ^blasint, info: ^Info, l_trans: c.size_t = 1) ---
 
 	// ===================================================================================
 	// Constrained Least Squares:
 	// ===================================================================================
 
-	cgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, C: ^complex64, D: ^complex64, X: ^complex64, work: ^complex64, lwork: ^blasint, info: ^Info) ---
-	dgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, C: ^f64, D: ^f64, X: ^f64, work: ^f64, lwork: ^blasint, info: ^Info) ---
-	sgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, C: ^f32, D: ^f32, X: ^f32, work: ^f32, lwork: ^blasint, info: ^Info) ---
-	zgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, C: ^complex128, D: ^complex128, X: ^complex128, work: ^complex128, lwork: ^blasint, info: ^Info) ---
+	cgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, C: [^]complex64, D: [^]complex64, X: [^]complex64, work: [^]complex64, lwork: ^blasint, info: ^Info) ---
+	dgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, C: [^]f64, D: [^]f64, X: [^]f64, work: [^]f64, lwork: ^blasint, info: ^Info) ---
+	sgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, C: [^]f32, D: [^]f32, X: [^]f32, work: [^]f32, lwork: ^blasint, info: ^Info) ---
+	zgglse_ :: proc(m: ^blasint, n: ^blasint, p: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, C: [^]complex128, D: [^]complex128, X: [^]complex128, work: [^]complex128, lwork: ^blasint, info: ^Info) ---
 
-	cggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: ^complex64, lda: ^blasint, B: ^complex64, ldb: ^blasint, D: ^complex64, X: ^complex64, Y: ^complex64, work: ^complex64, lwork: ^blasint, info: ^Info) ---
-	dggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: ^f64, lda: ^blasint, B: ^f64, ldb: ^blasint, D: ^f64, X: ^f64, Y: ^f64, work: ^f64, lwork: ^blasint, info: ^Info) ---
-	sggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: ^f32, lda: ^blasint, B: ^f32, ldb: ^blasint, D: ^f32, X: ^f32, Y: ^f32, work: ^f32, lwork: ^blasint, info: ^Info) ---
-	zggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: ^complex128, lda: ^blasint, B: ^complex128, ldb: ^blasint, D: ^complex128, X: ^complex128, Y: ^complex128, work: ^complex128, lwork: ^blasint, info: ^Info) ---
+	cggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: [^]complex64, lda: ^blasint, B: [^]complex64, ldb: ^blasint, D: [^]complex64, X: [^]complex64, Y: [^]complex64, work: [^]complex64, lwork: ^blasint, info: ^Info) ---
+	dggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, D: [^]f64, X: [^]f64, Y: [^]f64, work: [^]f64, lwork: ^blasint, info: ^Info) ---
+	sggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, D: [^]f32, X: [^]f32, Y: [^]f32, work: [^]f32, lwork: ^blasint, info: ^Info) ---
+	zggglm_ :: proc(n: ^blasint, m: ^blasint, p: ^blasint, A: [^]complex128, lda: ^blasint, B: [^]complex128, ldb: ^blasint, D: [^]complex128, X: [^]complex128, Y: [^]complex128, work: [^]complex128, lwork: ^blasint, info: ^Info) ---
 
 	// ===================================================================================
 	// Additional Least Squares Routines
@@ -192,9 +192,9 @@ foreign lib {
 		lwork: ^blasint [in] dimension of work array
 		info: ^Info [out] 0: Success; <0: -ith argument illegal
 	*/
-	cgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: ^complex64, lda: ^blasint, T: ^complex64, ldt: ^blasint, work: ^complex64, lwork: ^blasint, info: ^Info) ---
-	dgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: ^f64, lda: ^blasint, T: ^f64, ldt: ^blasint, work: ^f64, lwork: ^blasint, info: ^Info) ---
-	sgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: ^f32, lda: ^blasint, T: ^f32, ldt: ^blasint, work: ^f32, lwork: ^blasint, info: ^Info) ---
-	zgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: ^complex128, lda: ^blasint, T: ^complex128, ldt: ^blasint, work: ^complex128, lwork: ^blasint, info: ^Info) ---
+	cgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: [^]complex64, lda: ^blasint, T: ^complex64, ldt: ^blasint, work: [^]complex64, lwork: ^blasint, info: ^Info) ---
+	dgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: [^]f64, lda: ^blasint, T: ^f64, ldt: ^blasint, work: [^]f64, lwork: ^blasint, info: ^Info) ---
+	sgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: [^]f32, lda: ^blasint, T: ^f32, ldt: ^blasint, work: [^]f32, lwork: ^blasint, info: ^Info) ---
+	zgelqt_ :: proc(m: ^blasint, n: ^blasint, mb: ^blasint, A: [^]complex128, lda: ^blasint, T: ^complex128, ldt: ^blasint, work: [^]complex128, lwork: ^blasint, info: ^Info) ---
 
 }

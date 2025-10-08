@@ -20,51 +20,51 @@ import "base:builtin"
 // ===================================================================================
 
 // Standard eigenvalue computation for symmetric/Hermitian banded matrices
-banded_eigen :: proc {
-	banded_eigen_real,
-	banded_eigen_complex,
+band_eigen :: proc {
+	band_eigen_real,
+	band_eigen_complex,
 }
 
 // Eigenvalue computation using divide-and-conquer algorithm
-banded_eigen_dc :: proc {
-	banded_eigen_dc_real,
-	banded_eigen_dc_complex,
+band_eigen_dc :: proc {
+	band_eigen_dc_real,
+	band_eigen_dc_complex,
 }
 
 // Expert driver with subset selection and improved accuracy
-banded_eigen_expert :: proc {
-	banded_eigen_expert_real,
-	banded_eigen_expert_complex,
+band_eigen_expert :: proc {
+	band_eigen_expert_real,
+	band_eigen_expert_complex,
 }
 
 // Reduce banded symmetric/Hermitian matrix to tridiagonal form with Q generation (SBTRD/HBTRD)
-banded_to_tridiagonal_with_q :: proc {
-	banded_to_tridiagonal_with_q_real,
-	banded_to_tridiagonal_with_q_complex,
+band_to_tridiagonal_with_q :: proc {
+	band_to_tridiagonal_with_q_real,
+	band_to_tridiagonal_with_q_complex,
 }
 
 // Generalized eigenvalue problem: A*x = lambda*B*x
-banded_eigen_generalized :: proc {
-	banded_eigen_generalized_real,
-	banded_eigen_generalized_complex,
+band_eigen_generalized :: proc {
+	band_eigen_generalized_real,
+	band_eigen_generalized_complex,
 }
 
 // Generalized eigenvalue problem using divide-and-conquer: A*x = lambda*B*x
-banded_eigen_generalized_dc :: proc {
-	banded_eigen_generalized_dc_real,
-	banded_eigen_generalized_dc_complex,
+band_eigen_generalized_dc :: proc {
+	band_eigen_generalized_dc_real,
+	band_eigen_generalized_dc_complex,
 }
 
 // Reduce generalized symmetric/Hermitian banded eigenvalue problem to standard form
-banded_reduce_generalized :: proc {
-	banded_reduce_generalized_real,
-	banded_reduce_generalized_complex,
+band_reduce_generalized :: proc {
+	band_reduce_generalized_real,
+	band_reduce_generalized_complex,
 }
 
 // Generalized eigenvalue problem with expert driver (selected eigenvalues): A*x = lambda*B*x
-banded_eigen_generalized_expert :: proc {
-	banded_eigen_generalized_expert_real,
-	banded_eigen_generalized_expert_complex,
+band_eigen_generalized_expert :: proc {
+	band_eigen_generalized_expert_real,
+	band_eigen_generalized_expert_complex,
 }
 
 // ===================================================================================
@@ -72,7 +72,7 @@ banded_eigen_generalized_expert :: proc {
 // ===================================================================================
 
 // Query result sizes for eigenvalue computation
-query_result_sizes_banded_eigen :: proc(n: int, compute_vectors: bool) -> (w_size: int, z_rows: int, z_cols: int) {
+query_result_sizes_band_eigen :: proc(n: int, compute_vectors: bool) -> (w_size: int, z_rows: int, z_cols: int) {
 	w_size = n
 	if compute_vectors {
 		z_rows = n
@@ -82,14 +82,14 @@ query_result_sizes_banded_eigen :: proc(n: int, compute_vectors: bool) -> (w_siz
 }
 
 // Query workspace for standard eigenvalue computation
-query_workspace_banded_eigen :: proc($T: typeid, n: int, compute_vectors: bool) -> (work: int, rwork: int) {
-	when is_float(T) {
+query_workspace_band_eigen :: proc(n: int, compute_vectors: bool, is_complex := false) -> (work: int, rwork: int) {
+	if !is_complex {
 		if compute_vectors {
 			return 3 * n - 2, 0
 		} else {
 			return 1, 0
 		}
-	} else when is_complex(T) {
+	} else {
 		if compute_vectors {
 			return n, max(1, 3 * n - 2)
 		} else {
@@ -99,14 +99,14 @@ query_workspace_banded_eigen :: proc($T: typeid, n: int, compute_vectors: bool) 
 }
 
 // Query workspace for divide-and-conquer algorithm
-query_workspace_banded_eigen_dc :: proc($T: typeid, n: int, compute_vectors: bool) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_eigen_dc :: proc(n: int, compute_vectors: bool, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		if compute_vectors {
 			return 1 + 6 * n + 2 * n * n, 1 + 5 * n + 2 * n * n, 3 + 5 * n
 		} else {
 			return 2 * n, 0, 1
 		}
-	} else when is_complex(T) {
+	} else {
 		if compute_vectors {
 			return 1 + 5 * n + 2 * n * n, 1 + 5 * n + 2 * n * n, 3 + 5 * n
 		} else {
@@ -116,19 +116,19 @@ query_workspace_banded_eigen_dc :: proc($T: typeid, n: int, compute_vectors: boo
 }
 
 // Query workspace for expert eigenvalue computation with subset selection
-query_workspace_banded_eigen_expert_subset :: proc($T: typeid, n: int) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_eigen_expert_subset :: proc(n: int, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		return 7 * n, 0, 5 * n
-	} else when is_complex(T) {
+	} else {
 		return n, 7 * n, 5 * n
 	}
 }
 
 // Query workspace for tridiagonal reduction with Q generation
-query_workspace_banded_to_tridiagonal_with_q :: proc($T: typeid, n: int) -> (work: int, rwork: int) {
-	when is_float(T) {
+query_workspace_band_to_tridiagonal_with_q :: proc(n: int, is_complex := false) -> (work: int, rwork: int) {
+	if !is_complex {
 		return n, 0
-	} else when is_complex(T) {
+	} else {
 		return n, max(1, n - 1)
 	}
 }
@@ -138,7 +138,7 @@ query_workspace_banded_to_tridiagonal_with_q :: proc($T: typeid, n: int) -> (wor
 // ===================================================================================
 
 // Compute eigenvalues and optionally eigenvectors of symmetric/Hermitian banded matrix (real version)
-banded_eigen_real :: proc(
+band_eigen_real :: proc(
 	jobz: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($T), // Banded matrix (input/output - destroyed)
@@ -153,7 +153,6 @@ banded_eigen_real :: proc(
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	min_work := max(1, 3 * int(n) - 2) if jobz == .Vectors else 1
 	assert(len(work) >= min_work, "Work array too small")
@@ -179,7 +178,7 @@ banded_eigen_real :: proc(
 }
 
 // Compute eigenvalues and optionally eigenvectors of Hermitian banded matrix (complex version)
-banded_eigen_complex :: proc(
+band_eigen_complex :: proc(
 	jobz: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - destroyed)
@@ -190,13 +189,11 @@ banded_eigen_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	min_work := int(n) if jobz == .Vectors else 1
 	min_rwork := max(1, 3 * int(n) - 2) if jobz == .Vectors else max(1, int(n))
@@ -228,7 +225,7 @@ banded_eigen_complex :: proc(
 // ===================================================================================
 
 // Compute eigenvalues and optionally eigenvectors using divide-and-conquer (real version)
-banded_eigen_dc_real :: proc(
+band_eigen_dc_real :: proc(
 	jobz: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($T), // Banded matrix (input/output - destroyed)
@@ -244,7 +241,6 @@ banded_eigen_dc_real :: proc(
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 
 	ldz := Blas_Int(1)
@@ -270,7 +266,7 @@ banded_eigen_dc_real :: proc(
 }
 
 // Compute eigenvalues and optionally eigenvectors using divide-and-conquer (complex version)
-banded_eigen_dc_complex :: proc(
+band_eigen_dc_complex :: proc(
 	jobz: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - destroyed)
@@ -282,13 +278,11 @@ banded_eigen_dc_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 
 	ldz := Blas_Int(1)
@@ -319,7 +313,7 @@ banded_eigen_dc_complex :: proc(
 // ===================================================================================
 
 // Compute selected eigenvalues and optionally eigenvectors (real version)
-banded_eigen_expert_real :: proc(
+band_eigen_expert_real :: proc(
 	jobz: EigenJobOption,
 	range: EigenRangeOption,
 	uplo: MatrixRegion,
@@ -344,7 +338,6 @@ banded_eigen_expert_real :: proc(
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	assert(len(work) >= 7 * int(n), "Work array too small")
 	assert(len(iwork) >= 5 * int(n), "Integer work array too small")
@@ -372,19 +365,19 @@ banded_eigen_expert_real :: proc(
 	vu_val := vu
 	il_val := Blas_Int(il)
 	iu_val := Blas_Int(iu)
-	abstol_val := abstol
+	abstol := abstol
 
 	when T == f32 {
-		lapack.ssbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+		lapack.ssbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
 	} else when T == f64 {
-		lapack.dsbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+		lapack.dsbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
 	}
 
 	return info, info == 0
 }
 
 // Compute selected eigenvalues and optionally eigenvectors (complex version)
-banded_eigen_expert_complex :: proc(
+band_eigen_expert_complex :: proc(
 	jobz: EigenJobOption,
 	range: EigenRangeOption,
 	uplo: MatrixRegion,
@@ -405,13 +398,11 @@ banded_eigen_expert_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	assert(len(work) >= int(n), "Work array too small")
 	assert(len(rwork) >= 7 * int(n), "Real work array too small")
@@ -440,12 +431,12 @@ banded_eigen_expert_complex :: proc(
 	vu_val := vu
 	il_val := Blas_Int(il)
 	iu_val := Blas_Int(iu)
-	abstol_val := abstol
+	abstol := abstol
 
 	when Cmplx == complex64 {
-		lapack.chbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+		lapack.chbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
 	} else when Cmplx == complex128 {
-		lapack.zhbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+		lapack.zhbevx_(&jobz_c, &range_c, &uplo_c, &n, &kd, raw_data(AB.data), &ldab, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
 	}
 
 	return info, info == 0
@@ -456,7 +447,7 @@ banded_eigen_expert_complex :: proc(
 // ===================================================================================
 
 // Reduce banded symmetric/Hermitian matrix to tridiagonal form (real version)
-banded_to_tridiagonal_with_q_real :: proc(
+band_to_tridiagonal_with_q_real :: proc(
 	vect: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($T), // Banded matrix (input/output - reduced to tridiagonal)
@@ -472,7 +463,6 @@ banded_to_tridiagonal_with_q_real :: proc(
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(D) >= int(n), "D array too small")
 	assert(len(E) >= int(n - 1), "E array too small")
 	assert(len(work) >= int(n), "Work array too small")
@@ -498,7 +488,7 @@ banded_to_tridiagonal_with_q_real :: proc(
 }
 
 // Reduce banded Hermitian matrix to tridiagonal form (complex version)
-banded_to_tridiagonal_with_q_complex :: proc(
+band_to_tridiagonal_with_q_complex :: proc(
 	vect: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output - reduced to tridiagonal)
@@ -509,13 +499,11 @@ banded_to_tridiagonal_with_q_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kd := AB.kl
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(D) >= int(n), "D array too small")
 	assert(len(E) >= int(n - 1), "E array too small")
 	assert(len(work) >= int(n), "Work array too small")
@@ -545,7 +533,7 @@ banded_to_tridiagonal_with_q_complex :: proc(
 // ===================================================================================
 
 // Solve generalized eigenvalue problem A*x = lambda*B*x (real version)
-banded_eigen_generalized_real :: proc(
+band_eigen_generalized_real :: proc(
 	jobz: EigenJobOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($T), // Banded matrix A (input/output - destroyed)
@@ -588,7 +576,7 @@ banded_eigen_generalized_real :: proc(
 }
 
 // Solve generalized eigenvalue problem A*x = lambda*B*x (complex version)
-banded_eigen_generalized_complex :: proc(
+band_eigen_generalized_complex :: proc(
 	jobz: EigenJobOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - destroyed)
@@ -600,15 +588,13 @@ banded_eigen_generalized_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	ka := AB.kl // Bandwidth of A
 	kb := BB.kl // Bandwidth of B
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	assert(len(work) >= int(n), "Work array too small")
 	assert(len(rwork) >= 3 * int(n), "Real work array too small")
@@ -638,7 +624,7 @@ banded_eigen_generalized_complex :: proc(
 // ===================================================================================
 
 // Solve generalized eigenvalue problem using divide-and-conquer (real version)
-banded_eigen_generalized_dc_real :: proc(
+band_eigen_generalized_dc_real :: proc(
 	jobz: EigenJobOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($T), // Banded matrix A (input/output - destroyed)
@@ -657,7 +643,6 @@ banded_eigen_generalized_dc_real :: proc(
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 
 	ldz := Blas_Int(1)
@@ -683,7 +668,7 @@ banded_eigen_generalized_dc_real :: proc(
 }
 
 // Solve generalized eigenvalue problem using divide-and-conquer (complex version)
-banded_eigen_generalized_dc_complex :: proc(
+band_eigen_generalized_dc_complex :: proc(
 	jobz: EigenJobOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - destroyed)
@@ -696,15 +681,13 @@ banded_eigen_generalized_dc_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	ka := AB.kl // Bandwidth of A
 	kb := BB.kl // Bandwidth of B
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 
 	ldz := Blas_Int(1)
@@ -735,7 +718,7 @@ banded_eigen_generalized_dc_complex :: proc(
 // ===================================================================================
 
 // Solve generalized eigenvalue problem with expert driver (real version)
-banded_eigen_generalized_expert_real :: proc(
+band_eigen_generalized_expert_real :: proc(
 	jobz: EigenJobOption,
 	range: EigenRangeOption,
 	uplo: MatrixRegion,
@@ -763,7 +746,6 @@ banded_eigen_generalized_expert_real :: proc(
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	assert(len(work) >= 7 * int(n), "Work array too small")
 	assert(len(iwork) >= 5 * int(n), "Integer work array too small")
@@ -791,19 +773,19 @@ banded_eigen_generalized_expert_real :: proc(
 	vu_val := vu
 	il_val := Blas_Int(il)
 	iu_val := Blas_Int(iu)
-	abstol_val := abstol
+	abstol := abstol
 
 	when T == f32 {
-		lapack.ssbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+		lapack.ssbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
 	} else when T == f64 {
-		lapack.dsbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
+		lapack.dsbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
 	}
 
 	return info, info == 0
 }
 
 // Solve generalized eigenvalue problem with expert driver (complex version)
-banded_eigen_generalized_expert_complex :: proc(
+band_eigen_generalized_expert_complex :: proc(
 	jobz: EigenJobOption,
 	range: EigenRangeOption,
 	uplo: MatrixRegion,
@@ -825,15 +807,13 @@ banded_eigen_generalized_expert_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	ka := AB.kl // Bandwidth of A
 	kb := BB.kl // Bandwidth of B
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(w) >= int(n), "Eigenvalues array too small")
 	assert(len(work) >= int(n), "Work array too small")
 	assert(len(rwork) >= 7 * int(n), "Real work array too small")
@@ -862,12 +842,12 @@ banded_eigen_generalized_expert_complex :: proc(
 	vu_val := vu
 	il_val := Blas_Int(il)
 	iu_val := Blas_Int(iu)
-	abstol_val := abstol
+	abstol := abstol
 
 	when Cmplx == complex64 {
-		lapack.chbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+		lapack.chbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
 	} else when Cmplx == complex128 {
-		lapack.zhbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol_val, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
+		lapack.zhbgvx_(&jobz_c, &range_c, &uplo_c, &n, &ka, &kb, raw_data(AB.data), &ldab, raw_data(BB.data), &ldbb, q_ptr, &ldq, &vl_val, &vu_val, &il_val, &iu_val, &abstol, m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(rwork), raw_data(iwork), raw_data(ifail), &info)
 	}
 
 	return info, info == 0
@@ -878,11 +858,11 @@ banded_eigen_generalized_expert_complex :: proc(
 // ===================================================================================
 
 // Reduce generalized problem to standard form: C = L^{-1}*A*L^{-T} or C = U^{-T}*A*U^{-1} (real version)
-banded_reduce_generalized_real :: proc(
+band_reduce_generalized_real :: proc(
 	vect: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($T), // Banded matrix A (input/output - reduced)
-	BB: ^BandedMatrix(T), // Cholesky factor of B (input - from banded_cholesky)
+	BB: ^BandedMatrix(T), // Cholesky factor of B (input - from band_cholesky)
 	X: ^Matrix(T) = nil, // Optional transformation matrix (output)
 	work: []T, // Pre-allocated workspace
 ) -> (
@@ -895,7 +875,6 @@ banded_reduce_generalized_real :: proc(
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(work) >= 2 * int(n), "Work array too small")
 
 	ldx := Blas_Int(1)
@@ -919,26 +898,24 @@ banded_reduce_generalized_real :: proc(
 }
 
 // Reduce generalized problem to standard form: C = L^{-1}*A*L^{-H} or C = U^{-H}*A*U^{-1} (complex version)
-banded_reduce_generalized_complex :: proc(
+band_reduce_generalized_complex :: proc(
 	vect: VectorOption,
 	uplo: MatrixRegion,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix A (input/output - reduced)
-	BB: ^BandedMatrix(Cmplx), // Cholesky factor of B (input - from banded_cholesky)
+	BB: ^BandedMatrix(Cmplx), // Cholesky factor of B (input - from band_cholesky)
 	X: ^Matrix(Cmplx) = nil, // Optional transformation matrix (output)
 	work: []Cmplx, // Pre-allocated workspace
 	rwork: []$Real, // Pre-allocated real workspace
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	ka := AB.kl // Bandwidth of A
 	kb := BB.kl // Bandwidth of B
 	ldab := AB.ldab
 	ldbb := BB.ldab
 
-	// Validate inputs
 	assert(len(work) >= int(n), "Work array too small")
 	assert(len(rwork) >= int(n), "Real work array too small")
 

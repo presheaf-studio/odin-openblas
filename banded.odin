@@ -46,13 +46,13 @@ BandedMatrix :: struct($T: typeid) {
 // ===================================================================================
 
 // Create a general banded matrix
-make_banded_matrix :: proc(rows, cols, kl, ku: int, $T: typeid, allocator := context.allocator) -> BandedMatrix(T) {
+band_make :: proc(rows, cols, kl, ku: int, $T: typeid, allocator := context.allocator) -> BandedMatrix(T) {
 	ldab := kl + ku + 1
 	return BandedMatrix(T){rows = Blas_Int(rows), cols = Blas_Int(cols), kl = Blas_Int(kl), ku = Blas_Int(ku), ldab = Blas_Int(ldab), data = make([]T, ldab * cols, allocator)}
 }
 
-// Create symmetric banded matrix (only stores upper or lower band)
-make_symmetric_banded_matrix :: proc(n, k: int, uplo: UpLo, $T: typeid, allocator := context.allocator) -> BandedMatrix(T) {
+// Create symmetric banded matrix (only sets upper or lower band)
+band_make_symmetric :: proc(n, k: int, uplo: UpLo, $T: typeid, allocator := context.allocator) -> BandedMatrix(T) {
 	ldab := k + 1 // For symmetric, only need k+1 bands
 	bm := BandedMatrix(T) {
 		rows      = Blas_Int(n),
@@ -74,7 +74,7 @@ make_symmetric_banded_matrix :: proc(n, k: int, uplo: UpLo, $T: typeid, allocato
 }
 
 // Create a triangular banded matrix
-make_banded_triangular :: proc(
+band_make_triangular :: proc(
 	n: int,
 	k: int, // bandwidth
 	uplo: UpLo,
@@ -103,7 +103,7 @@ make_banded_triangular :: proc(
 // Access element (i,j) in banded storage
 // Band storage format (column-major):
 // AB(ku+1+i-j, j) = A(i,j) for max(0,j-ku) <= i <= min(m-1,j+kl)
-banded_index :: proc(bm: ^BandedMatrix($T), i, j: int) -> (idx: int, stored: bool) {
+band_index :: proc(bm: ^BandedMatrix($T), i, j: int) -> (idx: int, stored: bool) {
 	assert(i >= 0 && i < int(bm.rows) && j >= 0 && j < int(bm.cols), "Index out of bounds")
 
 	// Check if element is within the band
@@ -117,8 +117,8 @@ banded_index :: proc(bm: ^BandedMatrix($T), i, j: int) -> (idx: int, stored: boo
 }
 
 // Get element (i,j) from banded matrix
-banded_get :: proc(bm: ^BandedMatrix($T), i, j: int) -> (value: T, stored: bool) {
-	idx, is_stored := banded_index(bm, i, j)
+band_get :: proc(bm: ^BandedMatrix($T), i, j: int) -> (value: T, stored: bool) {
+	idx, is_stored := band_index(bm, i, j)
 	if !is_stored {
 		return T{}, false
 	}
@@ -126,8 +126,8 @@ banded_get :: proc(bm: ^BandedMatrix($T), i, j: int) -> (value: T, stored: bool)
 }
 
 // Set element (i,j) in banded matrix
-banded_set :: proc(bm: ^BandedMatrix($T), i, j: int, value: T) -> bool {
-	idx, is_stored := banded_index(bm, i, j)
+band_set :: proc(bm: ^BandedMatrix($T), i, j: int, value: T) -> bool {
+	idx, is_stored := band_index(bm, i, j)
 	if !is_stored {
 		return false
 	}
@@ -140,12 +140,12 @@ banded_set :: proc(bm: ^BandedMatrix($T), i, j: int, value: T) -> bool {
 // ===================================================================================
 
 // Get banded storage parameters from matrix
-get_banded_params :: proc(bm: ^BandedMatrix($T)) -> (kl, ku, ldab: int) {
+band_get_params :: proc(bm: ^BandedMatrix($T)) -> (kl, ku, ldab: int) {
 	return int(bm.kl), int(bm.ku), int(bm.ldab)
 }
 
 // Check if matrix has valid banded structure
-validate_banded_matrix :: proc(bm: ^BandedMatrix($T)) -> bool {
+band_validate :: proc(bm: ^BandedMatrix($T)) -> bool {
 	if bm.ldab < bm.kl + bm.ku + 1 {
 		return false
 	}
@@ -156,8 +156,8 @@ validate_banded_matrix :: proc(bm: ^BandedMatrix($T)) -> bool {
 }
 
 // Get the bandwidth of a banded matrix
-get_bandwidth :: proc(bm: ^BandedMatrix($T)) -> (lower: int, upper: int) {
-	return int(bm.kl), int(bm.ku)
+band_get_bandwidth :: proc(bm: ^BandedMatrix($T)) -> (lower: int, upper: int) {
+	return int(bm.kl), int(bm.ku) // TODO: flag to compute the bandwidth?? have in auxillery iirc
 }
 
 // ===================================================================================
@@ -165,13 +165,13 @@ get_bandwidth :: proc(bm: ^BandedMatrix($T)) -> (lower: int, upper: int) {
 // ===================================================================================
 
 // Delete banded matrix data
-delete_banded_matrix :: proc(bm: ^BandedMatrix($T), allocator := context.allocator) {
+band_delete :: proc(bm: ^BandedMatrix($T), allocator := context.allocator) {
 	delete(bm.data, allocator)
 	bm.data = nil
 }
 
 // Clone a banded matrix
-clone_banded_matrix :: proc(bm: ^BandedMatrix($T), allocator := context.allocator) -> BandedMatrix(T) {
+band_clone :: proc(bm: ^BandedMatrix($T), allocator := context.allocator) -> BandedMatrix(T) {
 	clone := BandedMatrix(T) {
 		rows      = bm.rows,
 		cols      = bm.cols,
@@ -185,61 +185,62 @@ clone_banded_matrix :: proc(bm: ^BandedMatrix($T), allocator := context.allocato
 	return clone
 }
 
-// ===================================================================================
-// WORKSPACE AND SIZE QUERIES
-// ===================================================================================
+// // ===================================================================================
+// // WORKSPACE AND SIZE QUERIES
+// // ===================================================================================
+// // FIXME: no cstring; do we even need this?? have specific queries for ops..
+// // Query workspace requirements for general banded operations
+// query_workspace_band :: proc(operation: string, $T: typeid, n, kl, ku: int) -> (work_size, rwork_size, iwork_size: int) {
+// 	// Default workspace requirements for common operations
+// 	switch operation {
+// 	case "factor":
+// 		// LU factorization
+// 		work_size = 0
+// 		rwork_size = 0
+// 		iwork_size = 0
+// 	case "solve":
+// 		// Linear solve
+// 		work_size = 0
+// 		rwork_size = 0
+// 		iwork_size = 0
+// 	case "condition":
+// 		// Condition number estimation
+// 		when is_float(T) {
+// 			work_size = 3 * n
+// 			iwork_size = n
+// 		} else {
+// 			work_size = 2 * n
+// 			rwork_size = n
+// 		}
+// 	case "equilibrate":
+// 		// matrix equilibration
+// 		work_size = 0
+// 		rwork_size = 0
+// 		iwork_size = 0
+// 	case:
+// 		// Unknown operation, return minimal workspace
+// 		work_size = n
+// 		rwork_size = 0
+// 		iwork_size = 0
+// 	}
 
-// Query workspace requirements for general banded operations
-query_workspace_banded :: proc(operation: string, $T: typeid, n, kl, ku: int) -> (work_size, rwork_size, iwork_size: int) {
-	// Default workspace requirements for common operations
-	switch operation {
-	case "factor":
-		// LU factorization
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case "solve":
-		// Linear solve
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case "condition":
-		// Condition number estimation
-		when is_float(T) {
-			work_size = 3 * n
-			iwork_size = n
-		} else {
-			work_size = 2 * n
-			rwork_size = n
-		}
-	case "equilibrate":
-		// matrix equilibration
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case:
-		// Unknown operation, return minimal workspace
-		work_size = n
-		rwork_size = 0
-		iwork_size = 0
-	}
+// 	return
+// }
 
-	return
-}
+// // Allocate workspace for banded operations
+// // FIXME: No cstrings.. do we even need?
+// allocate_band_workspace :: proc(operation: string, $T: typeid, n, kl, ku: int, allocator := context.allocator) -> (work: []T, rwork: []f64, iwork: []Blas_Int) {
+// 	work_size, rwork_size, iwork_size := query_workspace_band(operation, T, n, kl, ku)
 
-// Allocate workspace for banded operations
-allocate_banded_workspace :: proc(operation: string, $T: typeid, n, kl, ku: int, allocator := context.allocator) -> (work: []T, rwork: []f64, iwork: []Blas_Int) {
-	work_size, rwork_size, iwork_size := query_workspace_banded(operation, T, n, kl, ku)
+// 	if work_size > 0 {
+// 		work = make([]T, work_size, allocator)
+// 	}
+// 	if rwork_size > 0 {
+// 		rwork = make([]f64, rwork_size, allocator)
+// 	}
+// 	if iwork_size > 0 {
+// 		iwork = make([]Blas_Int, iwork_size, allocator)
+// 	}
 
-	if work_size > 0 {
-		work = make([]T, work_size, allocator)
-	}
-	if rwork_size > 0 {
-		rwork = make([]f64, rwork_size, allocator)
-	}
-	if iwork_size > 0 {
-		iwork = make([]Blas_Int, iwork_size, allocator)
-	}
-
-	return
-}
+// 	return
+// }

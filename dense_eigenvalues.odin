@@ -47,46 +47,39 @@ Sense_Job :: enum u8 {
 // STANDARD EIGENVALUE PROBLEMS (GEEV family)
 // ===================================================================================
 
-eigenvalues :: proc {
-	eigenvalues_real,
-	eigenvalues_complex,
+dns_eigen_general :: proc {
+	dns_eigen_general_real,
+	dns_eigen_general_complex,
 }
 
-eigenvalues_expert :: proc {
-	eigenvalues_expert_real,
-	eigenvalues_expert_complex,
+dns_eigen_general_expert :: proc {
+	dns_eigen_general_expert_real,
+	dns_eigen_general_expert_complex,
 }
 
 // Query workspace size for eigenvalue computation
-query_workspace_eigenvalues :: proc(A: ^Matrix($T), jobvl: Eigen_Job_Left = .None, jobvr: Eigen_Job_Right = .Compute) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_eigen_general :: proc(A: ^Matrix($T), jobvl: Eigen_Job_Left = .None, jobvr: Eigen_Job_Right = .Compute) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
 	jobvl_c := cast(u8)jobvl
 	jobvr_c := cast(u8)jobvr
 	lwork: Blas_Int = QUERY_WORKSPACE
+	work_query: T
+	info: Info
+	rwork_size = 0
 
 	when T == f32 {
-		work_query: f32
-		info: Info
 		lapack.sgeev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
 		work_size = int(work_query)
-		rwork_size = 0
 	} else when T == f64 {
-		work_query: f64
-		info: Info
 		lapack.dgeev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
 		work_size = int(work_query)
-		rwork_size = 0
 	} else when T == complex64 {
-		work_query: complex64
-		info: Info
 		lapack.cgeev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
 		work_size = int(real(work_query))
 		rwork_size = int(2 * n)
 	} else when T == complex128 {
-		work_query: complex128
-		info: Info
 		lapack.zgeev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
 		work_size = int(real(work_query))
 		rwork_size = int(2 * n)
@@ -96,7 +89,7 @@ query_workspace_eigenvalues :: proc(A: ^Matrix($T), jobvl: Eigen_Job_Left = .Non
 }
 
 // Compute eigenvalues and eigenvectors of a real general matrix
-eigenvalues_real :: proc(
+dns_eigen_general_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	WR: []T, // Real parts of eigenvalues (pre-allocated, size n)
 	WI: []T, // Imaginary parts of eigenvalues (pre-allocated, size n)
@@ -148,7 +141,7 @@ eigenvalues_real :: proc(
 }
 
 // Compute eigenvalues and eigenvectors of a complex general matrix
-eigenvalues_complex :: proc(
+dns_eigen_general_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	W: []Cmplx, // Eigenvalues (pre-allocated, size n)
 	VL: ^Matrix(Cmplx), // Left eigenvectors (pre-allocated, optional)
@@ -160,8 +153,7 @@ eigenvalues_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -205,10 +197,10 @@ eigenvalues_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for expert eigenvalue computation
-query_workspace_eigenvalues_expert :: proc(A: ^Matrix($T), sense: Sense_Job = .None) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_eigen_general_expert :: proc(A: ^Matrix($T), sense: Sense_Job = .None) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(n * (n + 6))
 		if sense == .Eigenvalues || sense == .Both {
 			work_size = max(work_size, int(n * (n + 6)))
@@ -218,7 +210,7 @@ query_workspace_eigenvalues_expert :: proc(A: ^Matrix($T), sense: Sense_Job = .N
 		}
 		iwork_size = int(2 * n - 2)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(2 * n)
 		iwork_size = 0
@@ -228,7 +220,13 @@ query_workspace_eigenvalues_expert :: proc(A: ^Matrix($T), sense: Sense_Job = .N
 }
 
 // Expert eigenvalue driver with balancing and condition number estimation
-eigenvalues_expert_real :: proc(
+// ilo:  lowest index of balanced matrix
+// ihi: highest index of balanced matrix
+// scale: Scaling factors (pre-allocated, size n)
+// abnrm: 1-norm of balanced matrix
+// rconde: Condition numbers of eigenvalues (pre-allocated, size n)
+// rcondv: Condition numbers of eigenvectors (pre-allocated, size n)
+dns_eigen_general_expert_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten)
 	WR: []T, // Real parts of eigenvalues (pre-allocated, size n)
 	WI: []T, // Imaginary parts of eigenvalues (pre-allocated, size n)
@@ -244,11 +242,11 @@ eigenvalues_expert_real :: proc(
 	ilo: Blas_Int,
 	ihi: Blas_Int,
 	scale: []T,
-	abnrm: T,// Output: lowest index of balanced matrix
-	rconde: []T,// Output: highest index of balanced matrix
-	rcondv: []T,// Scaling factors (pre-allocated, size n)
-	info: Info,// 1-norm of balanced matrix
-	ok: bool, // Condition numbers of eigenvalues (pre-allocated, size n)// Condition numbers of eigenvectors (pre-allocated, size n)
+	abnrm: T,
+	rconde: []T,
+	rcondv: []T,
+	info: Info,
+	ok: bool,
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -294,7 +292,7 @@ eigenvalues_expert_real :: proc(
 	return ilo, ihi, scale, abnrm, rconde, rcondv, info, info == 0
 }
 
-eigenvalues_expert_complex :: proc(
+dns_eigen_general_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten)
 	W: []Cmplx, // Eigenvalues (pre-allocated, size n)
 	VL: ^Matrix(Cmplx), // Left eigenvectors (pre-allocated, optional)
@@ -309,13 +307,12 @@ eigenvalues_expert_complex :: proc(
 	ilo: Blas_Int,
 	ihi: Blas_Int,
 	scale: []Real,
-	abnrm: Real,// Output: lowest index of balanced matrix
-	rconde: []Real,// Output: highest index of balanced matrix
-	rcondv: []Real,// Scaling factors (pre-allocated, size n)
-	info: Info,// 1-norm of balanced matrix
-	ok: bool, // Condition numbers of eigenvalues (pre-allocated, size n)// Condition numbers of eigenvectors (pre-allocated, size n)
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	abnrm: Real,
+	rconde: []Real,
+	rcondv: []Real,
+	info: Info,
+	ok: bool,
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -363,26 +360,26 @@ eigenvalues_expert_complex :: proc(
 // SCHUR DECOMPOSITION (GEES family)
 // ===================================================================================
 
-schur_form :: proc {
-	schur_form_real,
-	schur_form_complex,
+dns_schur :: proc {
+	dns_schur_real,
+	dns_schur_complex,
 }
 
 // TODO: Implement expert Schur form procedures
-// schur_form_expert :: proc {
-// 	schur_form_expert_real,
-// 	schur_form_expert_complex,
+// dns_schur_expert :: proc {
+// 	dns_schur_expert_real,
+// 	dns_schur_expert_complex,
 // }
 
 // Query workspace size for Schur decomposition
-query_workspace_schur_form :: proc(A: ^Matrix($T), jobvs: Schur_Job = .Compute) -> (work_size: int, rwork_size: int, bwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_schur :: proc(A: ^Matrix($T), jobvs: Schur_Job = .Compute) -> (work_size: int, rwork_size: int, bwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = max(1, int(3 * n))
 		bwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = max(1, int(2 * n))
 		rwork_size = int(n)
 		bwork_size = int(n)
@@ -392,7 +389,8 @@ query_workspace_schur_form :: proc(A: ^Matrix($T), jobvs: Schur_Job = .Compute) 
 }
 
 // Compute Schur form: A = Q * T * Q^T where T is upper quasi-triangular
-schur_form_real :: proc(
+// sdim: Number of selected eigenvalues
+dns_schur_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Schur form)
 	WR: []T, // Real parts of eigenvalues (pre-allocated, size n)
 	WI: []T, // Imaginary parts of eigenvalues (pre-allocated, size n)
@@ -405,7 +403,7 @@ schur_form_real :: proc(
 ) -> (
 	sdim: Blas_Int,
 	info: Info,
-	ok: bool, // Number of selected eigenvalues
+	ok: bool,
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -438,7 +436,7 @@ schur_form_real :: proc(
 	return sdim, info, info == 0
 }
 
-schur_form_complex :: proc(
+dns_schur_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten with Schur form)
 	W: []Cmplx, // Eigenvalues (pre-allocated, size n)
 	VS: ^Matrix(Cmplx), // Schur vectors (pre-allocated, optional)
@@ -451,9 +449,8 @@ schur_form_complex :: proc(
 ) -> (
 	sdim: Blas_Int,
 	info: Info,
-	ok: bool, // Number of selected eigenvalues
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	ok: bool,
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -489,27 +486,17 @@ schur_form_complex :: proc(
 // MATRIX BALANCING (GEBAL/GEBAK)
 // ===================================================================================
 
-balance :: proc {
-	balance_real,
-	balance_complex,
-}
-
-back_transform :: proc {
-	back_transform_real,
-	back_transform_complex,
-}
-
 // Balance a general matrix to improve eigenvalue computation
-balance_real :: proc(
+dns_balance :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with balanced matrix)
+	scale: []T, // Scaling factors (pre-allocated, size n)
 	job: Balance_Job = .Both,
 ) -> (
 	ilo: Blas_Int,
 	ihi: Blas_Int,
-	scale: []T,
-	info: Info,// Output: lowest index of balanced matrix
-	ok: bool, // Output: highest index of balanced matrix// Scaling factors (pre-allocated, size n)
-) where is_float(T) {
+	info: Info,
+	ok: bool,
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -522,51 +509,27 @@ balance_real :: proc(
 		lapack.sgebal_(&job_c, &n, raw_data(A.data), &lda, &ilo, &ihi, raw_data(scale), &info)
 	} else when T == f64 {
 		lapack.dgebal_(&job_c, &n, raw_data(A.data), &lda, &ilo, &ihi, raw_data(scale), &info)
-	}
-
-	return ilo, ihi, scale, info, info == 0
-}
-
-balance_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with balanced matrix)
-	job: Balance_Job = .Both,
-	scale: []$Real, // Scaling factors (pre-allocated, size n)
-) -> (
-	ilo: Blas_Int,
-	ihi: Blas_Int,
-	info: Info,
-	ok: bool, // Output: lowest index of balanced matrix// Output: highest index of balanced matrix
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(len(scale) >= int(n), "scale array too small")
-
-	job_c := cast(u8)job
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgebal_(&job_c, &n, raw_data(A.data), &lda, &ilo, &ihi, raw_data(scale), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgebal_(&job_c, &n, raw_data(A.data), &lda, &ilo, &ihi, raw_data(scale), &info)
 	}
 
-	return ilo, ihi, scale, info, info == 0
+	return ilo, ihi, info, info == 0
 }
 
 // Back-transform eigenvectors of a balanced matrix
-back_transform_real :: proc(
+dns_back_transform :: proc(
 	V: ^Matrix($T), // Eigenvectors (overwritten with back-transformed vectors)
-	job: Balance_Job, // Must match job used in balance
-	side: Side, // Left or right eigenvectors
+	scale: []T, // From balance
 	ilo: Blas_Int, // From balance
 	ihi: Blas_Int, // From balance
-	scale: []T, // From balance
+	job: Balance_Job, // Must match job used in balance
+	side: Side, // Left or right eigenvectors
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := V.rows
 	m := V.cols
 	ldv := V.ld
@@ -580,35 +543,9 @@ back_transform_real :: proc(
 		lapack.sgebak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(scale), &m, raw_data(V.data), &ldv, &info)
 	} else when T == f64 {
 		lapack.dgebak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(scale), &m, raw_data(V.data), &ldv, &info)
-	}
-
-	return info, info == 0
-}
-
-back_transform_complex :: proc(
-	V: ^Matrix($Cmplx), // Eigenvectors (overwritten with back-transformed vectors)
-	job: Balance_Job, // Must match job used in balance
-	side: Side, // Left or right eigenvectors
-	ilo: Blas_Int, // From balance
-	ihi: Blas_Int, // From balance
-	scale: []$Real, // From balance
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	n := V.rows
-	m := V.cols
-	ldv := V.ld
-
-	assert(len(scale) >= int(n), "scale array too small")
-
-	job_c := cast(u8)job
-	side_c := cast(u8)side
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgebak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(scale), &m, raw_data(V.data), &ldv, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgebak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(scale), &m, raw_data(V.data), &ldv, &info)
 	}
 
@@ -629,13 +566,13 @@ LAPACK_Z_SELECT2 :: proc "c" (alpha: ^complex128, beta: ^complex128) -> Blas_Int
 // Generalized Schur Decomposition (GGES family)
 // ===================================================================================
 
-generalized_schur :: proc {
-	generalized_schur_real,
-	generalized_schur_complex,
+dns_schur_generalized :: proc {
+	dns_schur_generalized_real,
+	dns_schur_generalized_complex,
 }
 
 // Query workspace size for generalized Schur decomposition
-query_workspace_generalized_schur :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvsl: Schur_Job = .Compute, jobvsr: Schur_Job = .Compute, sort: Schur_Sort = .None) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_schur_generalized :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvsl: Schur_Job = .Compute, jobvsr: Schur_Job = .Compute, sort: Schur_Sort = .None) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -682,7 +619,8 @@ query_workspace_generalized_schur :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvsl:
 // A and B are overwritten with Schur forms S and T
 // VSL and VSR contain the left and right Schur vectors if requested
 // For real matrices, eigenvalues are (alphar + i*alphai)/beta
-generalized_schur_real :: proc(
+// sdim: Number of eigenvalues selected (if sorting)
+dns_schur_generalized_real :: proc(
 	A: ^Matrix($T), // Input matrix A (overwritten with S)
 	B: ^Matrix(T), // Input matrix B (overwritten with T)
 	alphar: []T, // Real parts of alpha (pre-allocated, size n)
@@ -698,7 +636,7 @@ generalized_schur_real :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_S_SELECT3 or LAPACK_D_SELECT3)
 ) -> (
 	sdim: Blas_Int,
-	info: Info,// Number of eigenvalues selected (if sorting)
+	info: Info,
 	ok: bool,
 ) where is_float(T) {
 	n := A.rows
@@ -757,7 +695,7 @@ generalized_schur_real :: proc(
 // A and B are overwritten with Schur forms S and T
 // VSL and VSR contain the left and right Schur vectors if requested
 // For complex matrices, eigenvalues are alpha/beta
-generalized_schur_complex :: proc(
+dns_schur_generalized_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix A (overwritten with S)
 	B: ^Matrix(Cmplx), // Input matrix B (overwritten with T)
 	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
@@ -773,10 +711,9 @@ generalized_schur_complex :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_C_SELECT2 or LAPACK_Z_SELECT2)
 ) -> (
 	sdim: Blas_Int,
-	info: Info,// Number of eigenvalues selected (if sorting)
+	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -833,9 +770,9 @@ generalized_schur_complex :: proc(
 // Generalized Schur Decomposition Expert Driver (GGESX family)
 // ===================================================================================
 
-generalized_schur_expert :: proc {
-	generalized_schur_expert_real,
-	generalized_schur_expert_complex,
+dns_schur_generalized_expert :: proc {
+	dns_schur_generalized_expert_real,
+	dns_schur_generalized_expert_complex,
 }
 
 // Query workspace size for generalized Schur decomposition expert driver
@@ -893,7 +830,7 @@ query_workspace_generalized_schur_expert :: proc(A: ^Matrix($T), B: ^Matrix(T), 
 
 // Compute generalized Schur decomposition with expert driver (real matrices)
 // Provides condition number estimates for eigenvalues and subspaces
-generalized_schur_expert_real :: proc(
+dns_schur_generalized_expert_real :: proc(
 	A: ^Matrix($T), // Input matrix A (overwritten with S)
 	B: ^Matrix(T), // Input matrix B (overwritten with T)
 	alphar: []T, // Real parts of alpha (pre-allocated, size n)
@@ -911,10 +848,10 @@ generalized_schur_expert_real :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting
 ) -> (
 	sdim: Blas_Int,
-	rconde: [2]T,// Number of eigenvalues selected (if sorting)
-	rcondv: [2]T,// Reciprocal condition numbers for eigenvalues
-	info: Info,// Reciprocal condition numbers for eigenvectors
-	ok: bool,
+	rconde: [2]T,
+	rcondv: [2]T,
+	info: Info,
+	ok: bool, // Number of eigenvalues selected (if sorting)// Reciprocal condition numbers for eigenvalues// Reciprocal condition numbers for eigenvectors
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -1026,7 +963,7 @@ generalized_schur_expert_real :: proc(
 }
 
 // Compute generalized Schur decomposition with expert driver (complex matrices)
-generalized_schur_expert_complex :: proc(
+dns_schur_generalized_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix A (overwritten with S)
 	B: ^Matrix(Cmplx), // Input matrix B (overwritten with T)
 	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
@@ -1044,12 +981,11 @@ generalized_schur_expert_complex :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting
 ) -> (
 	sdim: Blas_Int,
-	rconde: [2]Real,// Number of eigenvalues selected (if sorting)
-	rcondv: [2]Real,// Reciprocal condition numbers for eigenvalues
-	info: Info,// Reciprocal condition numbers for eigenvectors
+	rconde: [2]Real,
+	rcondv: [2]Real,
+	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -1163,13 +1099,13 @@ generalized_schur_expert_complex :: proc(
 // Generalized Eigenvalue Problem (GGEV family)
 // ===================================================================================
 
-generalized_eigenvalues :: proc {
-	generalized_eigenvalues_real,
-	generalized_eigenvalues_complex,
+dns_eigen_generalized :: proc {
+	dns_eigen_generalized_real,
+	dns_eigen_generalized_complex,
 }
 
 // Query workspace size for generalized eigenvalue problem
-query_workspace_generalized_eigenvalues :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvl: Eigen_Job_Left = .None, jobvr: Eigen_Job_Right = .Compute) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_eigen_generalized :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvl: Eigen_Job_Left = .None, jobvr: Eigen_Job_Right = .Compute) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -1210,7 +1146,7 @@ query_workspace_generalized_eigenvalues :: proc(A: ^Matrix($T), B: ^Matrix(T), j
 // Compute generalized eigenvalues and eigenvectors (real matrices)
 // Solves the generalized eigenvalue problem: A*x = lambda*B*x
 // For real matrices, eigenvalues are (alphar + i*alphai)/beta
-generalized_eigenvalues_real :: proc(
+dns_eigen_generalized_real :: proc(
 	A: ^Matrix($T), // Input matrix A (overwritten)
 	B: ^Matrix(T), // Input matrix B (overwritten)
 	alphar: []T, // Real parts of alpha (pre-allocated, size n)
@@ -1270,7 +1206,7 @@ generalized_eigenvalues_real :: proc(
 // Compute generalized eigenvalues and eigenvectors (complex matrices)
 // Solves the generalized eigenvalue problem: A*x = lambda*B*x
 // For complex matrices, eigenvalues are alpha/beta
-generalized_eigenvalues_complex :: proc(
+dns_eigen_generalized_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix A (overwritten)
 	B: ^Matrix(Cmplx), // Input matrix B (overwritten)
 	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
@@ -1284,8 +1220,7 @@ generalized_eigenvalues_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -1332,9 +1267,9 @@ generalized_eigenvalues_complex :: proc(
 // Generalized Eigenvalue Problem Expert Driver (GGEVX family)
 // ===================================================================================
 
-generalized_eigenvalues_expert :: proc {
-	generalized_eigenvalues_expert_real,
-	generalized_eigenvalues_expert_complex,
+dns_eigen_generalized_expert :: proc {
+	dns_eigen_generalized_expert_real,
+	dns_eigen_generalized_expert_complex,
 }
 
 // Query workspace size for generalized eigenvalue expert driver
@@ -1384,7 +1319,7 @@ query_workspace_generalized_eigenvalues_expert :: proc(A: ^Matrix($T), B: ^Matri
 
 // Compute generalized eigenvalues with expert driver (real matrices)
 // Provides balancing, condition number estimates
-generalized_eigenvalues_expert_real :: proc(
+dns_eigen_generalized_expert_real :: proc(
 	A: ^Matrix($T), // Input matrix A (overwritten)
 	B: ^Matrix(T), // Input matrix B (overwritten)
 	alphar: []T, // Real parts of alpha (pre-allocated, size n)
@@ -1405,11 +1340,11 @@ generalized_eigenvalues_expert_real :: proc(
 	sense: Sense_Job = .None,
 ) -> (
 	ilo: Blas_Int,
-	ihi: Blas_Int,// Balancing info
-	abnrm: T,// Balancing info
-	bbnrm: T,// Norm of balanced A
-	info: Info,// Norm of balanced B
-	ok: bool,
+	ihi: Blas_Int,
+	abnrm: T,
+	bbnrm: T,
+	info: Info,
+	ok: bool, // Balancing info// Balancing info// Norm of balanced A// Norm of balanced B
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -1522,7 +1457,7 @@ generalized_eigenvalues_expert_real :: proc(
 }
 
 // Compute generalized eigenvalues with expert driver (complex matrices)
-generalized_eigenvalues_expert_complex :: proc(
+dns_eigen_generalized_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix A (overwritten)
 	B: ^Matrix(Cmplx), // Input matrix B (overwritten)
 	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
@@ -1543,13 +1478,12 @@ generalized_eigenvalues_expert_complex :: proc(
 	sense: Sense_Job = .None,
 ) -> (
 	ilo: Blas_Int,
-	ihi: Blas_Int,// Balancing info
-	abnrm: Real,// Balancing info
-	bbnrm: Real,// Norm of balanced A
-	info: Info,// Norm of balanced B
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	ihi: Blas_Int,
+	abnrm: Real,
+	bbnrm: Real,
+	info: Info,
+	ok: bool, // Balancing info// Balancing info// Norm of balanced A// Norm of balanced B
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -1684,13 +1618,13 @@ triangular_eigenvectors :: proc {
 }
 
 // Query workspace size for triangular eigenvector computation
-query_workspace_triangular_eigenvectors :: proc(T: ^Matrix($T), side: Eigenvector_Side = .Right) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	n := T.rows
+query_workspace_triangular_eigenvectors :: proc(schur: ^Matrix($T), side: Eigenvector_Side = .Right) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	n := schur.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(3 * n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		// Query with lwork = -1
 		lwork: Blas_Int = QUERY_WORKSPACE
 		work_query: T
@@ -1721,7 +1655,7 @@ query_workspace_triangular_eigenvectors :: proc(T: ^Matrix($T), side: Eigenvecto
 // Compute eigenvectors of a triangular matrix (real)
 // For real matrices, complex conjugate pairs are returned in consecutive columns
 triangular_eigenvectors_real :: proc(
-	T: ^Matrix($T), // Input triangular matrix (not modified)
+	schur: ^Matrix($T), // Input triangular matrix (not modified)
 	VL: ^Matrix(T), // Left eigenvectors (pre-allocated, optional)
 	VR: ^Matrix(T), // Right eigenvectors (pre-allocated, optional)
 	select: []Blas_Int, // Selection array (pre-allocated if howmny == .Selected, size n)
@@ -1730,8 +1664,8 @@ triangular_eigenvectors_real :: proc(
 	howmny: Eigenvector_Selection = .All,
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of eigenvectors computed
-	ok: bool,
+	info: Info,
+	ok: bool, // Number of eigenvectors computed
 ) where is_float(T) {
 	n := T.rows
 	ldt := T.ld
@@ -1790,10 +1724,9 @@ triangular_eigenvectors_complex :: proc(
 	howmny: Eigenvector_Selection = .All,
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of eigenvectors computed
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Number of eigenvectors computed
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := T.rows
 	ldt := T.ld
 
@@ -1852,10 +1785,10 @@ generalized_triangular_eigenvectors :: proc {
 
 // Query workspace size for generalized triangular eigenvector computation
 query_workspace_generalized_triangular_eigenvectors :: proc(n: int, $T: typeid) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(6 * n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(2 * n)
 	}
@@ -1876,8 +1809,8 @@ generalized_triangular_eigenvectors_real :: proc(
 	howmny: Eigenvector_Selection = .All,
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of eigenvectors computed
-	ok: bool,
+	info: Info,
+	ok: bool, // Number of eigenvectors computed
 ) where is_float(T) {
 	n := S.rows
 	lds := S.ld
@@ -1939,10 +1872,9 @@ generalized_triangular_eigenvectors_complex :: proc(
 	howmny: Eigenvector_Selection = .All,
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of eigenvectors computed
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Number of eigenvectors computed
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := S.rows
 	lds := S.ld
 	ldp := P.ld
@@ -2008,7 +1940,7 @@ reorder_schur :: proc {
 // Reorder eigenvalues in Schur form (real)
 // Exchanges two adjacent blocks in the Schur factorization
 reorder_schur_real :: proc(
-	T: ^Matrix($T), // Schur form matrix (overwritten with reordered form)
+	schur: ^Matrix($T), // Schur form matrix (overwritten with reordered form)
 	Q: ^Matrix(T), // Schur vectors (updated if compq == .Update)
 	ifst: ^Blas_Int, // Position of first block (updated on exit)
 	ilst: ^Blas_Int, // Desired position (updated on exit)
@@ -2018,10 +1950,10 @@ reorder_schur_real :: proc(
 	info: Info,
 	ok: bool,
 ) where is_float(T) {
-	n := T.rows
-	ldt := T.ld
+	n := schur.rows
+	ldt := schur.ld
 
-	assert(T.rows == T.cols, "Matrix T must be square")
+	assert(schur.rows == schur.cols, "Matrix T must be square")
 	assert(len(work) >= int(n), "work array too small")
 	assert(ifst^ >= 1 && ifst^ <= n, "ifst out of range")
 	assert(ilst^ >= 1 && ilst^ <= n, "ilst out of range")
@@ -2037,9 +1969,9 @@ reorder_schur_real :: proc(
 	}
 
 	when T == f32 {
-		lapack.strexc_(&compq_c, &n, raw_data(T.data), &ldt, q_ptr, &ldq, ifst, ilst, raw_data(work), &info)
+		lapack.strexc_(&compq_c, &n, raw_data(schur.data), &ldt, q_ptr, &ldq, ifst, ilst, raw_data(work), &info)
 	} else when T == f64 {
-		lapack.dtrexc_(&compq_c, &n, raw_data(T.data), &ldt, q_ptr, &ldq, ifst, ilst, raw_data(work), &info)
+		lapack.dtrexc_(&compq_c, &n, raw_data(schur.data), &ldt, q_ptr, &ldq, ifst, ilst, raw_data(work), &info)
 	}
 
 	return info, info == 0
@@ -2104,9 +2036,9 @@ reorder_schur_with_condition :: proc {
 }
 
 // Query workspace sizes for reordering Schur form with condition numbers
-query_workspace_reorder_schur_condition :: proc(T: ^Matrix($T), job: Condition_Job = .Both) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	n := T.rows
-	ldt := T.ld
+query_workspace_reorder_schur_condition :: proc(schur: ^Matrix($T), job: Condition_Job = .Both) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	n := schur.rows
+	ldt := schur.ld
 
 	job_c := cast(u8)job
 	compq_c := cast(u8)Schur_Computation.Update
@@ -2165,7 +2097,7 @@ query_workspace_reorder_schur_condition :: proc(T: ^Matrix($T), job: Condition_J
 // Reorder Schur form with condition number estimates (real)
 // Reorders the real Schur factorization and computes condition numbers
 reorder_schur_with_condition_real :: proc(
-	T: ^Matrix($T), // Schur form matrix (overwritten with reordered form)
+	schur: ^Matrix($T), // Schur form matrix (overwritten with reordered form)
 	Q: ^Matrix(T), // Schur vectors (updated if compq == .Update)
 	select: []Blas_Int, // Logical selection array (size n, 1 = select eigenvalue)
 	WR: []T, // Real parts of eigenvalues (pre-allocated, size n)
@@ -2176,17 +2108,17 @@ reorder_schur_with_condition_real :: proc(
 	compq: Schur_Computation = .Update,
 ) -> (
 	m: Blas_Int,
-	s: T,// Number of selected eigenvalues
-	sep: T,// Reciprocal condition number for eigenvalue cluster
-	info: Info,// Estimated reciprocal condition number for invariant subspace
-	ok: bool,
+	s: T,
+	sep: T,
+	info: Info,
+	ok: bool, // Number of selected eigenvalues// Reciprocal condition number for eigenvalue cluster// Estimated reciprocal condition number for invariant subspace
 ) where is_float(T) {
-	n := T.rows
-	ldt := T.ld
+	n := schur.rows
+	ldt := schur.ld
 	ldq: Blas_Int = 1
 	ptr_q: ^T = nil
 
-	assert(T.rows == T.cols, "Matrix T must be square")
+	assert(schur.rows == schur.cols, "Matrix T must be square")
 	assert(len(select) >= int(n), "select array too small")
 	assert(len(WR) >= int(n), "WR array too small")
 	assert(len(WI) >= int(n), "WI array too small")
@@ -2204,9 +2136,9 @@ reorder_schur_with_condition_real :: proc(
 	liwork := Blas_Int(len(iwork))
 
 	when T == f32 {
-		lapack.strsen_(&job_c, &compq_c, raw_data(select), &n, raw_data(T.data), &ldt, ptr_q, &ldq, raw_data(WR), raw_data(WI), &m, &s, &sep, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
+		lapack.strsen_(&job_c, &compq_c, raw_data(select), &n, raw_data(schur.data), &ldt, ptr_q, &ldq, raw_data(WR), raw_data(WI), &m, &s, &sep, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	} else when T == f64 {
-		lapack.dtrsen_(&job_c, &compq_c, raw_data(select), &n, raw_data(T.data), &ldt, ptr_q, &ldq, raw_data(WR), raw_data(WI), &m, &s, &sep, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
+		lapack.dtrsen_(&job_c, &compq_c, raw_data(select), &n, raw_data(schur.data), &ldt, ptr_q, &ldq, raw_data(WR), raw_data(WI), &m, &s, &sep, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
 	}
 
 	return m, s, sep, info, info == 0
@@ -2220,16 +2152,15 @@ reorder_schur_with_condition_complex :: proc(
 	select: []Blas_Int, // Logical selection array (size n, 1 = select eigenvalue)
 	W: []Cmplx, // Eigenvalues (pre-allocated, size n)
 	work: []Cmplx, // Workspace (pre-allocated)
+	s_out: ^$Real, // Output: reciprocal condition number for average of selected eigenvalues
+	sep_out: ^Real, // Output: reciprocal condition number for right invariant subspace
 	job: Condition_Job = .Both,
 	compq: Schur_Computation = .Update,
 ) -> (
 	m: Blas_Int,
-	s: $Real,// Number of selected eigenvalues
-	sep: Real,// Reciprocal condition number for eigenvalue cluster
-	info: Info,// Estimated reciprocal condition number for invariant subspace
+	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where is_complex(Cmplx) && ((Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64)) {
 	n := T.rows
 	ldt := T.ld
 	ldq: Blas_Int = 1
@@ -2250,13 +2181,19 @@ reorder_schur_with_condition_complex :: proc(
 	compq_c := cast(u8)compq
 	lwork := Blas_Int(len(work))
 
+	s: Real
+	sep: Real
+
 	when Cmplx == complex64 {
 		lapack.ctrsen_(&job_c, &compq_c, raw_data(select), &n, raw_data(T.data), &ldt, ptr_q, &ldq, raw_data(W), &m, &s, &sep, raw_data(work), &lwork, &info)
 	} else when Cmplx == complex128 {
 		lapack.ztrsen_(&job_c, &compq_c, raw_data(select), &n, raw_data(T.data), &ldt, ptr_q, &ldq, raw_data(W), &m, &s, &sep, raw_data(work), &lwork, &info)
 	}
 
-	return m, s, sep, info, info == 0
+	s_out^ = s
+	sep_out^ = sep
+
+	return m, info, info == 0
 }
 
 // ===================================================================================
@@ -2282,9 +2219,9 @@ condition_numbers_eigenvalues :: proc {
 }
 
 // Query workspace sizes for condition number computation
-query_workspace_condition_numbers :: proc(T: ^Matrix($T), VL: ^Matrix(T) = nil, VR: ^Matrix(T) = nil) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	n := T.rows
-	ldt := T.ld
+query_workspace_condition_numbers :: proc(schur: ^Matrix($T), VL: ^Matrix(T) = nil, VR: ^Matrix(T) = nil) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	n := schur.rows
+	ldt := schur.ld
 	ldvl: Blas_Int = 1
 	ldvr: Blas_Int = 1
 
@@ -2303,11 +2240,11 @@ query_workspace_condition_numbers :: proc(T: ^Matrix($T), VL: ^Matrix(T) = nil, 
 	m: Blas_Int
 	ldwork: Blas_Int = n
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		// Real types need iwork
 		work_size = int(3 * n)
 		iwork_size = int(2 * (n - 1))
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		// Complex types need no iwork but do need rwork
 		work_size = int(2 * n * n)
 		iwork_size = 0 // rwork size would be n
@@ -2319,7 +2256,7 @@ query_workspace_condition_numbers :: proc(T: ^Matrix($T), VL: ^Matrix(T) = nil, 
 // Compute condition numbers for eigenvalues and eigenvectors (real)
 // Estimates reciprocal condition numbers for specified eigenvalues/eigenvectors
 condition_numbers_eigenvalues_real :: proc(
-	T: ^Matrix($T), // Triangular matrix from Schur decomposition (not modified)
+	schur: ^Matrix($T), // Triangular matrix from Schur decomposition (not modified)
 	VL: ^Matrix(T), // Left eigenvectors (optional, not modified)
 	VR: ^Matrix(T), // Right eigenvectors (optional, not modified)
 	select: []Blas_Int, // Selection array if howmny == .Selected (size n)
@@ -2332,17 +2269,17 @@ condition_numbers_eigenvalues_real :: proc(
 	mm: Blas_Int = 0, // Number of elements in S and SEP (0 = auto-detect from n)
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of condition numbers computed
-	ok: bool,
+	info: Info,
+	ok: bool, // Number of condition numbers computed
 ) where is_float(T) {
-	n := T.rows
-	ldt := T.ld
+	n := schur.rows
+	ldt := schur.ld
 	ldvl: Blas_Int = 1
 	ldvr: Blas_Int = 1
 	ptr_vl: ^T = nil
 	ptr_vr: ^T = nil
 
-	assert(T.rows == T.cols, "Matrix T must be square")
+	assert(schur.rows == schur.cols, "Matrix T must be square")
 
 	if VL != nil {
 		assert(VL.rows == n, "VL matrix dimensions incorrect")
@@ -2375,9 +2312,9 @@ condition_numbers_eigenvalues_real :: proc(
 	ldwork := n
 
 	when T == f32 {
-		lapack.strsna_(&job_c, &howmny_c, raw_data(select), &n, raw_data(T.data), &ldt, ptr_vl, &ldvl, ptr_vr, &ldvr, raw_data(S), raw_data(SEP), &mm_val, &m, raw_data(work), &ldwork, raw_data(iwork), &info)
+		lapack.strsna_(&job_c, &howmny_c, raw_data(select), &n, raw_data(schur.data), &ldt, ptr_vl, &ldvl, ptr_vr, &ldvr, raw_data(S), raw_data(SEP), &mm_val, &m, raw_data(work), &ldwork, raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dtrsna_(&job_c, &howmny_c, raw_data(select), &n, raw_data(T.data), &ldt, ptr_vl, &ldvl, ptr_vr, &ldvr, raw_data(S), raw_data(SEP), &mm_val, &m, raw_data(work), &ldwork, raw_data(iwork), &info)
+		lapack.dtrsna_(&job_c, &howmny_c, raw_data(select), &n, raw_data(schur.data), &ldt, ptr_vl, &ldvl, ptr_vr, &ldvr, raw_data(S), raw_data(SEP), &mm_val, &m, raw_data(work), &ldwork, raw_data(iwork), &info)
 	}
 
 	return m, info, info == 0
@@ -2399,10 +2336,9 @@ condition_numbers_eigenvalues_complex :: proc(
 	mm: Blas_Int = 0, // Number of elements in S and SEP (0 = auto-detect from n)
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of condition numbers computed
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Number of condition numbers computed
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := T.rows
 	ldt := T.ld
 	ldvl: Blas_Int = 1
@@ -2522,8 +2458,8 @@ gges_real :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_S_SELECT3 or LAPACK_D_SELECT3)
 ) -> (
 	sdim: Blas_Int,
-	info: Info,// Number of eigenvalues selected (if sorting)
-	ok: bool,
+	info: Info,
+	ok: bool, // Number of eigenvalues selected (if sorting)
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -2594,10 +2530,9 @@ gges_complex :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_C_SELECT2 or LAPACK_Z_SELECT2)
 ) -> (
 	sdim: Blas_Int,
-	info: Info,// Number of eigenvalues selected (if sorting)
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Number of eigenvalues selected (if sorting)
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -2731,8 +2666,8 @@ ggesx_real :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_S_SELECT3 or LAPACK_D_SELECT3)
 ) -> (
 	sdim: Blas_Int,
-	info: Info,// Number of eigenvalues selected (if sorting)
-	ok: bool,
+	info: Info,
+	ok: bool, // Number of eigenvalues selected (if sorting)
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -2875,10 +2810,9 @@ ggesx_complex :: proc(
 	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_C_SELECT2 or LAPACK_Z_SELECT2)
 ) -> (
 	sdim: Blas_Int,
-	info: Info,// Number of eigenvalues selected (if sorting)
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Number of eigenvalues selected (if sorting)
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -3117,8 +3051,7 @@ ggev_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -3234,11 +3167,11 @@ ggevx_real :: proc(
 	sense: Sense_Job = .None,
 ) -> (
 	ilo: Blas_Int,
-	ihi: Blas_Int,// Index of first balanced row
-	abnrm: T,// Index of last balanced row
-	bbnrm: T,// Norm of balanced A
-	info: Info,// Norm of balanced B
-	ok: bool,
+	ihi: Blas_Int,
+	abnrm: T,
+	bbnrm: T,
+	info: Info,
+	ok: bool, // Index of first balanced row// Index of last balanced row// Norm of balanced A// Norm of balanced B
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -3381,13 +3314,12 @@ ggevx_complex :: proc(
 	sense: Sense_Job = .None,
 ) -> (
 	ilo: Blas_Int,
-	ihi: Blas_Int,// Index of first balanced row
-	abnrm: Real,// Index of last balanced row
-	bbnrm: Real,// Norm of balanced A
-	info: Info,// Norm of balanced B
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	ihi: Blas_Int,
+	abnrm: Real,
+	bbnrm: Real,
+	info: Info,
+	ok: bool, // Index of first balanced row// Index of last balanced row// Norm of balanced A// Norm of balanced B
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -3668,8 +3600,7 @@ hgeqz_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := H.rows
 	ldh := H.ld
 	ldt := T_mat.ld
@@ -3744,8 +3675,8 @@ hsein_real :: proc(
 	mm: Blas_Int = 0, // Number of columns in VL/VR (0 = auto-detect from n)
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of eigenvectors computed
-	ok: bool,
+	info: Info,
+	ok: bool, // Number of eigenvectors computed
 ) where is_float(T) {
 	n := H.rows
 	ldh := H.ld
@@ -3809,10 +3740,9 @@ hsein_complex :: proc(
 	mm: Blas_Int = 0, // Number of columns in VL/VR (0 = auto-detect from n)
 ) -> (
 	m: Blas_Int,
-	info: Info,// Number of eigenvectors computed
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Number of eigenvectors computed
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := H.rows
 	ldh := H.ld
 
@@ -4019,7 +3949,7 @@ ggbak_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := Blas_Int(len(lscale))
 	m := V.cols
 	ldv := V.ld
@@ -4034,6 +3964,10 @@ ggbak_real :: proc(
 		lapack.sggbak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info)
 	} else when T == f64 {
 		lapack.dggbak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info)
+	} else when T == complex64 {
+		lapack.cggbak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info)
+	} else when T == complex128 {
+		lapack.zggbak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info)
 	}
 
 	return info, info == 0
@@ -4051,25 +3985,8 @@ ggbak_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	n := Blas_Int(len(lscale))
-	m := V.cols
-	ldv := V.ld
-
-	assert(len(lscale) == len(rscale), "lscale and rscale must have same length")
-	assert(V.rows == int(n), "V matrix rows must match scale array size")
-
-	job_c := cast(u8)job
-	side_c := cast(u8)side
-
-	when Cmplx == complex64 {
-		lapack.cggbak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info)
-	} else when Cmplx == complex128 {
-		lapack.zggbak_(&job_c, &side_c, &n, &ilo, &ihi, raw_data(lscale), raw_data(rscale), &m, raw_data(V.data), &ldv, &info)
-	}
-
-	return info, info == 0
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+	return ggbak_real(lscale, rscale, V, ilo, ihi, job, side)
 }
 
 // ===================================================================================
@@ -4081,7 +3998,7 @@ ggbal :: proc {
 	ggbal_complex,
 }
 
-// Balance matrix pair for generalized eigenvalue problem (real)
+// Balance matrix pair for generalized eigenvalue problem
 ggbal_real :: proc(
 	A: ^Matrix($T), // First matrix (input/output)
 	B: ^Matrix(T), // Second matrix (input/output)
@@ -4094,7 +4011,7 @@ ggbal_real :: proc(
 	ihi: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 	ldb := B.ld
@@ -4112,12 +4029,16 @@ ggbal_real :: proc(
 		lapack.sggbal_(&job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info)
 	} else when T == f64 {
 		lapack.dggbal_(&job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info)
+	} else when T == complex64 {
+		lapack.cggbal_(&job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info)
+	} else when T == complex128 {
+		lapack.zggbal_(&job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info)
 	}
 
 	return ilo, ihi, info, info == 0
 }
 
-// Balance matrix pair for generalized eigenvalue problem (complex)
+// Balance matrix pair for generalized eigenvalue problem (complex wrapper)
 ggbal_complex :: proc(
 	A: ^Matrix($Cmplx), // First matrix (input/output)
 	B: ^Matrix(Cmplx), // Second matrix (input/output)
@@ -4130,38 +4051,19 @@ ggbal_complex :: proc(
 	ihi: Blas_Int,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(lscale) >= int(n), "lscale array too small")
-	assert(len(rscale) >= int(n), "rscale array too small")
-	assert(len(work) >= int(6 * n), "work array too small")
-
-	job_c := cast(u8)job
-
-	when Cmplx == complex64 {
-		lapack.cggbal_(&job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info)
-	} else when Cmplx == complex128 {
-		lapack.zggbal_(&job_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &ilo, &ihi, raw_data(lscale), raw_data(rscale), raw_data(work), &info)
-	}
-
-	return ilo, ihi, info, info == 0
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+	return ggbal_real(A, B, lscale, rscale, work, job)
 }
 
 // ===================================================================================
 // GGHRD - Reduce to generalized Hessenberg form
 // ===================================================================================
 
-gghrd :: proc {
-	gghrd_real,
-	gghrd_complex,
-}
+// Note: Use gghrd_real or gghrd_complex procedure groups directly
+// gghrd :: proc {
+// 	gghrd_real,
+// 	gghrd_complex,
+// }
 
 // Query workspace size for generalized Hessenberg reduction (gghd3)
 query_workspace_gghd3 :: proc(n: Blas_Int, $T: typeid) -> (work_size: int) where is_float(T) || is_complex(T) {
@@ -4451,7 +4353,7 @@ query_workspace_tgsyl :: proc(m: Blas_Int, n: Blas_Int, $T: typeid) -> (work_siz
 	ijob: Blas_Int = 0
 	lwork: Blas_Int = QUERY_WORKSPACE
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		liwork: Blas_Int = QUERY_WORKSPACE
 		when T == f32 {
 			work_query: f32
@@ -4511,9 +4413,9 @@ tgsyl_real :: proc(
 	ijob: Blas_Int = 0, // 0 = solve only, 1-4 = solve + condition estimate
 ) -> (
 	dif: T,
-	scale: T,// Estimate of Dif[(A,D), (B,E)]
-	info: Info,// Scale factor
-	ok: bool,
+	scale: T,
+	info: Info,
+	ok: bool, // Estimate of Dif[(A,D), (B,E)]// Scale factor
 ) where is_float(T) {
 	m := A.rows
 	n := B.rows
@@ -4555,14 +4457,14 @@ tgsyl_complex :: proc(
 	F: ^Matrix(Cmplx), // Second matrix in equation (input/output)
 	work: []Cmplx, // Workspace (pre-allocated)
 	iwork: []Blas_Int, // Integer workspace (pre-allocated)
+	dif_out: ^$Real, // Output: estimate of Dif[(A,D), (B,E)]
+	scale_out: ^Real, // Output: scaling factor for C and F
 	trans: Transpose = .None,
 	ijob: Blas_Int = 0, // 0 = solve only, 1-4 = solve + condition estimate
 ) -> (
-	dif: real_type_of(Cmplx),
-	scale: real_type_of(Cmplx),// Estimate of Dif[(A,D), (B,E)]
-	info: Info,// Scale factor
+	info: Info,
 	ok: bool,
-) where is_complex(Cmplx) {
+) where is_complex(Cmplx) && ((Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64)) {
 	m := A.rows
 	n := B.rows
 	lda := A.ld
@@ -4584,11 +4486,17 @@ tgsyl_complex :: proc(
 	trans_c := cast(u8)trans
 	lwork := Blas_Int(len(work))
 
+	dif: Real
+	scale: Real
+
 	when Cmplx == complex64 {
 		lapack.ctgsyl_(&trans_c, &ijob, &m, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(C.data), &ldc, raw_data(D.data), &ldd, raw_data(E.data), &lde, raw_data(F.data), &ldf, &dif, &scale, raw_data(work), &lwork, raw_data(iwork), &info)
 	} else when Cmplx == complex128 {
 		lapack.ztgsyl_(&trans_c, &ijob, &m, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(C.data), &ldc, raw_data(D.data), &ldd, raw_data(E.data), &lde, raw_data(F.data), &ldf, &dif, &scale, raw_data(work), &lwork, raw_data(iwork), &info)
 	}
 
-	return dif, scale, info, info == 0
+	dif_out^ = dif
+	scale_out^ = scale
+
+	return info, info == 0
 }

@@ -40,12 +40,12 @@ Tridiagonal :: struct($T: typeid) where is_float(T) || is_complex(T) {
 // ===================================================================================
 
 // Create a general tridiagonal matrix
-make_tridiagonal :: proc(n: int, $T: typeid, allocator := context.allocator) -> Tridiagonal(T) {
+trid_make :: proc(n: int, $T: typeid, allocator := context.allocator) -> Tridiagonal(T) {
 	return Tridiagonal(T){n = Blas_Int(n), dl = make([]T, max(n - 1, 0), allocator), d = make([]T, n, allocator), du = make([]T, max(n - 1, 0), allocator)}
 }
 
 // Create symmetric tridiagonal matrix (du is not allocated for real, or computed from dl for complex)
-make_symmetric_tridiagonal :: proc(n: int, $T: typeid, allocator := context.allocator) -> Tridiagonal(T) {
+trid_make_symmetric :: proc(n: int, $T: typeid, allocator := context.allocator) -> Tridiagonal(T) {
 	tm := Tridiagonal(T) {
 		n         = Blas_Int(n),
 		d         = make([]T, n, allocator),
@@ -69,7 +69,7 @@ make_symmetric_tridiagonal :: proc(n: int, $T: typeid, allocator := context.allo
 // ===================================================================================
 
 // Get element (i,j) from tridiagonal matrix
-tridiagonal_get :: proc(tm: ^Tridiagonal($T), i, j: int) -> (value: T, stored: bool) {
+trid_get :: proc(tm: ^Tridiagonal($T), i, j: int) -> (value: T, stored: bool) {
 	assert(i >= 0 && i < int(tm.n) && j >= 0 && j < int(tm.n), "Index out of bounds")
 
 	if i == j {
@@ -77,7 +77,7 @@ tridiagonal_get :: proc(tm: ^Tridiagonal($T), i, j: int) -> (value: T, stored: b
 	} else if i == j + 1 && i > 0 {
 		return tm.dl[j], true
 	} else if i == j - 1 && j > 0 {
-		when T == complex64 || T == complex128 {
+		when is_complex(T) {
 			if tm.symmetric {
 				return conj(tm.dl[i]), true // Hermitian case
 			}
@@ -89,7 +89,7 @@ tridiagonal_get :: proc(tm: ^Tridiagonal($T), i, j: int) -> (value: T, stored: b
 }
 
 // Set element (i,j) in tridiagonal matrix
-tridiagonal_set :: proc(tm: ^Tridiagonal($T), i, j: int, value: T) -> bool {
+trid_set :: proc(tm: ^Tridiagonal($T), i, j: int, value: T) -> bool {
 	assert(i >= 0 && i < int(tm.n) && j >= 0 && j < int(tm.n), "Index out of bounds")
 
 	if i == j {
@@ -126,7 +126,7 @@ tridiagonal_set :: proc(tm: ^Tridiagonal($T), i, j: int, value: T) -> bool {
 // ===================================================================================
 
 // Check if matrix has valid tridiagonal structure
-validate_tridiagonal :: proc(tm: ^Tridiagonal($T)) -> bool {
+validate_trid :: proc(tm: ^Tridiagonal($T)) -> bool {
 	if tm.n <= 0 {
 		return false
 	}
@@ -145,40 +145,22 @@ is_diagonally_dominant :: proc(tm: ^Tridiagonal($T)) -> bool {
 
 	// First row
 	if n > 1 {
-		when is_float(T) {
-			if abs(tm.d[0]) < abs(tm.du[0]) {
-				return false
-			}
-		} else {
-			if abs(tm.d[0]) < abs(tm.du[0]) {
-				return false
-			}
+		if abs(tm.d[0]) < abs(tm.du[0]) {
+			return false
 		}
 	}
 
 	// Middle rows
 	for i in 1 ..< n - 1 {
-		when is_float(T) {
-			if abs(tm.d[i]) < abs(tm.dl[i - 1]) + abs(tm.du[i]) {
-				return false
-			}
-		} else {
-			if abs(tm.d[i]) < abs(tm.dl[i - 1]) + abs(tm.du[i]) {
-				return false
-			}
+		if abs(tm.d[i]) < abs(tm.dl[i - 1]) + abs(tm.du[i]) {
+			return false
 		}
 	}
 
 	// Last row
 	if n > 1 {
-		when is_float(T) {
-			if abs(tm.d[n - 1]) < abs(tm.dl[n - 2]) {
-				return false
-			}
-		} else {
-			if abs(tm.d[n - 1]) < abs(tm.dl[n - 2]) {
-				return false
-			}
+		if abs(tm.d[n - 1]) < abs(tm.dl[n - 2]) {
+			return false
 		}
 	}
 
@@ -190,7 +172,7 @@ is_diagonally_dominant :: proc(tm: ^Tridiagonal($T)) -> bool {
 // ===================================================================================
 
 // Delete tridiagonal matrix data
-delete_tridiagonal :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) {
+trid_delete :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) {
 	delete(tm.d, allocator)
 	delete(tm.dl, allocator)
 	// Only delete du if it's not sharing storage with dl
@@ -209,7 +191,7 @@ delete_tridiagonal :: proc(tm: ^Tridiagonal($T), allocator := context.allocator)
 }
 
 // Clone a tridiagonal matrix
-clone_tridiagonal :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) -> Tridiagonal(T) {
+trid_clone :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) -> Tridiagonal(T) {
 	clone := Tridiagonal(T) {
 		n         = tm.n,
 		symmetric = tm.symmetric,
@@ -237,65 +219,4 @@ clone_tridiagonal :: proc(tm: ^Tridiagonal($T), allocator := context.allocator) 
 	}
 
 	return clone
-}
-
-// ===================================================================================
-// WORKSPACE AND SIZE QUERIES
-// ===================================================================================
-
-// Query workspace requirements for tridiagonal operations
-query_workspace_tridiagonal :: proc(operation: string, $T: typeid, n: int) -> (work_size, rwork_size, iwork_size: int) {
-	// Default workspace requirements for common operations
-	switch operation {
-	case "factor":
-		// LU factorization for tridiagonal
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case "solve":
-		// Linear solve for tridiagonal
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case "eigenvalues":
-		// Eigenvalue computation
-		when is_float(T) {
-			work_size = max(1, 2 * n - 2)
-		} else {
-			work_size = max(1, n)
-			rwork_size = max(1, n)
-		}
-	case "eigenvectors":
-		// Eigenvector computation
-		when is_float(T) {
-			work_size = max(1, 2 * n - 2)
-		} else {
-			work_size = max(1, 2 * n)
-			rwork_size = max(1, 3 * n - 2)
-		}
-	case:
-		// Unknown operation, return minimal workspace
-		work_size = n
-		rwork_size = 0
-		iwork_size = 0
-	}
-
-	return
-}
-
-// Allocate workspace for tridiagonal operations
-allocate_tridiagonal_workspace :: proc(operation: string, $T: typeid, n: int, allocator := context.allocator) -> (work: []T, rwork: []f64, iwork: []Blas_Int) {
-	work_size, rwork_size, iwork_size := query_workspace_tridiagonal(operation, T, n)
-
-	if work_size > 0 {
-		work = make([]T, work_size, allocator)
-	}
-	if rwork_size > 0 {
-		rwork = make([]f64, rwork_size, allocator)
-	}
-	if iwork_size > 0 {
-		iwork = make([]Blas_Int, iwork_size, allocator)
-	}
-
-	return
 }

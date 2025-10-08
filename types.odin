@@ -96,11 +96,20 @@ MatrixRegion :: enum u8 {
 	Lower = 'L', // "L" - Lower triangular part
 }
 
+// Matrix triangle specification (for symmetric/Hermitian/triangular matrices)
+MatrixTriangle :: enum u8 {
+	Upper = 'U', // "U" - Upper triangle
+	Lower = 'L', // "L" - Lower triangle
+}
+
 // Diagonal type for triangular matrices
 DiagonalType :: enum u8 {
 	NonUnit = 'N', // Non-unit diagonal (general triangular)
 	Unit    = 'U', // Unit diagonal (diagonal elements assumed to be 1)
 }
+
+// Matrix diagonal specification (alias for DiagonalType)
+MatrixDiagonal :: DiagonalType
 
 SortDirection :: enum u8 {
 	Increasing = 'I', // "I" - Sort in increasing order
@@ -113,6 +122,30 @@ FactorizationOption :: enum u8 {
 	NoFactorization = 'N', // "N" - Matrix already factored
 	Factor          = 'F', // "F" - Factor the matrix
 }
+
+// Factorization type for expert drivers
+Factorization_Type :: enum u8 {
+	New      = 'N', // "N" - Factor the matrix A
+	Factored = 'F', // "F" - Matrix A has already been factored
+}
+
+// Equilibration type (output from expert drivers)
+Equilibration_Type :: enum u8 {
+	None   = 'N', // "N" - No equilibration
+	Row    = 'R', // "R" - Row equilibration
+	Column = 'C', // "C" - Column equilibration
+	Both   = 'B', // "B" - Both row and column equilibration
+}
+
+// Transpose operation
+Transpose :: enum u8 {
+	None               = 'N', // "N" - No transpose
+	Transpose          = 'T', // "T" - Transpose
+	ConjugateTranspose = 'C', // "C" - Conjugate transpose (Hermitian)
+}
+
+// Matrix transpose (alias for Transpose)
+MatrixTranspose :: Transpose
 
 // ===================================================================================
 // SYMMETRY TYPES
@@ -246,29 +279,22 @@ MatrixScalingType :: enum u8 {
 }
 
 // ===================================================================================
-// UTILITY FUNCTIONS FOR ENUM TO CSTRING CONVERSION
+// TYPE UTILITIES
 // ===================================================================================
 
-// Convert MatrixRegion enum to cstring for LAPACK calls
-matrix_region_to_cstring :: proc(region: MatrixRegion) -> cstring {
-	switch region {
-	case .Full:
-		return "A"
-	case .Upper:
-		return "U"
-	case .Lower:
-		return "L"
+// Type checking helpers for generic constraints
+is_float :: proc($T: typeid) -> bool {
+	when is_float(T) {
+		return true
+	} else {
+		return false
 	}
-	return "A" // Default to full
 }
 
-// Convert SortDirection enum to cstring for LAPACK calls
-sort_direction_to_cstring :: proc(direction: SortDirection) -> cstring {
-	switch direction {
-	case .Increasing:
-		return "I"
-	case .Decreasing:
-		return "D"
+is_complex :: proc($T: typeid) -> bool {
+	when is_complex(T) {
+		return true
+	} else {
+		return false
 	}
-	return "I" // Default to increasing
 }

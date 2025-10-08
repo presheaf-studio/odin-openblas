@@ -7,16 +7,6 @@ import "base:intrinsics"
 // QR FACTORIZATION (GEQRF family)
 // ===================================================================================
 
-qr_factorize :: proc {
-	qr_factorize_real,
-	qr_factorize_complex,
-}
-
-qr_factorize_blocked :: proc {
-	qr_factorize_blocked_real,
-	qr_factorize_blocked_complex,
-}
-
 // TODO: Implement these procedures
 // qr_generate :: proc {
 // 	qr_generate_real,
@@ -29,7 +19,7 @@ qr_factorize_blocked :: proc {
 // }
 
 // Query workspace size for QR factorization
-query_workspace_qr_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_qr_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -62,14 +52,14 @@ query_workspace_qr_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where i
 }
 
 // QR factorization: A = Q * R
-qr_factorize_real :: proc(
+dns_qr_factorize :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and R factors)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
 	work: []T, // Workspace (pre-allocated)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -84,32 +74,9 @@ qr_factorize_real :: proc(
 		lapack.sgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-qr_factorize_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and R factors)
-	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(tau) >= int(min_mn), "tau array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgeqrf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
@@ -121,14 +88,14 @@ qr_factorize_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for blocked QR factorization
-query_workspace_qr_factorize_blocked :: proc(A: ^Matrix($T), nb: Blas_Int) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_qr_factorize_blocked :: proc(A: ^Matrix($T), nb: Blas_Int) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n := A.cols
 	work_size = int(nb * n)
 	return work_size
 }
 
 // Blocked QR factorization with explicit T factor
-qr_factorize_blocked_real :: proc(
+dns_qr_factorize_blocked :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and R factors)
 	T_matrix: ^Matrix(T), // T factor (pre-allocated, nb x min(m,n))
 	work: []T, // Workspace (pre-allocated)
@@ -136,7 +103,7 @@ qr_factorize_blocked_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -150,32 +117,9 @@ qr_factorize_blocked_real :: proc(
 		lapack.sgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
 	} else when T == f64 {
 		lapack.dgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
-	}
-
-	return info, info == 0
-}
-
-qr_factorize_blocked_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and R factors)
-	T_matrix: ^Matrix(Cmplx), // T factor (pre-allocated, nb x min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-	nb: Blas_Int, // Block size
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	ldt := T_matrix.ld
-
-	assert(T_matrix.rows >= nb, "T matrix has insufficient rows")
-	assert(T_matrix.cols >= min(m, n), "T matrix has insufficient columns")
-	assert(len(work) >= int(nb * n), "work array too small")
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgeqrt_(&m, &n, &nb, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &info)
 	}
 
@@ -186,13 +130,8 @@ qr_factorize_blocked_complex :: proc(
 // LQ FACTORIZATION (GELQF family)
 // ===================================================================================
 
-lq_factorize :: proc {
-	lq_factorize_real,
-	lq_factorize_complex,
-}
-
 // Query workspace size for LQ factorization
-query_workspace_lq_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_lq_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -225,14 +164,14 @@ query_workspace_lq_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where i
 }
 
 // LQ factorization: A = L * Q
-lq_factorize_real :: proc(
+dns_lq_factorize :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with L and Q factors)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
 	work: []T, // Workspace (pre-allocated)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -247,32 +186,9 @@ lq_factorize_real :: proc(
 		lapack.sgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-lq_factorize_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with L and Q factors)
-	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(tau) >= int(min_mn), "tau array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
@@ -283,13 +199,13 @@ lq_factorize_complex :: proc(
 // BIDIAGONAL REDUCTION (GEBRD family)
 // ===================================================================================
 
-bidiagonal_reduce :: proc {
-	bidiagonal_reduce_real,
-	bidiagonal_reduce_complex,
+dns_bidiagonal_reduce :: proc {
+	dns_bidiagonal_reduce_real,
+	dns_bidiagonal_reduce_complex,
 }
 
 // Query workspace size for bidiagonal reduction
-query_workspace_bidiagonal_reduce :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_bidiagonal_reduce :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -322,7 +238,7 @@ query_workspace_bidiagonal_reduce :: proc(A: ^Matrix($T)) -> (work_size: int) wh
 }
 
 // Reduce a general matrix to bidiagonal form
-bidiagonal_reduce_real :: proc(
+dns_bidiagonal_reduce_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with bidiagonal form)
 	D: []T, // Diagonal elements (pre-allocated, size min(m,n))
 	E: []T, // Super-diagonal elements (pre-allocated, size min(m,n)-1)
@@ -355,7 +271,7 @@ bidiagonal_reduce_real :: proc(
 	return info, info == 0
 }
 
-bidiagonal_reduce_complex :: proc(
+dns_bidiagonal_reduce_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten with bidiagonal form)
 	D: []$Real, // Diagonal elements (pre-allocated, size min(m,n))
 	E: []Real, // Super-diagonal elements (pre-allocated, size min(m,n)-1)
@@ -365,8 +281,7 @@ bidiagonal_reduce_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -393,13 +308,8 @@ bidiagonal_reduce_complex :: proc(
 // HESSENBERG REDUCTION (GEHRD family)
 // ===================================================================================
 
-hessenberg_reduce :: proc {
-	hessenberg_reduce_real,
-	hessenberg_reduce_complex,
-}
-
 // Query workspace size for Hessenberg reduction
-query_workspace_hessenberg_reduce :: proc(A: ^Matrix($T), ilo: Blas_Int = 1, ihi: Blas_Int = -1) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_hessenberg_reduce :: proc(A: ^Matrix($T), ilo: Blas_Int = 1, ihi: Blas_Int = -1) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -436,7 +346,7 @@ query_workspace_hessenberg_reduce :: proc(A: ^Matrix($T), ilo: Blas_Int = 1, ihi
 }
 
 // Reduce a general matrix to upper Hessenberg form
-hessenberg_reduce_real :: proc(
+dns_hessenberg_reduce :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Hessenberg form)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size n-1)
 	work: []T, // Workspace (pre-allocated)
@@ -445,7 +355,7 @@ hessenberg_reduce_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -464,38 +374,9 @@ hessenberg_reduce_real :: proc(
 		lapack.sgehrd_(&n, &ilo, &ihi_val, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgehrd_(&n, &ilo, &ihi_val, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-hessenberg_reduce_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with Hessenberg form)
-	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size n-1)
-	work: []Cmplx, // Workspace (pre-allocated)
-	ilo: Blas_Int = 1, // First row/column to be reduced
-	ihi: Blas_Int = -1, // Last row/column to be reduced (-1 = n)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(len(tau) >= int(n - 1), "tau array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	ihi_val := ihi
-	if ihi_val < 0 {
-		ihi_val = n
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgehrd_(&n, &ilo, &ihi_val, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgehrd_(&n, &ilo, &ihi_val, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
@@ -506,13 +387,13 @@ hessenberg_reduce_complex :: proc(
 // QR WITH PIVOTING (GEQPF family - deprecated, use GEQP3)
 // ===================================================================================
 
-qr_pivoted :: proc {
-	qr_pivoted_real,
-	qr_pivoted_complex,
+dns_qr_pivoted :: proc {
+	dns_qr_pivoted_real,
+	dns_qr_pivoted_complex,
 }
 
 // QR factorization with column pivoting (legacy interface)
-qr_pivoted_real :: proc(
+dns_qr_pivoted_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and R factors)
 	jpvt: []Blas_Int, // Pivot indices (pre-allocated, size n)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
@@ -544,7 +425,7 @@ qr_pivoted_real :: proc(
 	return info, info == 0
 }
 
-qr_pivoted_complex :: proc(
+dns_qr_pivoted_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and R factors)
 	jpvt: []Blas_Int, // Pivot indices (pre-allocated, size n)
 	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
@@ -553,8 +434,7 @@ qr_pivoted_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -583,13 +463,8 @@ qr_pivoted_complex :: proc(
 // QL FACTORIZATION (GEQLF family)
 // ===================================================================================
 
-ql_factorize :: proc {
-	ql_factorize_real,
-	ql_factorize_complex,
-}
-
 // Query workspace size for QL factorization
-query_workspace_ql_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_ql_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -622,14 +497,14 @@ query_workspace_ql_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where i
 }
 
 // QL factorization: A = Q * L
-ql_factorize_real :: proc(
+dns_ql_factorize :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and L factors)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
 	work: []T, // Workspace (pre-allocated)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -644,32 +519,9 @@ ql_factorize_real :: proc(
 		lapack.sgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-ql_factorize_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and L factors)
-	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(tau) >= int(min_mn), "tau array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgeqlf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
@@ -680,13 +532,8 @@ ql_factorize_complex :: proc(
 // RQ FACTORIZATION (GERQF family)
 // ===================================================================================
 
-rq_factorize :: proc {
-	rq_factorize_real,
-	rq_factorize_complex,
-}
-
 // Query workspace size for RQ factorization
-query_workspace_rq_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_rq_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -719,14 +566,14 @@ query_workspace_rq_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where i
 }
 
 // RQ factorization: A = R * Q
-rq_factorize_real :: proc(
+dns_rq_factorize :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with R and Q factors)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
 	work: []T, // Workspace (pre-allocated)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -741,32 +588,9 @@ rq_factorize_real :: proc(
 		lapack.sgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-rq_factorize_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with R and Q factors)
-	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(tau) >= int(min_mn), "tau array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgerqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
@@ -777,13 +601,13 @@ rq_factorize_complex :: proc(
 // QR WITH COLUMN PIVOTING (GEQP3 family)
 // ===================================================================================
 
-qr_pivoted_v3 :: proc {
-	qr_pivoted_v3_real,
-	qr_pivoted_v3_complex,
+dns_qr_pivoted_v3 :: proc {
+	dns_qr_pivoted_v3_real,
+	dns_qr_pivoted_v3_complex,
 }
 
 // Query workspace size for QR with column pivoting (GEQP3)
-query_workspace_qr_pivoted_v3 :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_qr_pivoted_v3 :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -816,7 +640,7 @@ query_workspace_qr_pivoted_v3 :: proc(A: ^Matrix($T)) -> (work_size: int) where 
 }
 
 // QR factorization with column pivoting: A*P = Q*R
-qr_pivoted_v3_real :: proc(
+dns_qr_pivoted_v3_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and R factors)
 	jpvt: []Blas_Int, // Pivot indices (pre-allocated, size n, input/output)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
@@ -845,7 +669,7 @@ qr_pivoted_v3_real :: proc(
 	return info, info == 0
 }
 
-qr_pivoted_v3_complex :: proc(
+dns_qr_pivoted_v3_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and R factors)
 	jpvt: []Blas_Int, // Pivot indices (pre-allocated, size n, input/output)
 	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
@@ -854,8 +678,7 @@ qr_pivoted_v3_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -881,13 +704,8 @@ qr_pivoted_v3_complex :: proc(
 // QR WITH NON-NEGATIVE DIAGONAL (GEQRFP family)
 // ===================================================================================
 
-qr_nonnegative_diag :: proc {
-	qr_nonnegative_diag_real,
-	qr_nonnegative_diag_complex,
-}
-
 // Query workspace size for QR with non-negative diagonal
-query_workspace_qr_nonnegative_diag :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_qr_nonnegative_diag :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -920,14 +738,14 @@ query_workspace_qr_nonnegative_diag :: proc(A: ^Matrix($T)) -> (work_size: int) 
 }
 
 // QR factorization with non-negative diagonal elements: A = Q * R (R has non-negative diagonal)
-qr_nonnegative_diag_real :: proc(
+dns_qr_nonnegative_diag :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and R factors)
 	tau: []T, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
 	work: []T, // Workspace (pre-allocated)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -942,32 +760,9 @@ qr_nonnegative_diag_real :: proc(
 		lapack.sgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-qr_nonnegative_diag_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and R factors)
-	tau: []Cmplx, // Scalar factors for elementary reflectors (pre-allocated, size min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(tau) >= int(min_mn), "tau array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgeqrfp_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
@@ -978,13 +773,8 @@ qr_nonnegative_diag_complex :: proc(
 // TALL-SKINNY QR (GETSQRHRT family)
 // ===================================================================================
 
-qr_tall_skinny :: proc {
-	qr_tall_skinny_real,
-	qr_tall_skinny_complex,
-}
-
 // Query workspace size for tall-skinny QR
-query_workspace_qr_tall_skinny :: proc(A: ^Matrix($T), mb1: Blas_Int, nb1: Blas_Int, nb2: Blas_Int) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_qr_tall_skinny :: proc(A: ^Matrix($T), mb1: Blas_Int, nb1: Blas_Int, nb2: Blas_Int) -> (work_size: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -1017,7 +807,7 @@ query_workspace_qr_tall_skinny :: proc(A: ^Matrix($T), mb1: Blas_Int, nb1: Blas_
 }
 
 // Optimized QR factorization for tall-skinny matrices (m >> n)
-qr_tall_skinny_real :: proc(
+dns_qr_tall_skinny :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Q and R factors)
 	T_matrix: ^Matrix(T), // T factor (pre-allocated, nb2 x n)
 	work: []T, // Workspace (pre-allocated)
@@ -1027,7 +817,7 @@ qr_tall_skinny_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -1043,36 +833,9 @@ qr_tall_skinny_real :: proc(
 		lapack.sgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-qr_tall_skinny_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with Q and R factors)
-	T_matrix: ^Matrix(Cmplx), // T factor (pre-allocated, nb2 x n)
-	work: []Cmplx, // Workspace (pre-allocated)
-	mb1: Blas_Int, // First blocking parameter
-	nb1: Blas_Int, // Second blocking parameter
-	nb2: Blas_Int, // Third blocking parameter
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	ldt := T_matrix.ld
-
-	assert(T_matrix.rows >= nb2, "T matrix has insufficient rows")
-	assert(T_matrix.cols >= n, "T matrix has insufficient columns")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
+	} else when T == complex64 {
 		lapack.cgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
+	} else when T == complex128 {
 		lapack.zgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, raw_data(A.data), &lda, raw_data(T_matrix.data), &ldt, raw_data(work), &lwork, &info)
 	}
 

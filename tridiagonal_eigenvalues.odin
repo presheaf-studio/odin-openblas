@@ -17,7 +17,7 @@ import "core:slice"
 
 // Compute eigenvalues only for symmetric tridiagonal matrix (no workspace needed)
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
-tridiagonal_eigenvalues_only :: proc(
+trid_eigen_only :: proc(
 	d: []$T, // Diagonal elements (modified to eigenvalues on output)
 	e: []T, // Off-diagonal elements (destroyed)
 ) -> (
@@ -53,7 +53,7 @@ query_workspace_tridiagonal_simple :: proc($T: typeid, n: int, compute_vectors: 
 
 // Compute eigenvalues and optionally eigenvectors using simple driver
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
-tridiagonal_eigenvalues_simple :: proc(
+trid_eigen_simple :: proc(
 	d: []$T, // Diagonal elements (modified to eigenvalues on output)
 	e: []T, // Off-diagonal elements (destroyed)
 	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
@@ -116,16 +116,16 @@ query_workspace_tridiagonal_dc :: proc($T: typeid, n: int, compute_vectors: bool
 
 	when T == f32 {
 		lapack.sstevd_(&jobz_c, &n_blas, nil, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
-		return int(work_query), int(iwork_query)
 	} else when T == f64 {
 		lapack.dstevd_(&jobz_c, &n_blas, nil, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
-		return int(work_query), int(iwork_query)
 	}
+
+	return int(work_query), int(iwork_query)
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
-tridiagonal_eigenvalues_dc :: proc(
+trid_eigen_dc :: proc(
 	d: []$T, // Diagonal elements (modified to eigenvalues on output)
 	e: []T, // Off-diagonal elements (destroyed)
 	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
@@ -186,31 +186,24 @@ query_workspace_tridiagonal_mrrr :: proc($T: typeid, n: int, compute_vectors: bo
 	info: Info
 	ldz := Blas_Int(1)
 	m_dummy: Blas_Int
+	vl_dummy: T = 0
+	vu_dummy: T = 0
+	il_dummy := Blas_Int(1)
+	iu_dummy := Blas_Int(n)
+	abstol_dummy: T = 0
 
 	when T == f32 {
-		vl_dummy: f32 = 0
-		vu_dummy: f32 = 0
-		il_dummy := Blas_Int(1)
-		iu_dummy := Blas_Int(n)
-		abstol_dummy: f32 = 0
-
 		lapack.sstevr_(&jobz_c, &range_c, &n_blas, nil, nil, &vl_dummy, &vu_dummy, &il_dummy, &iu_dummy, &abstol_dummy, &m_dummy, nil, nil, &ldz, nil, &work_query, &lwork, &iwork_query, &liwork, &info)
-		return int(work_query), int(iwork_query)
 	} else when T == f64 {
-		vl_dummy: f64 = 0
-		vu_dummy: f64 = 0
-		il_dummy := Blas_Int(1)
-		iu_dummy := Blas_Int(n)
-		abstol_dummy: f64 = 0
-
 		lapack.dstevr_(&jobz_c, &range_c, &n_blas, nil, nil, &vl_dummy, &vu_dummy, &il_dummy, &iu_dummy, &abstol_dummy, &m_dummy, nil, nil, &ldz, nil, &work_query, &lwork, &iwork_query, &liwork, &info)
-		return int(work_query), int(iwork_query)
 	}
+
+	return int(work_query), int(iwork_query)
 }
 
 // Compute eigenvalues/eigenvectors using MRRR
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
-tridiagonal_eigenvalues_mrrr :: proc(
+trid_eigen_mrrr :: proc(
 	d: []$T, // Diagonal elements (modified)
 	e: []T, // Off-diagonal elements (modified)
 	w: []T, // Eigenvalues output (size n)
@@ -219,11 +212,11 @@ tridiagonal_eigenvalues_mrrr :: proc(
 	work: []T, // Pre-allocated workspace
 	iwork: []Blas_Int, // Pre-allocated integer workspace
 	range := EigenRangeOption.ALL,
-	vl: T = 0, // Lower bound (if range == VALUE)
-	vu: T = 0, // Upper bound (if range == VALUE)
+	vl: T, // Lower bound (if range == VALUE)
+	vu: T, // Upper bound (if range == VALUE)
 	il: int = 1, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T = 0, // Absolute tolerance
+	abstol: T, // Absolute tolerance
 	jobz := EigenJobOption.VALUES_ONLY,
 ) -> (
 	num_found: int,
@@ -290,7 +283,7 @@ query_workspace_tridiagonal_bisection :: proc($T: typeid, n: int) -> (work_size:
 
 // Compute eigenvalues/eigenvectors using bisection and inverse iteration
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
-tridiagonal_eigenvalues_bisection :: proc(
+trid_eigen_bisection :: proc(
 	d: []$T, // Diagonal elements (preserved)
 	e: []T, // Off-diagonal elements (preserved)
 	w: []T, // Eigenvalues output (size n)
@@ -299,11 +292,11 @@ tridiagonal_eigenvalues_bisection :: proc(
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size 5*n)
 	ifail: []Blas_Int, // Failure indices (size n)
 	range := EigenRangeOption.ALL,
-	vl: T = 0, // Lower bound (if range == VALUE)
-	vu: T = 0, // Upper bound (if range == VALUE)
+	vl: T, // Lower bound (if range == VALUE)
+	vu: T, // Upper bound (if range == VALUE)
 	il: int = 1, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T = 0, // Absolute tolerance
+	abstol: T, // Absolute tolerance
 	jobz := EigenJobOption.VALUES_ONLY,
 ) -> (
 	num_found: int,
@@ -355,29 +348,20 @@ tridiagonal_eigenvalues_bisection :: proc(
 // ===================================================================================
 
 // Helper to analyze eigenvalues after computation
-analyze_tridiagonal_eigenvalues :: proc(eigenvalues: []$T) -> (min_val: f64, max_val: f64, condition_number: f64, all_positive: bool) {
+trid_eigen_analyze :: proc(eigenvalues: []$T) -> (min_val: f64, max_val: f64, condition_number: f64, all_positive: bool) {
 	if len(eigenvalues) == 0 {
 		return 0, 0, 1, false
 	}
 
 	// Eigenvalues are sorted by LAPACK
-	when T == f32 {
-		min_val = f64(eigenvalues[0])
-		max_val = f64(eigenvalues[len(eigenvalues) - 1])
-	} else {
-		min_val = eigenvalues[0]
-		max_val = eigenvalues[len(eigenvalues) - 1]
-	}
+	min_val = f64(eigenvalues[0])
+	max_val = f64(eigenvalues[len(eigenvalues) - 1])
 
 	all_positive = eigenvalues[0] > 0
 
 	// Compute condition number
 	if abs(eigenvalues[0]) > machine_epsilon(T) {
-		when T == f32 {
-			condition_number = f64(abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0]))
-		} else {
-			condition_number = abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0])
-		}
+		condition_number = f64(abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0]))
 	} else {
 		condition_number = math.INF_F64
 	}
@@ -404,15 +388,14 @@ machine_epsilon :: proc($T: typeid) -> T {
 query_workspace_tridiagonal_stedc :: proc($T: typeid, n: int, compz: CompzOption) -> (work_size: int, rwork_size: int, iwork_size: int) {
 	n_int := Blas_Int(n)
 	compz_c := cast(u8)compz
+	work_query: T
+	iwork_query: Blas_Int
+	lwork := Blas_Int(-1)
+	liwork := Blas_Int(-1)
+	info: Info
 
-	when T == f32 {
-		work_query: f32
-		iwork_query: Blas_Int
-		lwork := Blas_Int(-1)
-		liwork := Blas_Int(-1)
-		info: Info
-
-		lapack.sstedc_(
+	when is_float(T) {
+		lapack.sstedc_ when T == f32 else lapack.dstedc_(
 			&compz_c,
 			&n_int,
 			nil, // d
@@ -427,64 +410,12 @@ query_workspace_tridiagonal_stedc :: proc($T: typeid, n: int, compz: CompzOption
 		)
 
 		return int(work_query), 0, int(iwork_query)
-	} else when T == f64 {
-		work_query: f64
-		iwork_query: Blas_Int
-		lwork := Blas_Int(-1)
-		liwork := Blas_Int(-1)
-		info: Info
-
-		lapack.dstedc_(
-			&compz_c,
-			&n_int,
-			nil, // d
-			nil, // e
-			nil, // z
-			&n_int, // ldz
-			&work_query,
-			&lwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		return int(work_query), 0, int(iwork_query)
-	} else when T == complex64 {
-		work_query: complex64
-		rwork_query: f32
-		iwork_query: Blas_Int
-		lwork := Blas_Int(-1)
+	} else when is_complex(T) {
+		Real :: f32 when T == complex64 else f64
+		rwork_query: Real
 		lrwork := Blas_Int(-1)
-		liwork := Blas_Int(-1)
-		info: Info
 
-		lapack.cstedc_(
-			&compz_c,
-			&n_int,
-			nil, // d
-			nil, // e
-			nil, // z
-			&n_int, // ldz
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
-
-		return int(real(work_query)), int(rwork_query), int(iwork_query)
-	} else when T == complex128 {
-		work_query: complex128
-		rwork_query: f64
-		iwork_query: Blas_Int
-		lwork := Blas_Int(-1)
-		lrwork := Blas_Int(-1)
-		liwork := Blas_Int(-1)
-		info: Info
-
-		lapack.zstedc_(
+		lapack.cstedc_ when T == complex64 else lapack.zstedc_(
 			&compz_c,
 			&n_int,
 			nil, // d
@@ -505,13 +436,13 @@ query_workspace_tridiagonal_stedc :: proc($T: typeid, n: int, compz: CompzOption
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for all types
-tridiagonal_eigenvalues_stedc :: proc {
-	tridiagonal_eigenvalues_stedc_f32_f64,
-	tridiagonal_eigenvalues_stedc_c64_c128,
+trid_eigen_stedc :: proc {
+	trid_eigen_stedc_real,
+	trid_eigen_stedc_complex,
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for f32/f64
-tridiagonal_eigenvalues_stedc_f32_f64 :: proc(
+trid_eigen_stedc_real :: proc(
 	d: []$R, // Diagonal (modified to eigenvalues on output, always real)
 	e: []R, // Off-diagonal (destroyed, always real)
 	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
@@ -556,7 +487,7 @@ tridiagonal_eigenvalues_stedc_f32_f64 :: proc(
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for c64/c128
-tridiagonal_eigenvalues_stedc_c64_c128 :: proc(
+trid_eigen_stedc_complex :: proc(
 	d: []$R, // Diagonal (modified to eigenvalues on output, always real)
 	e: []R, // Off-diagonal (destroyed, always real)
 	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
@@ -630,11 +561,11 @@ eigenvalue_bisection :: proc(
 	iwork: []Blas_Int, // Pre-allocated integer workspace (size 3*n)
 	range := EigenRangeOption.ALL,
 	order := EigenvalueOrder.ENTIRE,
-	vl: T = 0, // Lower bound (if range == VALUE)
-	vu: T = 0, // Upper bound (if range == VALUE)
+	vl: T, // Lower bound (if range == VALUE)
+	vu: T, // Upper bound (if range == VALUE)
 	il: int = 1, // Lower index (if range == INDEX, 1-based)
 	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T = 0, // Absolute tolerance
+	abstol: T, // Absolute tolerance
 ) -> (
 	num_found: int,
 	num_splits: int,

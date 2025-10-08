@@ -6,29 +6,13 @@ import lapack "./f77"
 // POSITIVE DEFINITE CHOLESKY FACTORIZATION (POTRF family)
 // ===================================================================================
 
-cholesky_factorize :: proc {
-	cholesky_factorize_real,
-	cholesky_factorize_complex,
-}
-
-cholesky_solve :: proc {
-	cholesky_solve_real,
-	cholesky_solve_complex,
-}
-
-cholesky_invert :: proc {
-	cholesky_invert_real,
-	cholesky_invert_complex,
-}
-
-// Cholesky factorization: A = L*L^T (lower) or A = U^T*U (upper)
-cholesky_factorize_real :: proc(
+dns_cholesky :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Cholesky factor)
 	uplo: MatrixRegion = .Upper,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -40,26 +24,7 @@ cholesky_factorize_real :: proc(
 		lapack.spotrf_(&uplo_c, &n, raw_data(A.data), &lda, &info)
 	} else when T == f64 {
 		lapack.dpotrf_(&uplo_c, &n, raw_data(A.data), &lda, &info)
-	}
-
-	return info, info == 0
-}
-
-cholesky_factorize_complex :: proc(
-	A: ^Matrix($T), // Input matrix (overwritten with Cholesky factor)
-	uplo: MatrixRegion = .Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-
-	uplo_c := cast(u8)uplo
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cpotrf_(&uplo_c, &n, raw_data(A.data), &lda, &info)
 	} else when T == complex128 {
 		lapack.zpotrf_(&uplo_c, &n, raw_data(A.data), &lda, &info)
@@ -73,14 +38,14 @@ cholesky_factorize_complex :: proc(
 // ===================================================================================
 
 // Solve linear system using Cholesky factors: A*X = B
-cholesky_solve_real :: proc(
-	A: ^Matrix($T), // Cholesky factors from cholesky_factorize
+dns_cholesky_solve :: proc(
+	A: ^Matrix($T), // Cholesky factors from dns_cholesky
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	uplo: MatrixRegion = .Upper,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -95,30 +60,7 @@ cholesky_solve_real :: proc(
 		lapack.spotrs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
 		lapack.dpotrs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
-	}
-
-	return info, info == 0
-}
-
-cholesky_solve_complex :: proc(
-	A: ^Matrix($T), // Cholesky factors from cholesky_factorize
-	B: ^Matrix(T), // RHS matrix (overwritten with solution)
-	uplo: MatrixRegion = .Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	nrhs := B.cols
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == n, "B matrix must have same number of rows as A")
-
-	uplo_c := cast(u8)uplo
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cpotrs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
 		lapack.zpotrs_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
@@ -132,13 +74,13 @@ cholesky_solve_complex :: proc(
 // ===================================================================================
 
 // Compute inverse of positive definite matrix using Cholesky factors
-cholesky_invert_real :: proc(
+dns_cholesky_invert :: proc(
 	A: ^Matrix($T), // Cholesky factors (overwritten with inverse)
 	uplo: MatrixRegion = .Upper,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -150,26 +92,7 @@ cholesky_invert_real :: proc(
 		lapack.spotri_(&uplo_c, &n, raw_data(A.data), &lda, &info)
 	} else when T == f64 {
 		lapack.dpotri_(&uplo_c, &n, raw_data(A.data), &lda, &info)
-	}
-
-	return info, info == 0
-}
-
-cholesky_invert_complex :: proc(
-	A: ^Matrix($T), // Cholesky factors (overwritten with inverse)
-	uplo: MatrixRegion = .Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-
-	uplo_c := cast(u8)uplo
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cpotri_(&uplo_c, &n, raw_data(A.data), &lda, &info)
 	} else when T == complex128 {
 		lapack.zpotri_(&uplo_c, &n, raw_data(A.data), &lda, &info)
@@ -182,20 +105,20 @@ cholesky_invert_complex :: proc(
 // CONDITION NUMBER ESTIMATION (POCON family)
 // ===================================================================================
 
-cholesky_condition_number :: proc {
-	cholesky_condition_number_real,
-	cholesky_condition_number_complex,
+dns_cholesky_condition :: proc {
+	dns_cholesky_condition_real,
+	dns_cholesky_condition_complex,
 }
 
 // Query workspace size for condition number estimation
-query_workspace_cholesky_condition_number :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_cholesky_condition :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(3 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(n)
 		iwork_size = 0
@@ -205,8 +128,8 @@ query_workspace_cholesky_condition_number :: proc(A: ^Matrix($T)) -> (work_size:
 }
 
 // Estimate condition number of Cholesky-factored matrix
-cholesky_condition_number_real :: proc(
-	A: ^Matrix($T), // Cholesky factors from cholesky_factorize
+dns_cholesky_condition_real :: proc(
+	A: ^Matrix($T), // Cholesky factors from dns_cholesky
 	anorm: T, // 1-norm of original matrix
 	work: []T, // Workspace (pre-allocated)
 	iwork: []Blas_Int, // Integer workspace (pre-allocated)
@@ -234,8 +157,8 @@ cholesky_condition_number_real :: proc(
 	return rcond, info, info == 0
 }
 
-cholesky_condition_number_complex :: proc(
-	A: ^Matrix($Cmplx), // Cholesky factors from cholesky_factorize
+dns_cholesky_condition_complex :: proc(
+	A: ^Matrix($Cmplx), // Cholesky factors from dns_cholesky
 	anorm: $Real, // 1-norm of original matrix
 	work: []Cmplx, // Workspace (pre-allocated)
 	rwork: []Real, // Real workspace (pre-allocated)
@@ -244,8 +167,7 @@ cholesky_condition_number_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool, // Reciprocal condition number
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -268,13 +190,13 @@ cholesky_condition_number_complex :: proc(
 // EQUILIBRATION (POEQU family)
 // ===================================================================================
 
-cholesky_equilibrate :: proc {
-	cholesky_equilibrate_real,
-	cholesky_equilibrate_complex,
+dns_cholesky_equilibrate :: proc {
+	dns_cholesky_equilibrate_real,
+	dns_cholesky_equilibrate_complex,
 }
 
 // Compute row and column scalings to equilibrate symmetric positive definite matrix
-cholesky_equilibrate_real :: proc(
+dns_cholesky_equilibrate_real :: proc(
 	A: ^Matrix($T), // Input matrix (not modified)
 	S: []T, // Scaling factors (pre-allocated, size n)
 ) -> (
@@ -298,7 +220,7 @@ cholesky_equilibrate_real :: proc(
 	return scond, amax, info, info == 0
 }
 
-cholesky_equilibrate_complex :: proc(
+dns_cholesky_equilibrate_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (not modified)
 	S: []$Real, // Scaling factors (pre-allocated, size n)
 ) -> (
@@ -306,8 +228,7 @@ cholesky_equilibrate_complex :: proc(
 	amax: Real,
 	info: Info,
 	ok: bool, // Ratio of smallest to largest scaling factor// Absolute value of largest matrix element
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -327,21 +248,16 @@ cholesky_equilibrate_complex :: proc(
 // POSITIVE DEFINITE SOLVER (POSV family)
 // ===================================================================================
 
-cholesky_positive_definite_solve :: proc {
-	cholesky_positive_definite_solve_real,
-	cholesky_positive_definite_solve_complex,
-}
-
 // Solve positive definite linear system AX = B using Cholesky factorization
 // This is a simple driver that combines factorization and solve steps
-cholesky_positive_definite_solve_real :: proc(
+dns_pd_solve :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Cholesky factor)
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	uplo: MatrixRegion = .Upper,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -356,30 +272,7 @@ cholesky_positive_definite_solve_real :: proc(
 		lapack.sposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
 		lapack.dposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
-	}
-
-	return info, info == 0
-}
-
-cholesky_positive_definite_solve_complex :: proc(
-	A: ^Matrix($T), // Input matrix (overwritten with Cholesky factor)
-	B: ^Matrix(T), // RHS matrix (overwritten with solution)
-	uplo: MatrixRegion = .Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	nrhs := B.cols
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == n, "B matrix must have same number of rows as A")
-
-	uplo_c := cast(u8)uplo
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
 		lapack.zposv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
@@ -392,19 +285,19 @@ cholesky_positive_definite_solve_complex :: proc(
 // POSITIVE DEFINITE EXPERT SOLVER (POSVX family)
 // ===================================================================================
 
-cholesky_positive_definite_solve_expert :: proc {
-	cholesky_positive_definite_solve_expert_real,
-	cholesky_positive_definite_solve_expert_complex,
+dns_pd_solve_expert :: proc {
+	dns_pd_solve_expert_real,
+	dns_pd_solve_expert_complex,
 }
 
-query_workspace_cholesky_positive_definite_solve_expert :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_pd_solve_expert :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(3 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(n)
 		iwork_size = 0
@@ -414,7 +307,7 @@ query_workspace_cholesky_positive_definite_solve_expert :: proc(A: ^Matrix($T)) 
 }
 
 // Expert driver for solving positive definite systems with equilibration and error bounds
-cholesky_positive_definite_solve_expert_real :: proc(
+dns_pd_solve_expert_real :: proc(
 	A: ^Matrix($T), // Input matrix (may be equilibrated)
 	B: ^Matrix(T), // RHS matrix
 	X: ^Matrix(T), // Solution matrix (pre-allocated)
@@ -430,7 +323,7 @@ cholesky_positive_definite_solve_expert_real :: proc(
 	rcond: T,
 	equed: Equilibration_Type,
 	info: Info,
-	ok: bool,// Equilibration status
+	ok: bool,
 ) where is_float(T) {
 	n := A.rows
 	nrhs := B.cols
@@ -461,7 +354,7 @@ cholesky_positive_definite_solve_expert_real :: proc(
 	return rcond, equed, info, info == 0
 }
 
-cholesky_positive_definite_solve_expert_complex :: proc(
+dns_pd_solve_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (may be equilibrated)
 	B: ^Matrix(Cmplx), // RHS matrix
 	X: ^Matrix(Cmplx), // Solution matrix (pre-allocated)
@@ -477,9 +370,8 @@ cholesky_positive_definite_solve_expert_complex :: proc(
 	rcond: Real,
 	equed: Equilibration_Type,
 	info: Info,
-	ok: bool,// Equilibration status
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	ok: bool, // Equilibration status
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -513,19 +405,19 @@ cholesky_positive_definite_solve_expert_complex :: proc(
 // POSITIVE DEFINITE EXTRA-EXPERT SOLVER (POSVXX family)
 // ===================================================================================
 
-cholesky_positive_definite_solve_extra_expert :: proc {
-	cholesky_positive_definite_solve_extra_expert_real,
-	cholesky_positive_definite_solve_extra_expert_complex,
+dns_pd_solve_extra_expert :: proc {
+	dns_pd_solve_extra_expert_real,
+	dns_pd_solve_extra_expert_complex,
 }
 
-query_workspace_cholesky_positive_definite_solve_extra_expert :: proc(A: ^Matrix($T), n_err_bnds: int = 3) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_pd_solve_extra_expert :: proc(A: ^Matrix($T), n_err_bnds: int = 3) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(2 * n)
 		iwork_size = 0
@@ -535,7 +427,7 @@ query_workspace_cholesky_positive_definite_solve_extra_expert :: proc(A: ^Matrix
 }
 
 // Extra-precise iterative refinement solver with multiple error bounds
-cholesky_positive_definite_solve_extra_expert_real :: proc(
+dns_pd_solve_extra_expert_real :: proc(
 	A: ^Matrix($T), // Input matrix
 	B: ^Matrix(T), // RHS matrix
 	X: ^Matrix(T), // Solution matrix (pre-allocated)
@@ -554,8 +446,8 @@ cholesky_positive_definite_solve_extra_expert_real :: proc(
 	rcond: T,
 	rpvgrw: T,
 	equed: Equilibration_Type,
-	info: Info,// Reciprocal pivot growth factor
-	ok: bool,
+	info: Info,
+	ok: bool, // Reciprocal pivot growth factor
 ) where is_float(T) {
 	n := A.rows
 	nrhs := B.cols
@@ -640,7 +532,7 @@ cholesky_positive_definite_solve_extra_expert_real :: proc(
 	return rcond, rpvgrw, equed, info, info == 0
 }
 
-cholesky_positive_definite_solve_extra_expert_complex :: proc(
+dns_pd_solve_extra_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix
 	B: ^Matrix(Cmplx), // RHS matrix
 	X: ^Matrix(Cmplx), // Solution matrix (pre-allocated)
@@ -659,10 +551,9 @@ cholesky_positive_definite_solve_extra_expert_complex :: proc(
 	rcond: Real,
 	rpvgrw: Real,
 	equed: Equilibration_Type,
-	info: Info,// Reciprocal pivot growth factor
-	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Reciprocal pivot growth factor
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -750,19 +641,19 @@ cholesky_positive_definite_solve_extra_expert_complex :: proc(
 // ITERATIVE REFINEMENT (PORFS family)
 // ===================================================================================
 
-cholesky_iterative_refinement :: proc {
-	cholesky_iterative_refinement_real,
-	cholesky_iterative_refinement_complex,
+dns_cholesky_refine :: proc {
+	dns_cholesky_refine_real,
+	dns_cholesky_refine_complex,
 }
 
-query_workspace_cholesky_iterative_refinement :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_cholesky_refine :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(3 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(n)
 		iwork_size = 0
@@ -772,7 +663,7 @@ query_workspace_cholesky_iterative_refinement :: proc(A: ^Matrix($T)) -> (work_s
 }
 
 // Iterative refinement for positive definite linear systems
-cholesky_iterative_refinement_real :: proc(
+dns_cholesky_refine_real :: proc(
 	A: ^Matrix($T), // Original matrix
 	AF: ^Matrix(T), // Cholesky factors
 	B: ^Matrix(T), // RHS matrix
@@ -811,7 +702,7 @@ cholesky_iterative_refinement_real :: proc(
 	return info, info == 0
 }
 
-cholesky_iterative_refinement_complex :: proc(
+dns_cholesky_refine_complex :: proc(
 	A: ^Matrix($Cmplx), // Original matrix
 	AF: ^Matrix(Cmplx), // Cholesky factors
 	B: ^Matrix(Cmplx), // RHS matrix
@@ -824,8 +715,7 @@ cholesky_iterative_refinement_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -855,19 +745,19 @@ cholesky_iterative_refinement_complex :: proc(
 // EXPERT ITERATIVE REFINEMENT (PORFSX family)
 // ===================================================================================
 
-cholesky_iterative_refinement_expert :: proc {
-	cholesky_iterative_refinement_expert_real,
-	cholesky_iterative_refinement_expert_complex,
+dns_cholesky_refine_expert :: proc {
+	dns_cholesky_refine_expert_real,
+	dns_cholesky_refine_expert_complex,
 }
 
-query_workspace_cholesky_iterative_refinement_expert :: proc(A: ^Matrix($T), n_err_bnds: int = 3) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_cholesky_refine_expert :: proc(A: ^Matrix($T), n_err_bnds: int = 3) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(2 * n)
 		iwork_size = 0
@@ -877,7 +767,7 @@ query_workspace_cholesky_iterative_refinement_expert :: proc(A: ^Matrix($T), n_e
 }
 
 // Expert iterative refinement with multiple error bounds
-cholesky_iterative_refinement_expert_real :: proc(
+dns_cholesky_refine_expert_real :: proc(
 	A: ^Matrix($T), // Original matrix
 	AF: ^Matrix(T), // Cholesky factors
 	B: ^Matrix(T), // RHS matrix
@@ -973,7 +863,7 @@ cholesky_iterative_refinement_expert_real :: proc(
 	return rcond, info, info == 0
 }
 
-cholesky_iterative_refinement_expert_complex :: proc(
+dns_cholesky_refine_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Original matrix
 	AF: ^Matrix(Cmplx), // Cholesky factors
 	B: ^Matrix(Cmplx), // RHS matrix
@@ -992,8 +882,7 @@ cholesky_iterative_refinement_expert_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -1074,13 +963,13 @@ cholesky_iterative_refinement_expert_complex :: proc(
 // IMPROVED EQUILIBRATION (POEQUB family)
 // ===================================================================================
 
-cholesky_equilibrate_improved :: proc {
-	cholesky_equilibrate_improved_real,
-	cholesky_equilibrate_improved_complex,
+dns_cholesky_equilibrate_improved :: proc {
+	dns_cholesky_equilibrate_improved_real,
+	dns_cholesky_equilibrate_improved_complex,
 }
 
 // Improved equilibration for positive definite matrices
-cholesky_equilibrate_improved_real :: proc(
+dns_cholesky_equilibrate_improved_real :: proc(
 	A: ^Matrix($T), // Input matrix (not modified)
 	S: []T, // Scaling factors (pre-allocated, size n)
 ) -> (
@@ -1104,7 +993,7 @@ cholesky_equilibrate_improved_real :: proc(
 	return scond, amax, info, info == 0
 }
 
-cholesky_equilibrate_improved_complex :: proc(
+dns_cholesky_equilibrate_improved_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (not modified)
 	S: []$Real, // Scaling factors (pre-allocated, size n)
 ) -> (
@@ -1112,8 +1001,7 @@ cholesky_equilibrate_improved_complex :: proc(
 	amax: Real,
 	info: Info,
 	ok: bool, // Ratio of smallest to largest scaling factor// Absolute value of largest matrix element
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -1133,23 +1021,23 @@ cholesky_equilibrate_improved_complex :: proc(
 // CHOLESKY WITH COMPLETE PIVOTING (PSTRF family)
 // ===================================================================================
 
-cholesky_factorize_pivoted :: proc {
-	cholesky_factorize_pivoted_real,
-	cholesky_factorize_pivoted_complex,
+dns_cholesky_pivoted :: proc {
+	dns_cholesky_pivoted_real,
+	dns_cholesky_pivoted_complex,
 }
 
-query_workspace_cholesky_factorize_pivoted :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_cholesky_pivoted :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 	return int(2 * n)
 }
 
 // Cholesky factorization with complete pivoting for semi-definite matrices
-cholesky_factorize_pivoted_real :: proc(
+dns_cholesky_pivoted_real :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with Cholesky factor)
 	piv: []Blas_Int, // Pivot indices (pre-allocated, size n)
 	work: []T, // Workspace (pre-allocated)
+	tol: T, // Tolerance for rank determination (negative = use default)
 	uplo: MatrixRegion = .Upper,
-	tol: T = -1, // Tolerance for rank determination (negative = use default)
 ) -> (
 	rank: int,
 	info: Info,
@@ -1174,18 +1062,17 @@ cholesky_factorize_pivoted_real :: proc(
 	return int(rank_c), info, info == 0
 }
 
-cholesky_factorize_pivoted_complex :: proc(
+dns_cholesky_pivoted_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (overwritten with Cholesky factor)
 	piv: []Blas_Int, // Pivot indices (pre-allocated, size n)
 	work: []$Real, // Real workspace (pre-allocated)
+	tol: Real, // Tolerance for rank determination (negative = use default)
 	uplo: MatrixRegion = .Upper,
-	tol: Real = -1, // Tolerance for rank determination (negative = use default)
 ) -> (
 	rank: int,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 

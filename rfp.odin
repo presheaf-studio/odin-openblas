@@ -28,7 +28,8 @@ import "core:mem"
 // ===================================================================================
 
 // RFP matrix storage - hybrid format for symmetric/Hermitian matrices
-RFP :: struct($T: typeid) where is_float(T) || is_complex(T) {
+RFP :: struct($T: typeid) {
+	// where is_float(T) || is_complex(T)
 	data:        []T, // RFP storage array, size n*(n+1)/2
 	n:           Blas_Int, // Matrix dimension (n×n)
 	trans_state: TransposeState, // RFP format variant (Normal or Transpose/Conjugate)
@@ -45,13 +46,6 @@ make_rfp :: proc(n: int, trans_state: TransposeState, uplo: UpLo, $T: typeid, al
 	return RFP(T){n = Blas_Int(n), data = make([]T, size, allocator), trans_state = trans_state, uplo = uplo}
 }
 
-// Create RFP matrix with zero initialization
-make_rfp_zero :: proc(n: int, trans_state: TransposeState, uplo: UpLo, $T: typeid, allocator := context.allocator) -> RFP(T) {
-	rfp := make_rfp(n, trans_state, uplo, T, allocator)
-	// Data is already zero-initialized by make
-	return rfp
-}
-
 // ===================================================================================
 // RFP MATRIX INDEXING AND ACCESS
 // ===================================================================================
@@ -64,7 +58,7 @@ make_rfp_zero :: proc(n: int, trans_state: TransposeState, uplo: UpLo, $T: typei
 // This creates 8 different storage schemes
 rfp_index :: proc(rm: ^RFP($T), i, j: int) -> (idx: int, stored: bool) {
 	assert(i >= 0 && i < int(rm.n) && j >= 0 && j < int(rm.n), "Index out of bounds")
-
+	// FIXME
 	n := int(rm.n)
 	k := n / 2
 
@@ -167,60 +161,6 @@ clone_rfp :: proc(rm: ^RFP($T), allocator := context.allocator) -> RFP(T) {
 	return clone
 }
 
-// ===================================================================================
-// WORKSPACE AND SIZE QUERIES
-// ===================================================================================
-
-// Query workspace requirements for RFP operations
-query_workspace_rfp :: proc(operation: string, $T: typeid, n: int) -> (work_size, rwork_size, iwork_size: int) {
-	// Default workspace requirements for common operations
-	switch operation {
-	case "factor":
-		// Cholesky factorization for RFP
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case "solve":
-		// Linear solve for RFP
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case "invert":
-		// Matrix inversion for RFP
-		work_size = n
-		rwork_size = 0
-		iwork_size = 0
-	case "conversion":
-		// Format conversion
-		work_size = 0
-		rwork_size = 0
-		iwork_size = 0
-	case:
-		// Unknown operation, return minimal workspace
-		work_size = n
-		rwork_size = 0
-		iwork_size = 0
-	}
-
-	return
-}
-
-// Allocate workspace for RFP operations
-allocate_rfp_workspace :: proc(operation: string, $T: typeid, n: int, allocator := context.allocator) -> (work: []T, rwork: []f64, iwork: []Blas_Int) {
-	work_size, rwork_size, iwork_size := query_workspace_rfp(operation, T, n)
-
-	if work_size > 0 {
-		work = make([]T, work_size, allocator)
-	}
-	if rwork_size > 0 {
-		rwork = make([]f64, rwork_size, allocator)
-	}
-	if iwork_size > 0 {
-		iwork = make([]Blas_Int, iwork_size, allocator)
-	}
-
-	return
-}
 
 // ===================================================================================
 // RFP FORMAT UTILITIES
@@ -240,34 +180,19 @@ optimal_rfp_format :: proc(n: int) -> (trans_state: TransposeState, uplo: UpLo) 
 	}
 }
 
-// Get effective matrix dimension
-get_rfp_dimension :: proc(rm: ^RFP($T)) -> int {
-	return int(rm.n)
-}
-
-// Check if RFP uses transposed storage
-is_rfp_transposed :: proc(rm: ^RFP($T)) -> bool {
-	return rm.trans_state != .NoTrans
-}
-
 // ===================================================================================
 // RFP CHOLESKY FACTORIZATION (PFTRF family)
 // ===================================================================================
 
-rfp_cholesky_factorize :: proc {
-	rfp_cholesky_factorize_real,
-	rfp_cholesky_factorize_complex,
-}
-
 // Compute Cholesky factorization of a positive definite matrix in RFP format
 // A = U**T * U or A = L * L**T (real)
 // A = U**H * U or A = L * L**H (complex)
-rfp_cholesky_factorize_real :: proc(
+rfp_cholesky_factorize :: proc(
 	A: ^RFP($T), // RFP matrix (input/output, overwritten with factor)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	assert(validate_rfp(A), "Invalid RFP matrix structure")
 
 	transr := cast(u8)A.trans_state
@@ -278,24 +203,7 @@ rfp_cholesky_factorize_real :: proc(
 		lapack.spftrf_(&transr, &uplo, &n, raw_data(A.data), &info)
 	} else when T == f64 {
 		lapack.dpftrf_(&transr, &uplo, &n, raw_data(A.data), &info)
-	}
-
-	return info, info == 0
-}
-
-rfp_cholesky_factorize_complex :: proc(
-	A: ^RFP($T), // RFP matrix (input/output, overwritten with factor)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	assert(validate_rfp(A), "Invalid RFP matrix structure")
-
-	transr := cast(u8)A.trans_state
-	uplo := cast(u8)A.uplo
-	n := A.n
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cpftrf_(&transr, &uplo, &n, raw_data(A.data), &info)
 	} else when T == complex128 {
 		lapack.zpftrf_(&transr, &uplo, &n, raw_data(A.data), &info)
@@ -308,19 +216,14 @@ rfp_cholesky_factorize_complex :: proc(
 // RFP CHOLESKY SOLVE (PFTRS family)
 // ===================================================================================
 
-rfp_cholesky_solve :: proc {
-	rfp_cholesky_solve_real,
-	rfp_cholesky_solve_complex,
-}
-
 // Solve linear system using RFP Cholesky factorization: A*X = B
-rfp_cholesky_solve_real :: proc(
+rfp_cholesky_solve :: proc(
 	A: ^RFP($T), // Cholesky factors in RFP format
 	B: ^Matrix(T), // RHS matrix (input/output, overwritten with solution)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	assert(validate_rfp(A), "Invalid RFP matrix structure")
 	assert(B.rows == A.n, "B matrix must have same number of rows as A dimension")
 
@@ -334,28 +237,7 @@ rfp_cholesky_solve_real :: proc(
 		lapack.spftrs_(&transr, &uplo, &n, &nrhs, raw_data(A.data), raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
 		lapack.dpftrs_(&transr, &uplo, &n, &nrhs, raw_data(A.data), raw_data(B.data), &ldb, &info)
-	}
-
-	return info, info == 0
-}
-
-rfp_cholesky_solve_complex :: proc(
-	A: ^RFP($T), // Cholesky factors in RFP format
-	B: ^Matrix(T), // RHS matrix (input/output, overwritten with solution)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	assert(validate_rfp(A), "Invalid RFP matrix structure")
-	assert(B.rows == A.n, "B matrix must have same number of rows as A dimension")
-
-	transr := cast(u8)A.trans_state
-	uplo := cast(u8)A.uplo
-	n := A.n
-	nrhs := B.cols
-	ldb := B.ld
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cpftrs_(&transr, &uplo, &n, &nrhs, raw_data(A.data), raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
 		lapack.zpftrs_(&transr, &uplo, &n, &nrhs, raw_data(A.data), raw_data(B.data), &ldb, &info)
@@ -368,18 +250,13 @@ rfp_cholesky_solve_complex :: proc(
 // RFP CHOLESKY INVERSION (PFTRI family)
 // ===================================================================================
 
-rfp_cholesky_invert :: proc {
-	rfp_cholesky_invert_real,
-	rfp_cholesky_invert_complex,
-}
-
 // Compute inverse of positive definite matrix using RFP Cholesky factorization
-rfp_cholesky_invert_real :: proc(
+rfp_cholesky_invert :: proc(
 	A: ^RFP($T), // Cholesky factors (input/output, overwritten with inverse)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	assert(validate_rfp(A), "Invalid RFP matrix structure")
 
 	transr := cast(u8)A.trans_state
@@ -390,24 +267,7 @@ rfp_cholesky_invert_real :: proc(
 		lapack.spftri_(&transr, &uplo, &n, raw_data(A.data), &info)
 	} else when T == f64 {
 		lapack.dpftri_(&transr, &uplo, &n, raw_data(A.data), &info)
-	}
-
-	return info, info == 0
-}
-
-rfp_cholesky_invert_complex :: proc(
-	A: ^RFP($T), // Cholesky factors (input/output, overwritten with inverse)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	assert(validate_rfp(A), "Invalid RFP matrix structure")
-
-	transr := cast(u8)A.trans_state
-	uplo := cast(u8)A.uplo
-	n := A.n
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cpftri_(&transr, &uplo, &n, raw_data(A.data), &info)
 	} else when T == complex128 {
 		lapack.zpftri_(&transr, &uplo, &n, raw_data(A.data), &info)
@@ -420,16 +280,11 @@ rfp_cholesky_invert_complex :: proc(
 // RFP TRIANGULAR SOLVE (TFSM family)
 // ===================================================================================
 
-rfp_triangular_solve :: proc {
-	rfp_triangular_solve_real,
-	rfp_triangular_solve_complex,
-}
-
 // Solve triangular system with RFP format matrix
 // Solves: op(A) * X = alpha * B  (side = Left)
 //     or: X * op(A) = alpha * B  (side = Right)
 // where A is stored in RFP format
-rfp_triangular_solve_real :: proc(
+rfp_triangular_solve :: proc(
 	A: ^RFP($T), // Triangular matrix in RFP format
 	B: ^Matrix(T), // Right-hand side matrix (solution on output)
 	alpha: T, // Scalar multiplier
@@ -438,7 +293,7 @@ rfp_triangular_solve_real :: proc(
 	diag: Diag = .NonUnit,
 ) -> (
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	assert(validate_rfp(A), "Invalid RFP matrix structure")
 
 	m := B.rows
@@ -456,50 +311,16 @@ rfp_triangular_solve_real :: proc(
 	m_int := m
 	n_int := n
 	ldb := B.ld
-	alpha_copy := alpha
+	alpha := alpha
 
 	when T == f32 {
-		lapack.stfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(A.data), raw_data(B.data), &ldb)
+		lapack.stfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha, raw_data(A.data), raw_data(B.data), &ldb)
 	} else when T == f64 {
-		lapack.dtfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(A.data), raw_data(B.data), &ldb)
-	}
-
-	return true
-}
-
-rfp_triangular_solve_complex :: proc(
-	A: ^RFP($T), // Triangular matrix in RFP format
-	B: ^Matrix(T), // Right-hand side matrix (solution on output)
-	alpha: T, // Scalar multiplier
-	side: Side = .Left,
-	trans: TransposeState = .NoTrans,
-	diag: Diag = .NonUnit,
-) -> (
-	ok: bool,
-) where is_complex(T) {
-	assert(validate_rfp(A), "Invalid RFP matrix structure")
-
-	m := B.rows
-	n := B.cols
-
-	// Determine the size of A based on side
-	a_size := side == .Left ? m : n
-	assert(A.n == a_size, "RFP matrix dimension incompatible with B")
-
-	transr := cast(u8)A.trans_state
-	side_c := cast(u8)side
-	uplo := cast(u8)A.uplo
-	trans_c := cast(u8)trans
-	diag_c := cast(u8)diag
-	m_int := m
-	n_int := n
-	ldb := B.ld
-	alpha_copy := alpha
-
-	when T == complex64 {
-		lapack.ctfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(A.data), raw_data(B.data), &ldb)
+		lapack.dtfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha, raw_data(A.data), raw_data(B.data), &ldb)
+	} else when T == complex64 {
+		lapack.ctfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha, raw_data(A.data), raw_data(B.data), &ldb)
 	} else when T == complex128 {
-		lapack.ztfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha_copy, raw_data(A.data), raw_data(B.data), &ldb)
+		lapack.ztfsm_(&transr, &side_c, &uplo, &trans_c, &diag_c, &m_int, &n_int, &alpha, raw_data(A.data), raw_data(B.data), &ldb)
 	}
 
 	return true
@@ -509,20 +330,15 @@ rfp_triangular_solve_complex :: proc(
 // RFP TRIANGULAR INVERSION (TFTRI family)
 // ===================================================================================
 
-rfp_triangular_invert :: proc {
-	rfp_triangular_invert_real,
-	rfp_triangular_invert_complex,
-}
-
 // Invert triangular matrix in RFP format
 // Computes the inverse of a triangular matrix A stored in RFP format
-rfp_triangular_invert_real :: proc(
+rfp_triangular_invert :: proc(
 	A: ^RFP($T), // Triangular matrix in RFP format (inverted in place)
 	diag: Diag = .NonUnit,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	assert(validate_rfp(A), "Invalid RFP matrix structure")
 
 	transr := cast(u8)A.trans_state
@@ -534,26 +350,7 @@ rfp_triangular_invert_real :: proc(
 		lapack.stftri_(&transr, &uplo, &diag_c, &n, raw_data(A.data), &info)
 	} else when T == f64 {
 		lapack.dtftri_(&transr, &uplo, &diag_c, &n, raw_data(A.data), &info)
-	}
-
-	return info, info == 0
-}
-
-rfp_triangular_invert_complex :: proc(
-	A: ^RFP($T), // Triangular matrix in RFP format (inverted in place)
-	diag: Diag = .NonUnit,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	assert(validate_rfp(A), "Invalid RFP matrix structure")
-
-	transr := cast(u8)A.trans_state
-	uplo := cast(u8)A.uplo
-	diag_c := cast(u8)diag
-	n := A.n
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.ctftri_(&transr, &uplo, &diag_c, &n, raw_data(A.data), &info)
 	} else when T == complex128 {
 		lapack.ztftri_(&transr, &uplo, &diag_c, &n, raw_data(A.data), &info)
@@ -570,8 +367,8 @@ rfp_triangular_invert_complex :: proc(
 rfp_symmetric_rank_k_update :: proc(
 	C: ^RFP($T), // Symmetric matrix in RFP format (output)
 	A: ^Matrix(T), // Input matrix
-	alpha: T = 1.0,
-	beta: T = 0.0,
+	alpha: T,
+	beta: T,
 	trans: TransposeState = .NoTrans,
 ) where is_float(T) {
 	assert(validate_rfp(C), "Invalid RFP matrix structure")
@@ -584,34 +381,29 @@ rfp_symmetric_rank_k_update :: proc(
 	uplo := cast(u8)C.uplo
 	trans_c := cast(u8)trans
 
-	alpha_copy := alpha
-	beta_copy := beta
+	alpha := alpha
+	beta := beta
 
 	when T == f32 {
-		lapack.ssfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha_copy, raw_data(A.data), &lda, &beta_copy, raw_data(C.data))
+		lapack.ssfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha, raw_data(A.data), &lda, &beta, raw_data(C.data))
 	} else when T == f64 {
-		lapack.dsfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha_copy, raw_data(A.data), &lda, &beta_copy, raw_data(C.data))
+		lapack.dsfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha, raw_data(A.data), &lda, &beta, raw_data(C.data))
 	}
-	// Note: sfrk/dfrk don't have info parameter
 }
 
 // ===================================================================================
 // RFP HERMITIAN RANK-K UPDATE (HFRK family - complex only)
 // ===================================================================================
 
-rfp_hermitian_rank_k_update :: proc {
-	rfp_hermitian_rank_k_update_c64,
-	rfp_hermitian_rank_k_update_c128,
-}
 
 // Hermitian rank-k update in RFP format: C := alpha*A*A^H + beta*C
-rfp_hermitian_rank_k_update_c64 :: proc(
-	C: ^RFP(complex64), // Hermitian matrix in RFP format (output)
-	A: ^Matrix(complex64), // Input matrix
-	alpha: f32 = 1.0,
-	beta: f32 = 0.0,
+rfp_hermitian_rank_k_update :: proc(
+	C: ^RFP($Cmplx), // Hermitian matrix in RFP format (output)
+	A: ^Matrix(Cmplx), // Input matrix
+	alpha: $Real,
+	beta: Real,
 	trans: TransposeState = .NoTrans,
-) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(validate_rfp(C), "Invalid RFP matrix structure")
 
 	n := C.n
@@ -622,31 +414,12 @@ rfp_hermitian_rank_k_update_c64 :: proc(
 	uplo := cast(u8)C.uplo
 	trans_c := cast(u8)trans
 
-	alpha_copy := alpha
-	beta_copy := beta
+	alpha := alpha
+	beta := beta
 
-	lapack.chfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha_copy, raw_data(A.data), &lda, &beta_copy, raw_data(C.data))
-}
-
-rfp_hermitian_rank_k_update_c128 :: proc(
-	C: ^RFP(complex128), // Hermitian matrix in RFP format (output)
-	A: ^Matrix(complex128), // Input matrix
-	alpha: f64 = 1.0,
-	beta: f64 = 0.0,
-	trans: TransposeState = .NoTrans,
-) {
-	assert(validate_rfp(C), "Invalid RFP matrix structure")
-
-	n := C.n
-	k := (trans == .NoTrans) ? A.cols : A.rows
-	lda := A.ld
-
-	transr := cast(u8)C.trans_state
-	uplo := cast(u8)C.uplo
-	trans_c := cast(u8)trans
-
-	alpha_copy := alpha
-	beta_copy := beta
-
-	lapack.zhfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha_copy, raw_data(A.data), &lda, &beta_copy, raw_data(C.data))
+	when Cmplx == complex64 {
+		lapack.chfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha, raw_data(A.data), &lda, &beta, raw_data(C.data))
+	} else when Cmplx == complex128 {
+		lapack.zhfrk_(&transr, &uplo, &trans_c, &n, &k, &alpha, raw_data(A.data), &lda, &beta, raw_data(C.data))
+	}
 }

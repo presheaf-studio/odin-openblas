@@ -30,112 +30,101 @@ import "core:mem"
 // ===================================================================================
 
 // LU factorization for general banded matrices
-banded_factor :: proc {
-	banded_factor_unified,
-}
+// band_factor
 
 // Solve using pre-computed LU factorization
-banded_solve_factored :: proc {
-	banded_solve_factored_unified,
-}
+// band_solve_factored
 
 // Simple driver: factor and solve in one call
-banded_solve :: proc {
-	banded_solve_unified,
-}
+// band_solve
 
 // Expert driver: equilibration + factor + solve + refinement
-banded_solve_expert :: proc {
-	banded_solve_expert_real,
-	banded_solve_expert_complex,
+band_solve_expert :: proc {
+	band_solve_expert_real,
+	band_solve_expert_complex,
 }
 
 // Extended expert driver: extra-precise error bounds
-banded_solve_expert_extended :: proc {
-	banded_solve_expert_extended_real,
-	banded_solve_expert_extended_complex,
+band_solve_expert_extended :: proc {
+	band_solve_expert_extended_real,
+	band_solve_expert_extended_complex,
 }
 
 // Condition number estimation
-banded_condition :: proc {
-	banded_condition_real,
-	banded_condition_complex,
+band_condition :: proc {
+	band_condition_real,
+	band_condition_complex,
 }
 
 // Iterative refinement
-banded_refine :: proc {
-	banded_refine_real,
-	banded_refine_complex,
+band_refine :: proc {
+	band_refine_real,
+	band_refine_complex,
 }
 
 // Matrix equilibration
-banded_equilibrate :: proc {
-	banded_equilibrate_real,
-	banded_equilibrate_complex,
+band_equilibrate :: proc {
+	band_equilibrate_real,
+	band_equilibrate_complex,
 }
 
 // Extended iterative refinement
-banded_refine_extended :: proc {
-	banded_refine_extended_real,
-	banded_refine_extended_complex,
+band_refine_extended :: proc {
+	band_refine_extended_real,
+	band_refine_extended_complex,
 }
 
 // ===================================================================================
 // WORKSPACE AND SIZE QUERIES
 // ===================================================================================
 
-// Query workspace for LU factorization (no workspace needed)
-query_workspace_banded_factor :: proc($T: typeid, m, n, kl, ku: int) -> (work: int, rwork: int, iwork: int) {
-	return 0, 0, 0 // GBTRF requires no workspace
-}
-
 // Query array sizes for LU factorization
-query_result_sizes_banded_factor :: proc(m, n: int) -> (ipiv_size: int) {
+query_result_sizes_band_factor :: proc(m, n: int) -> (ipiv_size: int) {
 	return min(m, n)
 }
 
 // Query workspace for condition number estimation
-query_workspace_banded_condition :: proc($T: typeid, n, kl, ku: int) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_condition :: proc(n, kl, ku: int, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		return 3 * n, 0, n
-	} else when is_complex(T) {
+	} else {
 		return 2 * n, n, 0
 	}
 }
 
 // Query workspace for expert solver
-query_workspace_banded_solve_expert :: proc($T: typeid, n, kl, ku: int) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_solve_expert :: proc(n, kl, ku: int, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		return 3 * n, 0, n
-	} else when is_complex(T) {
+	} else {
 		return 2 * n, n, 0
 	}
 }
 
 // Query array sizes for expert solver
-query_result_sizes_banded_solve_expert :: proc(n, kl, ku, nrhs: int) -> (ipiv_size: int, AFB_rows: int, AFB_cols: int, R_size: int, C_size: int, X_rows: int, X_cols: int, ferr_size: int, berr_size: int) {
+query_result_sizes_band_solve_expert :: proc(n, kl, ku, nrhs: int, is_complex := false) -> (ipiv_size: int, AFB_rows: int, AFB_cols: int, R_size: int, C_size: int, X_rows: int, X_cols: int, ferr_size: int, berr_size: int) {
 	return n, 2 * kl + ku + 1, n, n, n, n, nrhs, nrhs, nrhs // ipiv// AFB rows (extended band for factorization)// AFB cols// R (row scale factors)// C (column scale factors)// X rows// X cols// ferr// berr
 }
 
 // Query array sizes for iterative refinement
-query_result_sizes_banded_refine :: proc(nrhs: int) -> (ferr_size: int, berr_size: int) {
+query_result_sizes_band_refine :: proc(nrhs: int) -> (ferr_size: int, berr_size: int) {
 	return nrhs, nrhs
 }
 
 // Query workspace for iterative refinement
-query_workspace_banded_refine :: proc($T: typeid, n: int) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_refine :: proc(n: int, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		return 3 * n, 0, n
-	} else when is_complex(T) {
+	} else {
 		return 2 * n, n, 0
 	}
 }
 
 // Query workspace for extended expert solver
-query_workspace_banded_solve_expert_extended :: proc($T: typeid, n, kl, ku: int) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_solve_expert_extended :: proc(n, kl, ku: int, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		return 4 * n, 0, n
-	} else when is_complex(T) {
+	} else {
 		return 2 * n, 2 * n, 0
 	}
 }
@@ -145,7 +134,7 @@ query_workspace_banded_solve_expert_extended :: proc($T: typeid, n, kl, ku: int)
 // ===================================================================================
 
 // LU factorization of general banded matrix (unified version)
-banded_factor_unified :: proc(
+band_factor :: proc(
 	AB: ^BandedMatrix($T), // Banded matrix (input/output - overwritten with LU)
 	ipiv: []Blas_Int, // Pre-allocated pivot indices (size min(m,n))
 ) -> (
@@ -158,7 +147,6 @@ banded_factor_unified :: proc(
 	ku := AB.ku
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(ipiv) >= int(min(m, n)), "Pivot array too small")
 
 	when T == f32 {
@@ -179,10 +167,10 @@ banded_factor_unified :: proc(
 // ===================================================================================
 
 // Solve using pre-computed LU factorization (unified version)
-banded_solve_factored_unified :: proc(
+band_solve_factored :: proc(
 	trans: TransposeMode,
-	AB: ^BandedMatrix($T), // LU factorization from banded_factor
-	ipiv: []Blas_Int, // Pivot indices from banded_factor
+	AB: ^BandedMatrix($T), // LU factorization from band_factor
+	ipiv: []Blas_Int, // Pivot indices from band_factor
 	B: ^Matrix(T), // Right-hand side (input/output - overwritten with solution)
 ) -> (
 	info: Info,
@@ -215,7 +203,7 @@ banded_solve_factored_unified :: proc(
 // ===================================================================================
 
 // Solve banded linear system: factor and solve in one call (unified version)
-banded_solve_unified :: proc(
+band_solve :: proc(
 	AB: ^BandedMatrix($T), // Banded matrix (input/output - overwritten with LU)
 	B: ^Matrix(T), // Right-hand side (input/output - overwritten with solution)
 	ipiv: []Blas_Int, // Pre-allocated pivot indices (size n)
@@ -230,7 +218,6 @@ banded_solve_unified :: proc(
 	ldab := AB.ldab
 	ldb := B.ld
 
-	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 
 	when T == f32 {
@@ -251,10 +238,10 @@ banded_solve_unified :: proc(
 // ===================================================================================
 
 // Estimate condition number of banded matrix (real version)
-banded_condition_real :: proc(
+band_condition_real :: proc(
 	norm: MatrixNorm,
-	AB: ^BandedMatrix($T), // LU factorization from banded_factor
-	ipiv: []Blas_Int, // Pivot indices from banded_factor
+	AB: ^BandedMatrix($T), // LU factorization from band_factor
+	ipiv: []Blas_Int, // Pivot indices from band_factor
 	anorm: T, // Norm of original matrix (computed separately)
 	rcond: ^T, // Output: reciprocal condition number
 	work: []T, // Pre-allocated workspace
@@ -268,7 +255,6 @@ banded_condition_real :: proc(
 	ku := AB.ku
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(work) >= 3 * int(n), "Work array too small")
 	assert(len(iwork) >= int(n), "Integer work array too small")
 
@@ -284,10 +270,10 @@ banded_condition_real :: proc(
 }
 
 // Estimate condition number of banded matrix (complex version)
-banded_condition_complex :: proc(
+band_condition_complex :: proc(
 	norm: MatrixNorm,
-	AB: ^BandedMatrix($Cmplx), // LU factorization from banded_factor
-	ipiv: []Blas_Int, // Pivot indices from banded_factor
+	AB: ^BandedMatrix($Cmplx), // LU factorization from band_factor
+	ipiv: []Blas_Int, // Pivot indices from band_factor
 	anorm: $Real, // Norm of original matrix (computed separately)
 	rcond: ^Real, // Output: reciprocal condition number
 	work: []Cmplx, // Pre-allocated workspace
@@ -295,14 +281,12 @@ banded_condition_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kl := AB.kl
 	ku := AB.ku
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(work) >= 2 * int(n), "Work array too small")
 	assert(len(rwork) >= int(n), "Real work array too small")
 
@@ -323,7 +307,7 @@ banded_condition_complex :: proc(
 // ===================================================================================
 
 // Equilibrate general banded matrix (real version)
-banded_equilibrate_real :: proc(
+band_equilibrate_real :: proc(
 	AB: ^BandedMatrix($T), // Banded matrix to equilibrate
 	R: []T, // Pre-allocated row scale factors (size m)
 	C: []T, // Pre-allocated column scale factors (size n)
@@ -340,7 +324,6 @@ banded_equilibrate_real :: proc(
 	ku := AB.ku
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(R) >= int(m), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 
@@ -354,7 +337,7 @@ banded_equilibrate_real :: proc(
 }
 
 // Equilibrate general banded matrix (complex version)
-banded_equilibrate_complex :: proc(
+band_equilibrate_complex :: proc(
 	AB: ^BandedMatrix($Cmplx), // Banded matrix to equilibrate
 	R: []$Real, // Pre-allocated row scale factors (size m)
 	C: []Real, // Pre-allocated column scale factors (size n)
@@ -364,15 +347,13 @@ banded_equilibrate_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	m := AB.rows
 	n := AB.cols
 	kl := AB.kl
 	ku := AB.ku
 	ldab := AB.ldab
 
-	// Validate inputs
 	assert(len(R) >= int(m), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
 
@@ -390,10 +371,10 @@ banded_equilibrate_complex :: proc(
 // ===================================================================================
 
 // Iterative refinement for banded matrix solution (real version)
-banded_refine_real :: proc(
+band_refine_real :: proc(
 	trans: TransposeMode,
 	AB: ^BandedMatrix($T), // Original banded matrix
-	AFB: ^BandedMatrix(T), // Factored matrix from banded_factor
+	AFB: ^BandedMatrix(T), // Factored matrix from band_factor
 	ipiv: []Blas_Int, // Pivot indices from factorization
 	B: ^Matrix(T), // Right-hand side
 	X: ^Matrix(T), // Solution (input: initial, output: refined)
@@ -414,7 +395,6 @@ banded_refine_real :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(ferr) >= int(nrhs), "Forward error array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(work) >= 3 * int(n), "Work array too small")
@@ -433,10 +413,10 @@ banded_refine_real :: proc(
 }
 
 // Iterative refinement for banded matrix solution (complex version)
-banded_refine_complex :: proc(
+band_refine_complex :: proc(
 	trans: TransposeMode,
 	AB: ^BandedMatrix($Cmplx), // Original banded matrix
-	AFB: ^BandedMatrix(Cmplx), // Factored matrix from banded_factor
+	AFB: ^BandedMatrix(Cmplx), // Factored matrix from band_factor
 	ipiv: []Blas_Int, // Pivot indices from factorization
 	B: ^Matrix(Cmplx), // Right-hand side
 	X: ^Matrix(Cmplx), // Solution (input: initial, output: refined)
@@ -447,8 +427,7 @@ banded_refine_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kl := AB.kl
 	ku := AB.ku
@@ -458,7 +437,6 @@ banded_refine_complex :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(ferr) >= int(nrhs), "Forward error array too small")
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(work) >= 2 * int(n), "Work array too small")
@@ -481,7 +459,7 @@ banded_refine_complex :: proc(
 // ===================================================================================
 
 // Expert solve for banded system (real version)
-banded_solve_expert_real :: proc(
+band_solve_expert_real :: proc(
 	fact: FactorizationOption,
 	trans: TransposeMode,
 	AB: ^BandedMatrix($T), // Banded matrix (input/output based on fact)
@@ -510,7 +488,6 @@ banded_solve_expert_real :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 	assert(len(R) >= int(n), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
@@ -532,7 +509,7 @@ banded_solve_expert_real :: proc(
 }
 
 // Expert solve for banded system (complex version)
-banded_solve_expert_complex :: proc(
+band_solve_expert_complex :: proc(
 	fact: FactorizationOption,
 	trans: TransposeMode,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output based on fact)
@@ -551,8 +528,7 @@ banded_solve_expert_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kl := AB.kl
 	ku := AB.ku
@@ -562,7 +538,6 @@ banded_solve_expert_complex :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 	assert(len(R) >= int(n), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
@@ -638,7 +613,7 @@ banded_solve_expert_complex :: proc(
 // ===================================================================================
 
 // Query result sizes for extended expert banded solve
-query_result_sizes_banded_solve_expert_extended :: proc(n, kl, ku, nrhs, n_err_bnds: int) -> (ipiv_size: int, AFB_rows: int, AFB_cols: int, R_size: int, C_size: int, X_rows: int, X_cols: int, berr_size: int, err_bnds_norm_size: int, err_bnds_comp_size: int, params_size: int) {
+query_result_sizes_band_solve_expert_extended :: proc(n, kl, ku, nrhs, n_err_bnds: int) -> (ipiv_size: int, AFB_rows: int, AFB_cols: int, R_size: int, C_size: int, X_rows: int, X_cols: int, berr_size: int, err_bnds_norm_size: int, err_bnds_comp_size: int, params_size: int) {
 	ipiv_size = n
 	AFB_rows = 2 * kl + ku + 1
 	AFB_cols = n
@@ -656,7 +631,7 @@ query_result_sizes_banded_solve_expert_extended :: proc(n, kl, ku, nrhs, n_err_b
 
 
 // Extended expert solve for banded system (real version)
-banded_solve_expert_extended_real :: proc(
+band_solve_expert_extended_real :: proc(
 	fact: FactorizationOption,
 	trans: TransposeMode,
 	AB: ^BandedMatrix($T), // Banded matrix (input/output based on fact)
@@ -689,7 +664,6 @@ banded_solve_expert_extended_real :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 	assert(len(R) >= int(n), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
@@ -703,7 +677,6 @@ banded_solve_expert_extended_real :: proc(
 	fact_c := cast(u8)fact
 	trans_c := cast(u8)trans
 
-	// Set nparams
 	nparams := Blas_Int(len(params))
 
 	when T == f32 {
@@ -776,7 +749,7 @@ banded_solve_expert_extended_real :: proc(
 }
 
 // Extended expert solve for banded system (complex version)
-banded_solve_expert_extended_complex :: proc(
+band_solve_expert_extended_complex :: proc(
 	fact: FactorizationOption,
 	trans: TransposeMode,
 	AB: ^BandedMatrix($Cmplx), // Banded matrix (input/output based on fact)
@@ -799,8 +772,7 @@ banded_solve_expert_extended_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kl := AB.kl
 	ku := AB.ku
@@ -810,7 +782,6 @@ banded_solve_expert_extended_complex :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(ipiv) >= int(n), "Pivot array too small")
 	assert(len(R) >= int(n), "Row scale array too small")
 	assert(len(C) >= int(n), "Column scale array too small")
@@ -824,7 +795,6 @@ banded_solve_expert_extended_complex :: proc(
 	fact_c := cast(u8)fact
 	trans_c := cast(u8)trans
 
-	// Set nparams
 	nparams := Blas_Int(len(params))
 
 	when Cmplx == complex64 {
@@ -901,26 +871,26 @@ banded_solve_expert_extended_complex :: proc(
 // ===================================================================================
 
 // Query result sizes for extended iterative refinement
-query_result_sizes_banded_refine_extended :: proc(nrhs: int) -> (rcond_size: int, berr_size: int, err_bnds_norm_size: int, err_bnds_comp_size: int, params_size: int) {
+query_result_sizes_band_refine_extended :: proc(nrhs: int) -> (rcond_size: int, berr_size: int, err_bnds_norm_size: int, err_bnds_comp_size: int, params_size: int) {
 	n_err_bnds := 3
 	return 1, nrhs, nrhs * n_err_bnds, nrhs * n_err_bnds, 3
 }
 
 // Query workspace for extended iterative refinement
-query_workspace_banded_refine_extended :: proc($T: typeid, n: int) -> (work: int, rwork: int, iwork: int) {
-	when is_float(T) {
+query_workspace_band_refine_extended :: proc(n: int, is_complex := false) -> (work: int, rwork: int, iwork: int) {
+	if !is_complex {
 		return 4 * n, 0, n
-	} else when is_complex(T) {
+	} else {
 		return 2 * n, 2 * n, 0
 	}
 }
 
 // Extended iterative refinement for banded matrix solution (real version)
-banded_refine_extended_real :: proc(
+band_refine_extended_real :: proc(
 	trans: TransposeMode,
 	equed: EquilibrationRequest,
 	AB: ^BandedMatrix($T), // Original banded matrix
-	AFB: ^BandedMatrix(T), // Factored matrix from banded_factor
+	AFB: ^BandedMatrix(T), // Factored matrix from band_factor
 	ipiv: []Blas_Int, // Pivot indices from factorization
 	R: []T, // Row scale factors from equilibration
 	C: []T, // Column scale factors from equilibration
@@ -948,7 +918,6 @@ banded_refine_extended_real :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(err_bnds_norm) >= int(nrhs) * 3, "Normwise error bounds array too small")
 	assert(len(err_bnds_comp) >= int(nrhs) * 3, "Componentwise error bounds array too small")
@@ -1029,11 +998,11 @@ banded_refine_extended_real :: proc(
 }
 
 // Extended iterative refinement for banded matrix solution (complex version)
-banded_refine_extended_complex :: proc(
+band_refine_extended_complex :: proc(
 	trans: TransposeMode,
 	equed: EquilibrationRequest,
 	AB: ^BandedMatrix($Cmplx), // Original banded matrix
-	AFB: ^BandedMatrix(Cmplx), // Factored matrix from banded_factor
+	AFB: ^BandedMatrix(Cmplx), // Factored matrix from band_factor
 	ipiv: []Blas_Int, // Pivot indices from factorization
 	R: []$Real, // Row scale factors from equilibration
 	C: []Real, // Column scale factors from equilibration
@@ -1051,8 +1020,7 @@ banded_refine_extended_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := AB.cols
 	kl := AB.kl
 	ku := AB.ku
@@ -1062,7 +1030,6 @@ banded_refine_extended_complex :: proc(
 	ldb := B.ld
 	ldx := X.ld
 
-	// Validate inputs
 	assert(len(berr) >= int(nrhs), "Backward error array too small")
 	assert(len(err_bnds_norm) >= int(nrhs) * 3, "Normwise error bounds array too small")
 	assert(len(err_bnds_comp) >= int(nrhs) * 3, "Componentwise error bounds array too small")

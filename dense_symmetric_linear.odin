@@ -13,63 +13,23 @@ import "core:slice"
 // Bunch-Kaufman diagonal pivoting for indefinite symmetric matrices
 // Pre-allocated workspace and result arrays
 
-query_workspace_solve_symmetric :: proc {
-	query_workspace_solve_symmetric_real,
-	query_workspace_solve_symmetric_complex,
-}
-
-solve_symmetric :: proc {
-	solve_symmetric_real,
-	solve_symmetric_complex,
-}
-
-query_workspace_solve_symmetric_rook :: proc {
-	query_workspace_solve_symmetric_rook_real,
-	query_workspace_solve_symmetric_rook_complex,
-}
-
-solve_symmetric_rook :: proc {
-	solve_symmetric_rook_real,
-	solve_symmetric_rook_complex,
-}
-
-query_workspace_solve_symmetric_rk :: proc {
-	query_workspace_solve_symmetric_rk_real,
-	query_workspace_solve_symmetric_rk_complex,
-}
-
-solve_symmetric_rk :: proc {
-	solve_symmetric_rk_real,
-	solve_symmetric_rk_complex,
-}
-
-query_workspace_solve_symmetric_expert :: proc {
-	query_workspace_solve_symmetric_expert_real,
-	query_workspace_solve_symmetric_expert_complex,
-}
-
-solve_symmetric_expert :: proc {
-	solve_symmetric_expert_real,
-	solve_symmetric_expert_complex,
-}
-
 // Query workspace for symmetric system solver (SYSV)
-query_workspace_solve_symmetric_real :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) {
+dns_query_workspace_solve_symmetric :: proc(A: ^Matrix($T), B: ^Matrix(T), uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// Query LAPACK for optimal workspace size
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(1)
+	n := A.rows
+	nrhs := B.cols
 	uplo_c := cast(u8)uplo
-	lda := Blas_Int(max(1, n))
-	ldb := Blas_Int(max(1, n))
+	lda := A.ld
+	ldb := B.ld
 	lwork := QUERY_WORKSPACE
 	info: Info
+	work_query: T
 
 	when T == f32 {
-		work_query: f32
 		lapack.ssysv_(
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil, // a
 			&lda,
 			nil, // ipiv
@@ -81,11 +41,10 @@ query_workspace_solve_symmetric_real :: proc($T: typeid, n: int, uplo := MatrixR
 		)
 		work_size = int(work_query)
 	} else when T == f64 {
-		work_query: f64
 		lapack.dsysv_(
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil, // a
 			&lda,
 			nil, // ipiv
@@ -96,27 +55,11 @@ query_workspace_solve_symmetric_real :: proc($T: typeid, n: int, uplo := MatrixR
 			&info,
 		)
 		work_size = int(work_query)
-	}
-
-	return work_size
-}
-
-query_workspace_solve_symmetric_complex :: proc($Cmplx: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_complex(Cmplx) {
-	// Query LAPACK for optimal workspace size
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(1)
-	uplo_c := cast(u8)uplo
-	lda := Blas_Int(max(1, n))
-	ldb := Blas_Int(max(1, n))
-	lwork := QUERY_WORKSPACE
-	info: Info
-
-	when Cmplx == complex64 {
-		work_query: complex64
+	} else when Cmplx == complex64 {
 		lapack.csysv_(
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil, // a
 			&lda,
 			nil, // ipiv
@@ -128,11 +71,10 @@ query_workspace_solve_symmetric_complex :: proc($Cmplx: typeid, n: int, uplo := 
 		)
 		work_size = int(real(work_query))
 	} else when Cmplx == complex128 {
-		work_query: complex128
 		lapack.zsysv_(
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil, // a
 			&lda,
 			nil, // ipiv
@@ -149,7 +91,7 @@ query_workspace_solve_symmetric_complex :: proc($Cmplx: typeid, n: int, uplo := 
 }
 
 // Solve symmetric system using Bunch-Kaufman pivoting
-solve_symmetric :: proc(
+dns_solve_symmetric :: proc(
 	A: ^Matrix($T), // System matrix (modified on output)
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	ipiv: []Blas_Int, // Pre-allocated pivot indices (n)
@@ -167,20 +109,18 @@ solve_symmetric :: proc(
 	assert(len(work) > 0, "Workspace required")
 
 	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(nrhs)
 	lda := A.ld
 	ldb := B.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssysv_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.ssysv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsysv_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.dsysv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csysv_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.csysv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsysv_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.zsysv_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -191,38 +131,37 @@ solve_symmetric :: proc(
 // ============================================================================
 
 // Query workspace for symmetric system solver with Rook pivoting (SYSV_ROOK)
-query_workspace_solve_symmetric_rook :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(1)
+dns_query_workspace_solve_symmetric_rook :: proc(A: ^Matrix($T), B: ^Matrix(T), uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
+	n := A.rows
+	nrhs := B.cols
 	uplo_c := cast(u8)uplo
-	lda := Blas_Int(max(1, n))
-	ldb := Blas_Int(max(1, n))
+	lda := A.ld
+	ldb := B.ld
 	lwork := QUERY_WORKSPACE
 	info: Info
+	work_query: T
 
 	when T == f32 {
-		work_query: f32
-		lapack.ssysv_rook_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
-		work_size = int(work_query)
+		lapack.ssysv_rook_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 	} else when T == f64 {
-		work_query: f64
-		lapack.dsysv_rook_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
-		work_size = int(work_query)
+		lapack.dsysv_rook_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 	} else when T == complex64 {
-		work_query: complex64
-		lapack.csysv_rook_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
+		lapack.csysv_rook_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
 	} else when T == complex128 {
-		work_query: complex128
-		lapack.zsysv_rook_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
+		lapack.zsysv_rook_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, &ldb, &work_query, &lwork, &info)
+	}
+
+	when is_complex(T) {
 		work_size = int(real(work_query))
+	} else {
+		work_size = int(work_query)
 	}
 
 	return work_size
 }
 
 // Solve symmetric system using Rook pivoting (enhanced numerical stability)
-solve_symmetric_rook :: proc(
+dns_solve_symmetric_rook :: proc(
 	A: ^Matrix($T), // System matrix (modified on output)
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	ipiv: []Blas_Int, // Pre-allocated pivot indices (n)
@@ -240,20 +179,18 @@ solve_symmetric_rook :: proc(
 	assert(len(work) > 0, "Workspace required")
 
 	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(nrhs)
 	lda := A.ld
 	ldb := B.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssysv_rook_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.ssysv_rook_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsysv_rook_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.dsysv_rook_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csysv_rook_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.csysv_rook_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsysv_rook_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.zsysv_rook_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -264,38 +201,37 @@ solve_symmetric_rook :: proc(
 // ============================================================================
 
 // Query workspace for symmetric system solver with RK pivoting (SYSV_RK)
-query_workspace_solve_symmetric_rk :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(1)
+dns_query_workspace_solve_symmetric_rk :: proc(A: ^Matrix($T), B: ^Matrix(T), uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
+	n := A.rows
+	nrhs := B.cols
 	uplo_c := cast(u8)uplo
-	lda := Blas_Int(max(1, n))
-	ldb := Blas_Int(max(1, n))
+	lda := A.ld
+	ldb := B.ld
 	lwork := QUERY_WORKSPACE
 	info: Info
+	work_query: T
 
 	when T == f32 {
-		work_query: f32
-		lapack.ssysv_rk_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
-		work_size = int(work_query)
+		lapack.ssysv_rk_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
 	} else when T == f64 {
-		work_query: f64
-		lapack.dsysv_rk_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
-		work_size = int(work_query)
+		lapack.dsysv_rk_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
 	} else when T == complex64 {
-		work_query: complex64
-		lapack.csysv_rk_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
+		lapack.csysv_rk_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
 	} else when T == complex128 {
-		work_query: complex128
-		lapack.zsysv_rk_(&uplo_c, &n_int, &nrhs_int, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
+		lapack.zsysv_rk_(&uplo_c, &n, &nrhs, nil, &lda, nil, nil, nil, &ldb, &work_query, &lwork, &info)
+	}
+
+	when is_complex(T) {
 		work_size = int(real(work_query))
+	} else {
+		work_size = int(work_query)
 	}
 
 	return work_size
 }
 
 // Solve symmetric system using RK pivoting (bounded Bunch-Kaufman)
-solve_symmetric_rk :: proc(
+dns_solve_symmetric_rk :: proc(
 	A: ^Matrix($T), // System matrix (modified on output)
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	E: ^Matrix(T), // Factor E from RK factorization
@@ -315,21 +251,19 @@ solve_symmetric_rk :: proc(
 	assert(len(work) > 0, "Workspace required")
 
 	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(nrhs)
 	lda := A.ld
 	lde := E.ld
 	ldb := B.ld
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssysv_rk_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.ssysv_rk_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == f64 {
-		lapack.dsysv_rk_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.dsysv_rk_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex64 {
-		lapack.csysv_rk_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.csysv_rk_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	} else when T == complex128 {
-		lapack.zsysv_rk_(&uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
+		lapack.zsysv_rk_(&uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(E.data), raw_data(ipiv), raw_data(B.data), &ldb, raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -340,26 +274,26 @@ solve_symmetric_rk :: proc(
 // ============================================================================
 
 // Query workspace for expert symmetric solver (SYSVX)
-query_workspace_solve_symmetric_expert :: proc($T: typeid, n: int, uplo := MatrixRegion.Upper) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(1)
-	fact_c: u8 = 'N' // New factorization
+dns_query_workspace_solve_symmetric_expert :: proc(A: ^Matrix($T), B: ^Matrix(T), AF: ^Matrix(T), X: ^Matrix(T), fact: FactorizationOption) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	n := A.rows
+	nrhs := B.cols
+	fact_c := cast(u8)fact
 	uplo_c := cast(u8)uplo
-	lda := Blas_Int(max(1, n))
-	ldaf := Blas_Int(max(1, n))
-	ldb := Blas_Int(max(1, n))
-	ldx := Blas_Int(max(1, n))
+	lda := A.ld
+	ldaf := AF.ld
+	ldb := B.ld
+	ldx := X.ld
 	lwork := QUERY_WORKSPACE
 	info: Info
+	work_query: T
+	iwork_query: Blas_Int
 
 	when T == f32 {
-		work_query: f32
-		iwork_query: Blas_Int
 		lapack.ssysvx_(
 			&fact_c,
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil,
 			&lda,
 			nil,
@@ -385,8 +319,8 @@ query_workspace_solve_symmetric_expert :: proc($T: typeid, n: int, uplo := Matri
 		lapack.dsysvx_(
 			&fact_c,
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil,
 			&lda,
 			nil,
@@ -407,13 +341,12 @@ query_workspace_solve_symmetric_expert :: proc($T: typeid, n: int, uplo := Matri
 		work_size = int(work_query)
 		iwork_size = int(iwork_query)
 	} else when T == complex64 {
-		work_query: complex64
 		rwork_query: f32
 		lapack.csysvx_(
 			&fact_c,
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil,
 			&lda,
 			nil,
@@ -432,15 +365,14 @@ query_workspace_solve_symmetric_expert :: proc($T: typeid, n: int, uplo := Matri
 			&info,
 		)
 		work_size = int(real(work_query))
-		iwork_size = int(rwork_query) // For complex, this is rwork
+		rwork_size = int(rwork_query)
 	} else when T == complex128 {
-		work_query: complex128
 		rwork_query: f64
 		lapack.zsysvx_(
 			&fact_c,
 			&uplo_c,
-			&n_int,
-			&nrhs_int,
+			&n,
+			&nrhs,
 			nil,
 			&lda,
 			nil,
@@ -459,14 +391,14 @@ query_workspace_solve_symmetric_expert :: proc($T: typeid, n: int, uplo := Matri
 			&info,
 		)
 		work_size = int(real(work_query))
-		iwork_size = int(rwork_query) // For complex, this is rwork
+		rwork_size = int(rwork_query)
 	}
 
 	return work_size, iwork_size
 }
 
 // Expert driver for symmetric linear systems with error bounds and condition estimation
-solve_symmetric_expert :: proc(
+dns_solve_symmetric_expert :: proc(
 	A: ^Matrix($T), // Input matrix (preserved)
 	B: ^Matrix(T), // RHS matrix (preserved)
 	X: ^Matrix(T), // Solution matrix (output)
@@ -477,7 +409,7 @@ solve_symmetric_expert :: proc(
 	ferr: []$Real, // Forward error bounds
 	berr: []Real, // Backward error bounds
 	uplo := MatrixRegion.Upper,
-	fact: u8 = 'N', // 'N' = new factorization, 'F' = use given factorization
+	fact: FactorizationOption, // 'N' = new factorization, 'F' = use given factorization
 ) -> (
 	rcond: Real,
 	info: Info,
@@ -492,10 +424,8 @@ solve_symmetric_expert :: proc(
 	assert(len(ipiv) >= n, "Pivot array too small")
 	assert(len(ferr) >= nrhs && len(berr) >= nrhs, "Error bound arrays too small")
 
-	fact_c := fact
+	fact_c := cast(u8)fact
 	uplo_c := cast(u8)uplo
-	n_int := Blas_Int(n)
-	nrhs_int := Blas_Int(nrhs)
 	lda := A.ld
 	ldaf := AF.ld
 	ldb := B.ld
@@ -503,15 +433,15 @@ solve_symmetric_expert :: proc(
 	lwork := Blas_Int(len(work))
 
 	when T == f32 {
-		lapack.ssysvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(iwork), &info)
+		lapack.ssysvx_(&fact_c, &uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(iwork), &info)
 	} else when T == f64 {
-		lapack.dsysvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(iwork), &info)
+		lapack.dsysvx_(&fact_c, &uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(iwork), &info)
 	} else when T == complex64 {
 		rwork := transmute([]f32)iwork // For complex, iwork is really rwork
-		lapack.csysvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(rwork), &info)
+		lapack.csysvx_(&fact_c, &uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(rwork), &info)
 	} else when T == complex128 {
 		rwork := transmute([]f64)iwork // For complex, iwork is really rwork
-		lapack.zsysvx_(&fact_c, &uplo_c, &n_int, &nrhs_int, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(rwork), &info)
+		lapack.zsysvx_(&fact_c, &uplo_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(AF.data), &ldaf, raw_data(ipiv), raw_data(B.data), &ldb, raw_data(X.data), &ldx, &rcond, raw_data(ferr), raw_data(berr), raw_data(work), &lwork, raw_data(rwork), &info)
 	}
 
 	return rcond, info, info == 0
@@ -521,24 +451,24 @@ solve_symmetric_expert :: proc(
 // CONDITION NUMBER ESTIMATION (SYCON family)
 // ============================================================================
 
-symmetric_condition_number :: proc {
-	symmetric_condition_number_real,
-	symmetric_condition_number_complex,
+dns_symmetric_condition_number :: proc {
+	dns_symmetric_condition_number_real,
+	dns_symmetric_condition_number_complex,
 }
 
-query_workspace_symmetric_condition_number :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	when T == f32 || T == f64 {
-		work_size = int(2 * n)
+dns_query_workspace_symmetric_condition_number :: proc(A: ^Matrix($T)) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	work_size = int(2 * n)
+	iwork_size = 0 // Complex variants don't use iwork
+
+	when is_float(T) {
 		iwork_size = int(n)
-	} else when T == complex64 || T == complex128 {
-		work_size = int(2 * n)
-		iwork_size = 0 // Complex variants don't use iwork
 	}
+
 	return work_size, iwork_size
 }
 
 // Estimate condition number of symmetric matrix
-symmetric_condition_number_real :: proc(
+dns_symmetric_condition_number_real :: proc(
 	A: ^Matrix($T), // Factored matrix from sytrf
 	ipiv: []Blas_Int, // Pivot indices from sytrf
 	anorm: T, // 1-norm of original matrix
@@ -548,7 +478,7 @@ symmetric_condition_number_real :: proc(
 ) -> (
 	rcond: T,
 	info: Info,
-	ok: bool,// Reciprocal condition number
+	ok: bool, // Reciprocal condition number
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -569,7 +499,7 @@ symmetric_condition_number_real :: proc(
 	return rcond, info, info == 0
 }
 
-symmetric_condition_number_complex :: proc(
+dns_symmetric_condition_number_complex :: proc(
 	A: ^Matrix($Cmplx), // Factored matrix from sytrf
 	ipiv: []Blas_Int, // Pivot indices from sytrf
 	anorm: $Real, // 1-norm of original matrix
@@ -578,9 +508,8 @@ symmetric_condition_number_complex :: proc(
 ) -> (
 	rcond: Real,
 	info: Info,
-	ok: bool,// Reciprocal condition number
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	ok: bool, // Reciprocal condition number
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -603,17 +532,17 @@ symmetric_condition_number_complex :: proc(
 // IMPROVED EQUILIBRATION (SYEQUB family)
 // ============================================================================
 
-symmetric_equilibrate_improved :: proc {
-	symmetric_equilibrate_improved_real,
-	symmetric_equilibrate_improved_complex,
+dns_symmetric_equilibrate_improved :: proc {
+	dns_symmetric_equilibrate_improved_real,
+	dns_symmetric_equilibrate_improved_complex,
 }
 
-query_workspace_symmetric_equilibrate_improved :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) || is_complex(T) {
-	return int(3 * n)
+dns_query_workspace_symmetric_equilibrate_improved :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+	return int(3 * A.rows)
 }
 
 // Improved equilibration for symmetric matrices
-symmetric_equilibrate_improved_real :: proc(
+dns_symmetric_equilibrate_improved_real :: proc(
 	A: ^Matrix($T), // Input matrix (not modified)
 	S: []T, // Scaling factors (pre-allocated, size n)
 	work: []T, // Workspace (pre-allocated, size 3*n)
@@ -621,8 +550,8 @@ symmetric_equilibrate_improved_real :: proc(
 ) -> (
 	scond: T,
 	amax: T,
-	info: Info,// Ratio of smallest to largest scaling factor
-	ok: bool,// Absolute value of largest matrix element
+	info: Info,
+	ok: bool, // Ratio of smallest to largest scaling factor// Absolute value of largest matrix element
 ) where is_float(T) {
 	n := A.rows
 	lda := A.ld
@@ -642,7 +571,7 @@ symmetric_equilibrate_improved_real :: proc(
 	return scond, amax, info, info == 0
 }
 
-symmetric_equilibrate_improved_complex :: proc(
+dns_symmetric_equilibrate_improved_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (not modified)
 	S: []$Real, // Scaling factors (pre-allocated, size n)
 	work: []Cmplx, // Workspace (pre-allocated, size 3*n)
@@ -650,10 +579,9 @@ symmetric_equilibrate_improved_complex :: proc(
 ) -> (
 	scond: Real,
 	amax: Real,
-	info: Info,// Ratio of smallest to largest scaling factor
-	ok: bool,// Absolute value of largest matrix element
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Ratio of smallest to largest scaling factor// Absolute value of largest matrix element
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -676,24 +604,24 @@ symmetric_equilibrate_improved_complex :: proc(
 // ITERATIVE REFINEMENT (SYRFS family)
 // ============================================================================
 
-symmetric_iterative_refinement :: proc {
-	symmetric_iterative_refinement_real,
-	symmetric_iterative_refinement_complex,
+dns_symmetric_iterative_refinement :: proc {
+	dns_symmetric_iterative_refinement_real,
+	dns_symmetric_iterative_refinement_complex,
 }
 
-query_workspace_symmetric_iterative_refinement :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	when T == f32 || T == f64 {
+dns_query_workspace_symmetric_iterative_refinement :: proc(A: ^Matrix($T)) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		work_size = int(3 * n)
 		iwork_size = int(n)
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
-		iwork_size = int(n) // For complex, this is rwork
+		rwork_size = int(n)
 	}
-	return work_size, iwork_size
+	return work_size, iwork_size, rwork_size
 }
 
 // Iterative refinement for symmetric linear systems
-symmetric_iterative_refinement_real :: proc(
+dns_symmetric_iterative_refinement_real :: proc(
 	A: ^Matrix($T), // Original matrix
 	AF: ^Matrix(T), // Factored matrix from sytrf
 	ipiv: []Blas_Int, // Pivot indices from sytrf
@@ -733,7 +661,7 @@ symmetric_iterative_refinement_real :: proc(
 	return info, info == 0
 }
 
-symmetric_iterative_refinement_complex :: proc(
+dns_symmetric_iterative_refinement_complex :: proc(
 	A: ^Matrix($Cmplx), // Original matrix
 	AF: ^Matrix(Cmplx), // Factored matrix from sytrf
 	ipiv: []Blas_Int, // Pivot indices from sytrf
@@ -747,8 +675,7 @@ symmetric_iterative_refinement_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -778,24 +705,24 @@ symmetric_iterative_refinement_complex :: proc(
 // EXPERT ITERATIVE REFINEMENT (SYRFSX family)
 // ============================================================================
 
-symmetric_iterative_refinement_expert :: proc {
-	symmetric_iterative_refinement_expert_real,
-	symmetric_iterative_refinement_expert_complex,
+dns_symmetric_iterative_refinement_expert :: proc {
+	dns_symmetric_iterative_refinement_expert_real,
+	dns_symmetric_iterative_refinement_expert_complex,
 }
 
-query_workspace_symmetric_iterative_refinement_expert :: proc($T: typeid, n: int, n_err_bnds: int = 3) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	when T == f32 || T == f64 {
+dns_query_workspace_symmetric_iterative_refinement_expert :: proc(A: ^Matrix($T), n_err_bnds: int = 3) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
-		iwork_size = int(2 * n) // For complex, this is rwork
+		rwork_size = int(2 * n)
 	}
-	return work_size, iwork_size
+	return work_size, iwork_size, rwork_size
 }
 
 // Expert iterative refinement with multiple error bounds
-symmetric_iterative_refinement_expert_real :: proc(
+dns_symmetric_iterative_refinement_expert_real :: proc(
 	A: ^Matrix($T), // Original matrix
 	AF: ^Matrix(T), // Factored matrix from sytrf
 	ipiv: []Blas_Int, // Pivot indices from sytrf
@@ -894,7 +821,7 @@ symmetric_iterative_refinement_expert_real :: proc(
 	return rcond, info, info == 0
 }
 
-symmetric_iterative_refinement_expert_complex :: proc(
+dns_symmetric_iterative_refinement_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Original matrix
 	AF: ^Matrix(Cmplx), // Factored matrix from sytrf
 	ipiv: []Blas_Int, // Pivot indices from sytrf
@@ -914,8 +841,7 @@ symmetric_iterative_refinement_expert_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -998,17 +924,12 @@ symmetric_iterative_refinement_expert_complex :: proc(
 // MATRIX INVERSION (SYTRI family)
 // ============================================================================
 
-symmetric_invert :: proc {
-	symmetric_invert_real,
-	symmetric_invert_complex,
-}
-
-query_workspace_symmetric_invert :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) || is_complex(T) {
-	return int(n)
+dns_query_workspace_symmetric_invert :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+	return int(A.rows)
 }
 
 // Invert symmetric matrix using factorization
-symmetric_invert_real :: proc(
+dns_symmetric_invert :: proc(
 	A: ^Matrix($T), // Factored matrix (overwritten with inverse)
 	ipiv: []Blas_Int, // Pivot indices from sytrf
 	work: []T, // Workspace (pre-allocated, size n)
@@ -1016,7 +937,7 @@ symmetric_invert_real :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -1030,30 +951,7 @@ symmetric_invert_real :: proc(
 		lapack.ssytri_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &info)
 	} else when T == f64 {
 		lapack.dsytri_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &info)
-	}
-
-	return info, info == 0
-}
-
-symmetric_invert_complex :: proc(
-	A: ^Matrix($T), // Factored matrix (overwritten with inverse)
-	ipiv: []Blas_Int, // Pivot indices from sytrf
-	work: []T, // Workspace (pre-allocated, size n)
-	uplo: MatrixRegion = .Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix must be square")
-	assert(len(ipiv) >= int(n), "ipiv array too small")
-	assert(len(work) >= int(n), "work array too small")
-
-	uplo_c := cast(u8)uplo
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.csytri_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &info)
 	} else when T == complex128 {
 		lapack.zsytri_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &info)
@@ -1066,22 +964,17 @@ symmetric_invert_complex :: proc(
 // STORAGE FORMAT CONVERSION (SYCONV family)
 // ============================================================================
 
-symmetric_convert_storage :: proc {
-	symmetric_convert_storage_real,
-	symmetric_convert_storage_complex,
-}
-
 // Convert between symmetric matrix storage formats
-symmetric_convert_storage_real :: proc(
+dns_symmetric_convert_storage :: proc(
 	A: ^Matrix($T), // Matrix to convert (modified)
 	ipiv: []Blas_Int, // Pivot indices
 	E: []T, // Factor E (pre-allocated, size n)
-	way: u8 = 'C', // 'C' = convert, 'R' = revert
+	way: u8 = 'C', // 'C' = convert, 'R' = revert **FIXME: need enum**
 	uplo: MatrixRegion = .Upper,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -1096,32 +989,7 @@ symmetric_convert_storage_real :: proc(
 		lapack.ssyconv_(&uplo_c, &way_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(E), &info)
 	} else when T == f64 {
 		lapack.dsyconv_(&uplo_c, &way_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(E), &info)
-	}
-
-	return info, info == 0
-}
-
-symmetric_convert_storage_complex :: proc(
-	A: ^Matrix($T), // Matrix to convert (modified)
-	ipiv: []Blas_Int, // Pivot indices
-	E: []T, // Factor E (pre-allocated, size n)
-	way: u8 = 'C', // 'C' = convert, 'R' = revert
-	uplo: MatrixRegion = .Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix must be square")
-	assert(len(ipiv) >= int(n), "ipiv array too small")
-	assert(len(E) >= int(n), "E array too small")
-
-	uplo_c := cast(u8)uplo
-	way_c := way
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.csyconv_(&uplo_c, &way_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(E), &info)
 	} else when T == complex128 {
 		lapack.zsyconv_(&uplo_c, &way_c, &n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(E), &info)
@@ -1134,18 +1002,13 @@ symmetric_convert_storage_complex :: proc(
 // ROW/COLUMN SWAPPING (SYSWAPR family)
 // ============================================================================
 
-symmetric_swap_rows :: proc {
-	symmetric_swap_rows_real,
-	symmetric_swap_rows_complex,
-}
-
 // Apply row/column swaps to symmetric matrix
-symmetric_swap_rows_real :: proc(
+dns_symmetric_swap_rows :: proc(
 	A: ^Matrix($T), // Matrix to modify
 	i1: int, // First row/column index
 	i2: int, // Second row/column index
 	uplo: MatrixRegion = .Upper,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
@@ -1161,27 +1024,7 @@ symmetric_swap_rows_real :: proc(
 		lapack.ssyswapr_(&uplo_c, &n, raw_data(A.data), &lda, &i1_c, &i2_c)
 	} else when T == f64 {
 		lapack.dsyswapr_(&uplo_c, &n, raw_data(A.data), &lda, &i1_c, &i2_c)
-	}
-}
-
-symmetric_swap_rows_complex :: proc(
-	A: ^Matrix($T), // Matrix to modify
-	i1: int, // First row/column index
-	i2: int, // Second row/column index
-	uplo: MatrixRegion = .Upper,
-) where is_complex(T) {
-	n := A.rows
-	lda := A.ld
-
-	assert(A.rows == A.cols, "Matrix must be square")
-	assert(i1 >= 1 && i1 <= int(n), "i1 out of bounds")
-	assert(i2 >= 1 && i2 <= int(n), "i2 out of bounds")
-
-	uplo_c := cast(u8)uplo
-	i1_c := Blas_Int(i1)
-	i2_c := Blas_Int(i2)
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.csyswapr_(&uplo_c, &n, raw_data(A.data), &lda, &i1_c, &i2_c)
 	} else when T == complex128 {
 		lapack.zsyswapr_(&uplo_c, &n, raw_data(A.data), &lda, &i1_c, &i2_c)

@@ -12,10 +12,10 @@ import "core:math"
 // of symmetric matrices in a 1D array, saving approximately 50% memory.
 //
 // Conversion operations:
-// - pack_symmetric: Convert full matrix to packed storage
-// - unpack_symmetric: Convert packed storage to full matrix
-// - create_packed_symmetric: Allocating conversion from full to PackedSymmetric
-// - extract_full_symmetric: Allocating conversion from PackedSymmetric to full
+// - pack_sym_from_dns_array: Convert full matrix array to packed storage array (non-allocating)
+// - dns_from_pack_sym_array: Convert packed storage array to full matrix array (non-allocating)
+// - pack_sym_make_from_dns: Allocating conversion from full array to PackedSymmetric
+// - pack_sym_to_dns: Allocating conversion from PackedSymmetric to full array
 
 // ===================================================================================
 // MEMORY LAYOUT CONVERSIONS
@@ -23,13 +23,13 @@ import "core:math"
 
 // Convert full symmetric matrix to packed storage
 // Non-allocating version: requires pre-allocated packed array
-pack_symmetric :: proc(
+pack_sym_from_dns_array :: proc(
 	A: []$T, // Full matrix (n×n) in column-major order
 	AP: []T, // Pre-allocated packed array (n*(n+1)/2 elements)
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
 	uplo: MatrixRegion = .Upper,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(A) >= n * lda, "Full matrix array too small")
 
@@ -58,13 +58,13 @@ pack_symmetric :: proc(
 
 // Convert packed storage to full symmetric matrix
 // Non-allocating version: requires pre-allocated full matrix
-unpack_symmetric :: proc(
+dns_from_pack_sym_array :: proc(
 	AP: []$T, // Packed array
 	A: []T, // Pre-allocated full matrix (n×n)
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
 	uplo: MatrixRegion = .Upper,
-) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) where is_float(T) || is_complex(T) {
 	assert(validate_packed_storage(n, len(AP)), "Packed array too small")
 	assert(len(A) >= n * lda, "Full matrix array too small")
 
@@ -109,33 +109,33 @@ unpack_symmetric :: proc(
 // ===================================================================================
 
 // Create PackedSymmetric from full matrix (allocating version for convenience)
-create_packed_symmetric :: proc(
+pack_sym_make_from_dns :: proc(
 	A: []$T, // Full matrix
 	n: int, // Matrix dimension
 	lda: int, // Leading dimension of A
 	uplo: MatrixRegion = .Upper,
 	allocator := context.allocator,
-) -> PackedSymmetric(T) where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) -> PackedSymmetric(T) where is_float(T) || is_complex(T) {
 	packed_size := packed_storage_size(n)
 	data := make([]T, packed_size, allocator)
 
-	pack_symmetric(A, data, n, lda, uplo)
+	pack_sym_from_dns_array(A, data, n, lda, uplo)
 
 	return PackedSymmetric(T){data = data, n = n, uplo = uplo}
 }
 
 // Extract full matrix from PackedSymmetric (allocating version for convenience)
-extract_full_symmetric :: proc(
+pack_sym_to_dns :: proc(
 	packed: ^PackedSymmetric($T),
 	lda: int, // Leading dimension for output
 	allocator := context.allocator,
-) -> []T where T == f32 || T == f64 || T == complex64 || T == complex128 {
+) -> []T where is_float(T) || is_complex(T) {
 	if lda < packed.n {
 		panic("Leading dimension too small")
 	}
 
 	A := make([]T, packed.n * lda, allocator)
-	unpack_symmetric(packed.data, A, packed.n, lda, packed.uplo)
+	dns_from_pack_sym_array(packed.data, A, packed.n, lda, packed.uplo)
 
 	return A
 }
@@ -145,22 +145,22 @@ extract_full_symmetric :: proc(
 // ===================================================================================
 
 // Convert multiple packed matrices to full format in batch
-batch_extract_packed_symmetric :: proc(packed_matrices: []^PackedSymmetric($T), lda: int, allocator := context.allocator) -> [][]T {
+pack_sym_batch_to_dns :: proc(packed_matrices: []^PackedSymmetric($T), lda: int, allocator := context.allocator) -> [][]T {
 	results := make([][]T, len(packed_matrices), allocator)
 
 	for i, packed in packed_matrices {
-		results[i] = extract_full_symmetric(packed, lda, allocator)
+		results[i] = pack_sym_to_dns(packed, lda, allocator)
 	}
 
 	return results
 }
 
 // Convert multiple full matrices to packed format in batch
-batch_create_packed_symmetric :: proc(full_matrices: [][]$T, n: int, lda: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> []PackedSymmetric(T) {
+pack_sym_batch_from_dns :: proc(full_matrices: [][]$T, n: int, lda: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> []PackedSymmetric(T) {
 	results := make([]PackedSymmetric(T), len(full_matrices), allocator)
 
 	for i, A in full_matrices {
-		results[i] = create_packed_symmetric(A, n, lda, uplo, allocator)
+		results[i] = pack_sym_make_from_dns(A, n, lda, uplo, allocator)
 	}
 
 	return results
@@ -172,7 +172,7 @@ batch_create_packed_symmetric :: proc(full_matrices: [][]$T, n: int, lda: int, u
 
 // Convert upper triangle storage to lower triangle storage (or vice versa)
 // This operation modifies the packed matrix in-place
-transpose_packed_storage :: proc(packed: ^PackedSymmetric($T)) {
+pack_sym_transpose :: proc(packed: ^PackedSymmetric($T)) {
 	n := packed.n
 	temp_data := make([]T, len(packed.data))
 	defer delete(temp_data)
@@ -212,23 +212,17 @@ transpose_packed_storage :: proc(packed: ^PackedSymmetric($T)) {
 
 // Verify that a packed matrix correctly represents a symmetric matrix
 // by converting to full and checking symmetry
-verify_packed_symmetry :: proc(packed: ^PackedSymmetric($T), tolerance: T) -> bool {
+pack_sym_verify_symmetry :: proc(packed: ^PackedSymmetric($T), tolerance: T) -> bool {
 	// Extract to full matrix
-	A := extract_full_symmetric(packed, packed.n)
+	A := pack_sym_to_dns(packed, packed.n) // This is janky;; fixme
 	defer delete(A)
 
 	// Check symmetry: A[i,j] == A[j,i]
 	for i in 0 ..< packed.n {
 		for j in 0 ..< packed.n {
 			diff := A[i + j * packed.n] - A[j + i * packed.n]
-			when T == complex64 || T == complex128 {
-				if abs(diff) > tolerance {
-					return false
-				}
-			} else {
-				if abs(diff) > tolerance {
-					return false
-				}
+			if abs(diff) > tolerance {
+				return false
 			}
 		}
 	}
@@ -237,7 +231,7 @@ verify_packed_symmetry :: proc(packed: ^PackedSymmetric($T), tolerance: T) -> bo
 }
 
 // Compare packed and full representations for equivalence
-compare_packed_full :: proc(packed: ^PackedSymmetric($T), A: []T, lda: int, tolerance: T) -> bool {
+pack_sym_compare_full :: proc(packed: ^PackedSymmetric($T), A: []T, lda: int, tolerance: T) -> bool {
 	if lda < packed.n {
 		return false
 	}
@@ -245,18 +239,12 @@ compare_packed_full :: proc(packed: ^PackedSymmetric($T), A: []T, lda: int, tole
 	// Check each element
 	for i in 0 ..< packed.n {
 		for j in 0 ..< packed.n {
-			packed_val := packed_symmetric_get(packed.data, packed.n, i, j, packed.uplo)
+			packed_val := pack_sym_get(packed.data, packed.n, i, j, packed.uplo)
 			full_val := A[i + j * lda]
 
 			diff := packed_val - full_val
-			when T == complex64 || T == complex128 {
-				if abs(diff) > tolerance {
-					return false
-				}
-			} else {
-				if abs(diff) > tolerance {
-					return false
-				}
+			if abs(diff) > tolerance {
+				return false
 			}
 		}
 	}

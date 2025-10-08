@@ -23,7 +23,7 @@ import "core:math"
 // ===================================================================================
 
 // Packed Hermitian matrix type (complex types only)
-PackedHermitian :: struct($T: typeid) where T == complex64 || T == complex128 {
+PackedHermitian :: struct($T: typeid) where is_complex(T) {
 	data: []T, // Packed storage array (n*(n+1)/2 elements)
 	n:    int, // Matrix dimension
 	uplo: MatrixRegion, // Storage region (Upper or Lower)
@@ -33,12 +33,12 @@ PackedHermitian :: struct($T: typeid) where T == complex64 || T == complex128 {
 // ===================================================================================
 
 // Get element from packed Hermitian matrix
-packed_hermitian_get :: proc(
+pack_herm_get :: proc(
 	AP: []$T, // Packed array
 	n: int, // Matrix dimension
 	i, j: int, // Element indices
 	uplo: MatrixRegion = .Upper,
-) -> T where T == complex64 || T == complex128 {
+) -> T where is_complex(T) {
 	assert(i >= 0 && i < n && j >= 0 && j < n, "Index out of bounds")
 
 	// Determine if we need to access stored triangle or compute conjugate
@@ -79,13 +79,13 @@ packed_hermitian_get :: proc(
 }
 
 // Set element in packed Hermitian matrix
-packed_hermitian_set :: proc(
+pack_herm_set :: proc(
 	AP: []$T, // Packed array
 	n: int, // Matrix dimension
 	i, j: int, // Element indices
 	val: T, // Value to set
 	uplo: MatrixRegion = .Upper,
-) where T == complex64 || T == complex128 {
+) where is_complex(T) {
 	assert(i >= 0 && i < n && j >= 0 && j < n, "Index out of bounds")
 
 	// For diagonal elements, ensure they are real (Hermitian property)
@@ -128,7 +128,7 @@ packed_hermitian_set :: proc(
 // UTILITY FUNCTIONS
 // ===================================================================================
 // Copy packed Hermitian matrix
-copy_packed_hermitian :: proc(src: ^PackedHermitian($T), allocator := context.allocator) -> PackedHermitian(T) where T == complex64 || T == complex128 {
+copy_packed_hermitian :: proc(src: ^PackedHermitian($T), allocator := context.allocator) -> PackedHermitian(T) where is_complex(T) {
 	data := make([]T, len(src.data), allocator)
 	copy(data, src.data)
 
@@ -136,7 +136,7 @@ copy_packed_hermitian :: proc(src: ^PackedHermitian($T), allocator := context.al
 }
 
 // Delete packed Hermitian matrix
-delete_packed_hermitian :: proc(packed: ^PackedHermitian($T)) where T == complex64 || T == complex128 {
+delete_packed_hermitian :: proc(packed: ^PackedHermitian($T)) where is_complex(T) {
 	if packed.data != nil {
 		delete(packed.data)
 		packed.data = nil
@@ -144,7 +144,7 @@ delete_packed_hermitian :: proc(packed: ^PackedHermitian($T)) where T == complex
 }
 
 // Validate packed Hermitian matrix consistency
-validate_packed_hermitian :: proc(packed: ^PackedHermitian($T)) -> bool where T == complex64 || T == complex128 {
+validate_packed_hermitian :: proc(packed: ^PackedHermitian($T)) -> bool where is_complex(T) {
 	if packed.n <= 0 {
 		return false
 	}
@@ -158,7 +158,7 @@ validate_packed_hermitian :: proc(packed: ^PackedHermitian($T)) -> bool where T 
 	case .Upper, .Lower:
 		// Check that diagonal elements are real (Hermitian property)
 		for i in 0 ..< packed.n {
-			diag_val := packed_hermitian_get(packed.data, packed.n, i, i, packed.uplo)
+			diag_val := pack_herm_get(packed.data, packed.n, i, i, packed.uplo)
 			if abs(imag(diag_val)) > 1e-12 { 	// Allow for small numerical errors
 				return false
 			}
@@ -177,9 +177,9 @@ validate_packed_hermitian :: proc(packed: ^PackedHermitian($T)) -> bool where T 
 
 // Check if a packed Hermitian matrix appears to be positive definite
 // (diagonal elements > 0 and real)
-is_packed_hermitian_positive_definite_heuristic :: proc(packed: ^PackedHermitian($T)) -> bool where T == complex64 || T == complex128 {
+is_packed_hermitian_positive_definite_heuristic :: proc(packed: ^PackedHermitian($T)) -> bool where is_complex(T) {
 	for i in 0 ..< packed.n {
-		diag_val := packed_hermitian_get(packed.data, packed.n, i, i, packed.uplo)
+		diag_val := pack_herm_get(packed.data, packed.n, i, i, packed.uplo)
 		// Diagonal should be real and positive
 		if real(diag_val) <= 0 || abs(imag(diag_val)) > 1e-12 {
 			return false
@@ -189,17 +189,13 @@ is_packed_hermitian_positive_definite_heuristic :: proc(packed: ^PackedHermitian
 }
 
 // Get diagonal element efficiently (always real for Hermitian matrices)
-packed_hermitian_diagonal_element :: proc {
-	packed_hermitian_diagonal_element_complex64,
-	packed_hermitian_diagonal_element_complex128,
-}
-
-packed_hermitian_diagonal_element_complex64 :: proc(
-	AP: []complex64, // Packed array
+pack_herm_diagonal_get :: proc(
+	AP: []$Cmplx, // Packed array
 	n: int, // Matrix dimension
 	i: int, // Diagonal index
+	result_out: ^$Real, // Output: diagonal element value
 	uplo: MatrixRegion = .Upper,
-) -> f32 {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	assert(i >= 0 && i < n, "Diagonal index out of bounds")
 
 	idx: int
@@ -213,67 +209,18 @@ packed_hermitian_diagonal_element_complex64 :: proc(
 	}
 
 	// Diagonal elements are always real in Hermitian matrices
-	return real(AP[idx])
-}
-
-packed_hermitian_diagonal_element_complex128 :: proc(
-	AP: []complex128, // Packed array
-	n: int, // Matrix dimension
-	i: int, // Diagonal index
-	uplo: MatrixRegion = .Upper,
-) -> f64 {
-	assert(i >= 0 && i < n, "Diagonal index out of bounds")
-
-	idx: int
-	switch uplo {
-	case .Upper:
-		idx = i + i * (i + 1) / 2
-	case .Lower:
-		idx = i * (2 * n - i - 1) / 2
-	case .Full:
-		panic("Full storage not supported for packed format")
-	}
-
-	// Diagonal elements are always real in Hermitian matrices
-	return real(AP[idx])
+	result_out^ = real(AP[idx])
 }
 
 // Set diagonal element efficiently (automatically makes it real)
-set_packed_hermitian_diagonal_element :: proc {
-	set_packed_hermitian_diagonal_element_complex64,
-	set_packed_hermitian_diagonal_element_complex128,
-}
-
-set_packed_hermitian_diagonal_element_complex64 :: proc(
-	AP: []complex64, // Packed array
+pack_herm_diagonal_set :: proc(
+	AP: []$Cmplx, // Packed array
 	n: int, // Matrix dimension
 	i: int, // Diagonal index
-	val: f32, // Real value to set
+	val: $Real, // Real value to set
 	uplo: MatrixRegion = .Upper,
-) {
-	assert(i >= 0 && i < n, "Diagonal index out of bounds")
-
-	idx: int
-	switch uplo {
-	case .Upper:
-		idx = i + i * (i + 1) / 2
-	case .Lower:
-		idx = i * (2 * n - i - 1) / 2
-	case .Full:
-		panic("Full storage not supported for packed format")
-	}
-
-	// Store as real value (imaginary part = 0)
-	AP[idx] = complex(val, 0)
-}
-
-set_packed_hermitian_diagonal_element_complex128 :: proc(
-	AP: []complex128, // Packed array
-	n: int, // Matrix dimension
-	i: int, // Diagonal index
-	val: f64, // Real value to set
-	uplo: MatrixRegion = .Upper,
-) {
+) where Cmplx == complex64 || Cmplx == complex128,
+	Real == real_type_of(Cmplx) {
 	assert(i >= 0 && i < n, "Diagonal index out of bounds")
 
 	idx: int

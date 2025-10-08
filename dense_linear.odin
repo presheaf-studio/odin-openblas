@@ -27,36 +27,22 @@ Factorization_Job :: enum u8 {
 // BASIC LINEAR SOLVERS (GESV family)
 // ===================================================================================
 
-// Overloaded procedures for different types
-linear_solve :: proc {
-	linear_solve_real,
-	linear_solve_complex,
-}
-
-linear_solve_expert :: proc {
-	linear_solve_expert_real,
-	linear_solve_expert_complex,
-}
-
-// Query workspace size for linear solve
-query_workspace_linear_solve :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	// Basic GESV doesn't need workspace queries
-	work_size = 0
-	rwork_size = 0
-	return
+dns_solve_expert :: proc {
+	dns_solve_expert_real,
+	dns_solve_expert_complex,
 }
 
 // Basic linear solve: AX = B using LU factorization
 // A is overwritten with L and U factors
 // B is overwritten with solution X
-linear_solve_real :: proc(
+dns_solve :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with LU factors)
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated, size min(m,n))
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -70,29 +56,7 @@ linear_solve_real :: proc(
 		lapack.sgesv_(&n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
 		lapack.dgesv_(&n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
-	}
-
-	return info, info == 0
-}
-
-linear_solve_complex :: proc(
-	A: ^Matrix($T), // Input matrix (overwritten with LU factors)
-	B: ^Matrix(T), // RHS matrix (overwritten with solution)
-	ipiv: []Blas_Int, // Pivot indices (pre-allocated, size min(m,n))
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	nrhs := B.cols
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == n, "B matrix must have same number of rows as A")
-	assert(len(ipiv) >= int(n), "ipiv array too small")
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cgesv_(&n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
 		lapack.zgesv_(&n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
@@ -106,14 +70,14 @@ linear_solve_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for expert linear solver
-query_workspace_linear_solve_expert :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_solve_expert :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(n)
 		iwork_size = 0
@@ -123,7 +87,7 @@ query_workspace_linear_solve_expert :: proc(A: ^Matrix($T)) -> (work_size: int, 
 }
 
 // Expert linear solver with equilibration, condition estimation, and iterative refinement
-linear_solve_expert_real :: proc(
+dns_solve_expert_real :: proc(
 	A: ^Matrix($T), // Input matrix (preserved if AF provided)
 	AF: ^Matrix(T), // Factored matrix (pre-allocated, optional)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated if factored)
@@ -140,8 +104,8 @@ linear_solve_expert_real :: proc(
 	rcond: T,
 	ferr: []T,
 	berr: []T,
-	info: Info,// Reciprocal condition number estimate
-	ok: bool, // Forward error bounds (pre-allocated)// Backward error bounds (pre-allocated)
+	info: Info,
+	ok: bool, // Reciprocal condition number estimate// Forward error bounds (pre-allocated)// Backward error bounds (pre-allocated)
 ) where is_float(T) {
 	n := A.rows
 	nrhs := B.cols
@@ -176,7 +140,7 @@ linear_solve_expert_real :: proc(
 	return rcond, ferr, berr, info, info == 0
 }
 
-linear_solve_expert_complex :: proc(
+dns_solve_expert_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (preserved if AF provided)
 	AF: ^Matrix(Cmplx), // Factored matrix (pre-allocated, optional)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated if factored)
@@ -193,10 +157,9 @@ linear_solve_expert_complex :: proc(
 	rcond: Real,
 	ferr: []Real,
 	berr: []Real,
-	info: Info,// Reciprocal condition number estimate
-	ok: bool, // Forward error bounds (pre-allocated)// Backward error bounds (pre-allocated)
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+	info: Info,
+	ok: bool, // Reciprocal condition number estimate// Forward error bounds (pre-allocated)// Backward error bounds (pre-allocated)
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -233,30 +196,14 @@ linear_solve_expert_complex :: proc(
 // ===================================================================================
 // LU FACTORIZATION (GETRF/GETRS family)
 // ===================================================================================
-
-lu_factorize :: proc {
-	lu_factorize_real,
-	lu_factorize_complex,
-}
-
-lu_solve :: proc {
-	lu_solve_real,
-	lu_solve_complex,
-}
-
-lu_invert :: proc {
-	lu_invert_real,
-	lu_invert_complex,
-}
-
 // LU factorization: A = P*L*U
-lu_factorize_real :: proc(
+dns_lu_factorize :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with L and U)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated, size min(m,n))
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -267,25 +214,7 @@ lu_factorize_real :: proc(
 		lapack.sgetrf_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
 	} else when T == f64 {
 		lapack.dgetrf_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
-	}
-
-	return info, info == 0
-}
-
-lu_factorize_complex :: proc(
-	A: ^Matrix($T), // Input matrix (overwritten with L and U)
-	ipiv: []Blas_Int, // Pivot indices (pre-allocated, size min(m,n))
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	assert(len(ipiv) >= int(min(m, n)), "ipiv array too small")
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cgetrf_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
 	} else when T == complex128 {
 		lapack.zgetrf_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
@@ -295,15 +224,15 @@ lu_factorize_complex :: proc(
 }
 
 // Solve linear system using LU factors: A*X = B or A^T*X = B
-lu_solve_real :: proc(
-	A: ^Matrix($T), // LU factors from lu_factorize
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
+dns_lu_solve :: proc(
+	A: ^Matrix($T), // LU factors from dns_lu_factorize
+	ipiv: []Blas_Int, // Pivot indices from dns_lu_factorize
 	B: ^Matrix(T), // RHS matrix (overwritten with solution)
 	trans: TransposeMode = .None,
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -319,32 +248,7 @@ lu_solve_real :: proc(
 		lapack.sgetrs_(&trans_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
 		lapack.dgetrs_(&trans_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
-	}
-
-	return info, info == 0
-}
-
-lu_solve_complex :: proc(
-	A: ^Matrix($T), // LU factors from lu_factorize
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
-	B: ^Matrix(T), // RHS matrix (overwritten with solution)
-	trans: TransposeMode = .None,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	nrhs := B.cols
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == n, "B matrix must have same number of rows as A")
-	assert(len(ipiv) >= int(n), "ipiv array too small")
-
-	trans_c := cast(char)trans
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cgetrs_(&trans_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
 	} else when T == complex128 {
 		lapack.zgetrs_(&trans_c, &n, &nrhs, raw_data(A.data), &lda, raw_data(ipiv), raw_data(B.data), &ldb, &info)
@@ -354,30 +258,24 @@ lu_solve_complex :: proc(
 }
 
 // Query workspace size for matrix inversion
-query_workspace_lu_invert :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_lu_invert :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 
 	lwork: Blas_Int = QUERY_WORKSPACE
+	work_query: T
+	info: Info
 
 	when T == f32 {
-		work_query: f32
-		info: Info
 		lapack.sgetri_(&n, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == f64 {
-		work_query: f64
-		info: Info
 		lapack.dgetri_(&n, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(work_query)
 	} else when T == complex64 {
-		work_query: complex64
-		info: Info
 		lapack.cgetri_(&n, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	} else when T == complex128 {
-		work_query: complex128
-		info: Info
 		lapack.zgetri_(&n, nil, &lda, nil, &work_query, &lwork, &info)
 		work_size = int(real(work_query))
 	}
@@ -386,14 +284,14 @@ query_workspace_lu_invert :: proc(A: ^Matrix($T)) -> (work_size: int) where is_f
 }
 
 // Matrix inversion using LU factors
-lu_invert_real :: proc(
+dns_lu_invert :: proc(
 	A: ^Matrix($T), // LU factors (overwritten with inverse)
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
+	ipiv: []Blas_Int, // Pivot indices from dns_lu_factorize
 	work: []T, // Workspace (pre-allocated)
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	n := A.rows
 	lda := A.ld
 	lwork := Blas_Int(len(work))
@@ -406,28 +304,7 @@ lu_invert_real :: proc(
 		lapack.sgetri_(&n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == f64 {
 		lapack.dgetri_(&n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-lu_invert_complex :: proc(
-	A: ^Matrix($T), // LU factors (overwritten with inverse)
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
-	work: []T, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	n := A.rows
-	lda := A.ld
-	lwork := Blas_Int(len(work))
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(len(ipiv) >= int(n), "ipiv array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cgetri_(&n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
 		lapack.zgetri_(&n, raw_data(A.data), &lda, raw_data(ipiv), raw_data(work), &lwork, &info)
@@ -440,20 +317,20 @@ lu_invert_complex :: proc(
 // CONDITION NUMBER ESTIMATION (GECON)
 // ===================================================================================
 
-condition_number :: proc {
-	condition_number_real,
-	condition_number_complex,
+dns_condition :: proc {
+	dns_condition_real,
+	dns_condition_complex,
 }
 
 // Query workspace size for condition number estimation
-query_workspace_condition_number :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_condition :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(n)
 		iwork_size = 0
@@ -463,8 +340,8 @@ query_workspace_condition_number :: proc(A: ^Matrix($T)) -> (work_size: int, rwo
 }
 
 // Estimate condition number of LU-factored matrix
-condition_number_real :: proc(
-	A: ^Matrix($T), // LU factors from lu_factorize
+dns_condition_real :: proc(
+	A: ^Matrix($T), // LU factors from dns_lu_factorize
 	anorm: T, // 1-norm or infinity-norm of original matrix
 	work: []T, // Workspace (pre-allocated)
 	iwork: []Blas_Int, // Integer workspace (pre-allocated)
@@ -492,8 +369,8 @@ condition_number_real :: proc(
 	return rcond, info, info == 0
 }
 
-condition_number_complex :: proc(
-	A: ^Matrix($Cmplx), // LU factors from lu_factorize
+dns_condition_complex :: proc(
+	A: ^Matrix($Cmplx), // LU factors from dns_lu_factorize
 	anorm: $Real, // 1-norm or infinity-norm of original matrix
 	work: []Cmplx, // Workspace (pre-allocated)
 	rwork: []Real, // Real workspace (pre-allocated)
@@ -502,8 +379,7 @@ condition_number_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool, // Reciprocal condition number
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	lda := A.ld
 
@@ -523,154 +399,25 @@ condition_number_complex :: proc(
 }
 
 // ===================================================================================
-// MATRIX EQUILIBRATION (GEEQU)
-// ===================================================================================
-
-equilibrate :: proc {
-	equilibrate_real,
-	equilibrate_complex,
-}
-
-// Compute row and column scalings to equilibrate matrix
-equilibrate_real :: proc(
-	A: ^Matrix($T), // Input matrix (not modified)
-	R: []T, // Row scaling factors (pre-allocated, size m)
-	C: []T, // Column scaling factors (pre-allocated, size n)
-) -> (
-	rowcnd: T,
-	colcnd: T,
-	amax: T,
-	info: Info,// Ratio of smallest to largest row scaling factor
-	ok: bool, // Ratio of smallest to largest column scaling factor// Absolute value of largest matrix element
-) where is_float(T) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	assert(len(R) >= int(m), "R array too small")
-	assert(len(C) >= int(n), "C array too small")
-
-	when T == f32 {
-		lapack.sgeequ_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	} else when T == f64 {
-		lapack.dgeequ_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	}
-
-	return rowcnd, colcnd, amax, info, info == 0
-}
-
-equilibrate_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (not modified)
-	R: []$Real, // Row scaling factors (pre-allocated, size m)
-	C: []Real, // Column scaling factors (pre-allocated, size n)
-) -> (
-	rowcnd: Real,
-	colcnd: Real,
-	amax: Real,
-	info: Info,// Ratio of smallest to largest row scaling factor
-	ok: bool, // Ratio of smallest to largest column scaling factor// Absolute value of largest matrix element
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	assert(len(R) >= int(m), "R array too small")
-	assert(len(C) >= int(n), "C array too small")
-
-	when Cmplx == complex64 {
-		lapack.cgeequ_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	} else when Cmplx == complex128 {
-		lapack.zgeequ_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	}
-
-	return rowcnd, colcnd, amax, info, info == 0
-}
-
-// ===================================================================================
-// IMPROVED MATRIX EQUILIBRATION (GEEQUB)
-// ===================================================================================
-
-equilibrate_improved :: proc {
-	equilibrate_improved_real,
-	equilibrate_improved_complex,
-}
-
-// Compute row and column scalings to equilibrate matrix (improved algorithm)
-// This is an improved version of equilibrate (geequ) that provides better scaling
-equilibrate_improved_real :: proc(
-	A: ^Matrix($T), // Input matrix (not modified)
-	R: []T, // Row scaling factors (pre-allocated, size m)
-	C: []T, // Column scaling factors (pre-allocated, size n)
-) -> (
-	rowcnd: T,
-	colcnd: T,
-	amax: T,// Ratio of smallest to largest row scaling factor
-	info: Info,// Ratio of smallest to largest column scaling factor
-	ok: bool,// Absolute value of largest matrix element
-) where is_float(T) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	assert(len(R) >= int(m), "R array too small")
-	assert(len(C) >= int(n), "C array too small")
-
-	when T == f32 {
-		lapack.sgeequb_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	} else when T == f64 {
-		lapack.dgeequb_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	}
-
-	return rowcnd, colcnd, amax, info, info == 0
-}
-
-equilibrate_improved_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (not modified)
-	R: []$Real, // Row scaling factors (pre-allocated, size m)
-	C: []Real, // Column scaling factors (pre-allocated, size n)
-) -> (
-	rowcnd: Real,
-	colcnd: Real,
-	amax: Real,// Ratio of smallest to largest row scaling factor
-	info: Info,// Ratio of smallest to largest column scaling factor
-	ok: bool,// Absolute value of largest matrix element
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	assert(len(R) >= int(m), "R array too small")
-	assert(len(C) >= int(n), "C array too small")
-
-	when Cmplx == complex64 {
-		lapack.cgeequb_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	} else when Cmplx == complex128 {
-		lapack.zgeequb_(&m, &n, raw_data(A.data), &lda, raw_data(R), raw_data(C), &rowcnd, &colcnd, &amax, &info)
-	}
-
-	return rowcnd, colcnd, amax, info, info == 0
-}
-
-// ===================================================================================
 // ITERATIVE REFINEMENT (GERFS family)
 // ===================================================================================
+// Note: Equilibration functions (dns_equilibrate, dns_equilibrate_improved)
+// are in auxiliary.odin
 
-linear_solve_refine :: proc {
-	linear_solve_refine_real,
-	linear_solve_refine_complex,
+dns_solve_refine :: proc {
+	dns_solve_refine_real,
+	dns_solve_refine_complex,
 }
 
 // Query workspace size for iterative refinement
-query_workspace_linear_solve_refine :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_solve_refine :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
 	n := A.rows
 
-	when T == f32 || T == f64 {
+	when is_float(T) {
 		work_size = int(3 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(n)
 		iwork_size = 0
@@ -680,10 +427,10 @@ query_workspace_linear_solve_refine :: proc(A: ^Matrix($T)) -> (work_size: int, 
 }
 
 // Iterative refinement for linear systems
-linear_solve_refine_real :: proc(
+dns_solve_refine_real :: proc(
 	A: ^Matrix($T), // Original matrix A
-	AF: ^Matrix(T), // LU factorization from lu_factorize
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
+	AF: ^Matrix(T), // LU factorization from dns_lu_factorize
+	ipiv: []Blas_Int, // Pivot indices from dns_lu_factorize
 	B: ^Matrix(T), // Right-hand side (preserved)
 	X: ^Matrix(T), // Solution (input/output)
 	ferr: []T, // Forward error bounds (pre-allocated, size nrhs)
@@ -724,10 +471,10 @@ linear_solve_refine_real :: proc(
 	return info, info == 0
 }
 
-linear_solve_refine_complex :: proc(
+dns_solve_refine_complex :: proc(
 	A: ^Matrix($Cmplx), // Original matrix A
-	AF: ^Matrix(Cmplx), // LU factorization from lu_factorize
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
+	AF: ^Matrix(Cmplx), // LU factorization from dns_lu_factorize
+	ipiv: []Blas_Int, // Pivot indices from dns_lu_factorize
 	B: ^Matrix(Cmplx), // Right-hand side (preserved)
 	X: ^Matrix(Cmplx), // Solution (input/output)
 	ferr: []$Real, // Forward error bounds (pre-allocated, size nrhs)
@@ -738,8 +485,7 @@ linear_solve_refine_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -773,13 +519,13 @@ linear_solve_refine_complex :: proc(
 // MIXED-PRECISION ITERATIVE REFINEMENT (DSGESV/ZCGESV family)
 // ===================================================================================
 
-linear_solve_mixed_precision :: proc {
-	linear_solve_mixed_precision_f64,
-	linear_solve_mixed_precision_c128,
+dns_solve_mixed_precision :: proc {
+	dns_solve_mixed_precision_f64,
+	dns_solve_mixed_precision_c128,
 }
 
 // Query workspace size for mixed precision solver
-query_workspace_linear_solve_mixed_precision :: proc($T: typeid, n: int, nrhs: int) -> (work_size: int, swork_size: int, rwork_size: int) where T == f64 || T == complex128 {
+query_workspace_dns_solve_mixed_precision :: proc($T: typeid, n: int, nrhs: int) -> (work_size: int, swork_size: int, rwork_size: int) where T == f64 || T == complex128 {
 	when T == f64 {
 		work_size = int(n * nrhs)
 		swork_size = int(n * (n + nrhs))
@@ -793,7 +539,7 @@ query_workspace_linear_solve_mixed_precision :: proc($T: typeid, n: int, nrhs: i
 }
 
 // Mixed precision solver: uses f32 factorization for f64 system
-linear_solve_mixed_precision_f64 :: proc(
+dns_solve_mixed_precision_f64 :: proc(
 	A: ^Matrix(f64), // Input matrix (overwritten with LU factors)
 	B: ^Matrix(f64), // RHS matrix (overwritten with solution)
 	X: ^Matrix(f64), // Solution matrix (pre-allocated)
@@ -824,7 +570,7 @@ linear_solve_mixed_precision_f64 :: proc(
 }
 
 // Mixed precision solver: uses complex64 factorization for complex128 system
-linear_solve_mixed_precision_c128 :: proc(
+dns_solve_mixed_precision_c128 :: proc(
 	A: ^Matrix(complex128), // Input matrix (overwritten with LU factors)
 	B: ^Matrix(complex128), // RHS matrix (overwritten with solution)
 	X: ^Matrix(complex128), // Solution matrix (pre-allocated)
@@ -860,19 +606,16 @@ linear_solve_mixed_precision_c128 :: proc(
 // RECURSIVE LU FACTORIZATION (GETRF2 family)
 // ===================================================================================
 
-lu_factorize_recursive :: proc {
-	lu_factorize_recursive_real,
-	lu_factorize_recursive_complex,
-}
+dns_lu_factorize_recursive :: dns_lu_factorize_recursive_generic
 
 // Recursive LU factorization (more efficient for tall matrices)
-lu_factorize_recursive_real :: proc(
+dns_lu_factorize_recursive_generic :: proc(
 	A: ^Matrix($T), // Input matrix (overwritten with L and U)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated, size min(m,n))
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_float(T) {
+) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
@@ -883,25 +626,7 @@ lu_factorize_recursive_real :: proc(
 		lapack.sgetrf2_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
 	} else when T == f64 {
 		lapack.dgetrf2_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
-	}
-
-	return info, info == 0
-}
-
-lu_factorize_recursive_complex :: proc(
-	A: ^Matrix($T), // Input matrix (overwritten with L and U)
-	ipiv: []Blas_Int, // Pivot indices (pre-allocated, size min(m,n))
-) -> (
-	info: Info,
-	ok: bool,
-) where is_complex(T) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	assert(len(ipiv) >= int(min(m, n)), "ipiv array too small")
-
-	when T == complex64 {
+	} else when T == complex64 {
 		lapack.cgetrf2_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
 	} else when T == complex128 {
 		lapack.zgetrf2_(&m, &n, raw_data(A.data), &lda, raw_data(ipiv), &info)
@@ -914,23 +639,23 @@ lu_factorize_recursive_complex :: proc(
 // EXTENDED EXPERT LINEAR SOLVERS WITH COMPREHENSIVE ERROR BOUNDS (GESVXX/GERFSX family)
 // ===================================================================================
 
-linear_solve_refine_extended :: proc {
-	linear_solve_refine_extended_real,
-	linear_solve_refine_extended_complex,
+dns_solve_refine_extended :: proc {
+	dns_solve_refine_extended_real,
+	dns_solve_refine_extended_complex,
 }
 
-linear_solve_expert_extended :: proc {
-	linear_solve_expert_extended_real,
-	linear_solve_expert_extended_complex,
+dns_solve_expert_extended :: proc {
+	dns_solve_expert_extended_real,
+	dns_solve_expert_extended_complex,
 }
 
 // Query workspace size for extended iterative refinement
-query_workspace_linear_solve_refine_extended :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	when T == f32 || T == f64 {
+query_workspace_dns_solve_refine_extended :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(3 * n)
 		iwork_size = 0
@@ -939,10 +664,10 @@ query_workspace_linear_solve_refine_extended :: proc($T: typeid, n: int) -> (wor
 }
 
 // Extended iterative refinement with comprehensive error bounds (GERFSX)
-linear_solve_refine_extended_real :: proc(
+dns_solve_refine_extended_real :: proc(
 	A: ^Matrix($T), // Original matrix
-	AF: ^Matrix(T), // LU factorization from lu_factorize
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
+	AF: ^Matrix(T), // LU factorization from dns_lu_factorize
+	ipiv: []Blas_Int, // Pivot indices from dns_lu_factorize
 	R: []T, // Row scaling factors (pre-allocated, size n)
 	C: []T, // Column scaling factors (pre-allocated, size n)
 	B: ^Matrix(T), // Right-hand side (preserved)
@@ -1049,10 +774,10 @@ linear_solve_refine_extended_real :: proc(
 	return rcond, info, info == 0
 }
 
-linear_solve_refine_extended_complex :: proc(
+dns_solve_refine_extended_complex :: proc(
 	A: ^Matrix($Cmplx), // Original matrix
-	AF: ^Matrix(Cmplx), // LU factorization from lu_factorize
-	ipiv: []Blas_Int, // Pivot indices from lu_factorize
+	AF: ^Matrix(Cmplx), // LU factorization from dns_lu_factorize
+	ipiv: []Blas_Int, // Pivot indices from dns_lu_factorize
 	R: []$Real, // Row scaling factors (pre-allocated, size n)
 	C: []Real, // Column scaling factors (pre-allocated, size n)
 	B: ^Matrix(Cmplx), // Right-hand side (preserved)
@@ -1069,8 +794,7 @@ linear_solve_refine_extended_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld
@@ -1161,12 +885,12 @@ linear_solve_refine_extended_complex :: proc(
 }
 
 // Query workspace size for expert extended solver
-query_workspace_linear_solve_expert_extended :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	when T == f32 || T == f64 {
+query_workspace_dns_solve_expert_extended :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
 		rwork_size = 0
-	} else when T == complex64 || T == complex128 {
+	} else when is_complex(T) {
 		work_size = int(2 * n)
 		rwork_size = int(3 * n)
 		iwork_size = 0
@@ -1175,7 +899,7 @@ query_workspace_linear_solve_expert_extended :: proc($T: typeid, n: int) -> (wor
 }
 
 // Expert solver with extended error bounds (GESVXX)
-linear_solve_expert_extended_real :: proc(
+dns_solve_expert_extended_real :: proc(
 	A: ^Matrix($T), // Input matrix (preserved if AF provided)
 	AF: ^Matrix(T), // Factored matrix (pre-allocated, optional)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated if factored)
@@ -1293,7 +1017,7 @@ linear_solve_expert_extended_real :: proc(
 	return rcond, rpvgrw, info, info == 0
 }
 
-linear_solve_expert_extended_complex :: proc(
+dns_solve_expert_extended_complex :: proc(
 	A: ^Matrix($Cmplx), // Input matrix (preserved if AF provided)
 	AF: ^Matrix(Cmplx), // Factored matrix (pre-allocated, optional)
 	ipiv: []Blas_Int, // Pivot indices (pre-allocated if factored)
@@ -1315,8 +1039,7 @@ linear_solve_expert_extended_complex :: proc(
 	rpvgrw: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	nrhs := B.cols
 	lda := A.ld

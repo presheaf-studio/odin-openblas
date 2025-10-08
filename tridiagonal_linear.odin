@@ -17,7 +17,7 @@ import "core:slice"
 
 // Factorize general tridiagonal matrix using Gaussian elimination with partial pivoting
 // A = P*L*U where P is permutation, L is unit lower triangular, U is upper triangular
-tridiagonal_factorize :: proc(
+trid_factorize :: proc(
 	dl: []$T, // Subdiagonal (size n-1, modified)
 	d: []T, // Diagonal (size n, modified)
 	du: []T, // Superdiagonal (size n-1, modified)
@@ -54,7 +54,7 @@ tridiagonal_factorize :: proc(
 // ===================================================================================
 
 // Solve tridiagonal system using LU factorization from GTTRF
-tridiagonal_solve_factorized :: proc(
+trid_solve_factorized :: proc(
 	dl: []$T, // Factorized subdiagonal from GTTRF
 	d: []T, // Factorized diagonal from GTTRF
 	du: []T, // Factorized superdiagonal from GTTRF
@@ -98,7 +98,7 @@ tridiagonal_solve_factorized :: proc(
 // ===================================================================================
 
 // Solve tridiagonal system directly (factorization + solve in one call)
-tridiagonal_solve :: proc(
+trid_solve :: proc(
 	dl: []$T, // Subdiagonal (size n-1, modified during factorization)
 	d: []T, // Diagonal (size n, modified during factorization)
 	du: []T, // Superdiagonal (size n-1, modified during factorization)
@@ -136,7 +136,7 @@ tridiagonal_solve :: proc(
 // ===================================================================================
 
 // Query workspace for condition number estimation
-query_workspace_tridiagonal_condition :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) {
+query_workspace_trid_condition :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) {
 	when is_float(T) {
 		// Real types need both real and integer workspace
 		return n, n
@@ -148,13 +148,13 @@ query_workspace_tridiagonal_condition :: proc($T: typeid, n: int) -> (work_size:
 }
 
 // Estimate condition number of factorized tridiagonal matrix
-tridiagonal_condition :: proc {
-	tridiagonal_condition_real,
-	tridiagonal_condition_complex,
+trid_condition :: proc {
+	trid_condition_real,
+	trid_condition_complex,
 }
 
 // Estimate condition number for real matrices
-tridiagonal_condition_real :: proc(
+trid_condition_real :: proc(
 	dl: []$T, // Factorized subdiagonal from GTTRF
 	d: []T, // Factorized diagonal from GTTRF
 	du: []T, // Factorized superdiagonal from GTTRF
@@ -191,7 +191,7 @@ tridiagonal_condition_real :: proc(
 }
 
 // Estimate condition number for complex matrices
-tridiagonal_condition_complex :: proc(
+trid_condition_complex :: proc(
 	dl: []$Cmplx, // Factorized subdiagonal from GTTRF
 	d: []Cmplx, // Factorized diagonal from GTTRF
 	du: []Cmplx, // Factorized superdiagonal from GTTRF
@@ -204,8 +204,7 @@ tridiagonal_condition_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := len(d)
 	assert(len(dl) >= n - 1 || n <= 1, "Subdiagonal array too small")
 	assert(len(du) >= n - 1 || n <= 1, "Superdiagonal array too small")
@@ -231,7 +230,7 @@ tridiagonal_condition_complex :: proc(
 // ===================================================================================
 
 // Query workspace for iterative refinement
-query_workspace_tridiagonal_refinement :: proc($T: typeid, nrhs: int) -> (work_size: int, rwork_size: int, iwork_size: int, ferr_size: int, berr_size: int) {
+query_workspace_trid_refine :: proc($T: typeid, nrhs: int) -> (work_size: int, rwork_size: int, iwork_size: int, ferr_size: int, berr_size: int) {
 	when is_float(T) {
 		// Real types need work and iwork
 		return 3 * nrhs, 0, nrhs, nrhs, nrhs
@@ -243,13 +242,13 @@ query_workspace_tridiagonal_refinement :: proc($T: typeid, nrhs: int) -> (work_s
 }
 
 // Perform iterative refinement for tridiagonal system
-tridiagonal_refine :: proc {
-	tridiagonal_refine_real,
-	tridiagonal_refine_complex,
+trid_refine :: proc {
+	trid_refine_real,
+	trid_refine_complex,
 }
 
 // Iterative refinement for real matrices
-tridiagonal_refine_real :: proc(
+trid_refine_real :: proc(
 	dl: []$T, // Original subdiagonal
 	d: []T, // Original diagonal
 	du: []T, // Original superdiagonal
@@ -291,7 +290,7 @@ tridiagonal_refine_real :: proc(
 }
 
 // Iterative refinement for complex matrices
-tridiagonal_refine_complex :: proc(
+trid_refine_complex :: proc(
 	dl: []$Cmplx, // Original subdiagonal
 	d: []Cmplx, // Original diagonal
 	du: []Cmplx, // Original superdiagonal
@@ -310,8 +309,7 @@ tridiagonal_refine_complex :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := len(d)
 	nrhs := B.cols
 	assert(B.rows >= n && X.rows >= n, "Matrix dimensions incorrect")
@@ -339,13 +337,13 @@ tridiagonal_refine_complex :: proc(
 
 // Expert driver for solving tridiagonal systems with optional equilibration,
 // factorization, condition estimation, and error bounds
-tridiagonal_solve_expert :: proc {
-	tridiagonal_solve_expert_real,
-	tridiagonal_solve_expert_complex,
+trid_solve_expert :: proc {
+	trid_solve_expert_real,
+	trid_solve_expert_complex,
 }
 
 // Expert driver for real matrices
-tridiagonal_solve_expert_real :: proc(
+trid_solve_expert_real :: proc(
 	dl: []$T, // Subdiagonal (size n-1)
 	d: []T, // Diagonal (size n)
 	du: []T, // Superdiagonal (size n-1)
@@ -436,7 +434,7 @@ tridiagonal_solve_expert_real :: proc(
 }
 
 // Expert driver for complex matrices
-tridiagonal_solve_expert_complex :: proc(
+trid_solve_expert_complex :: proc(
 	dl: []$Cmplx, // Subdiagonal (size n-1)
 	d: []Cmplx, // Diagonal (size n)
 	du: []Cmplx, // Superdiagonal (size n-1)
@@ -457,8 +455,7 @@ tridiagonal_solve_expert_complex :: proc(
 	rcond: Real,
 	info: Info,
 	ok: bool,
-) where is_complex(Cmplx),
-	Real == real_type_of(Cmplx) {
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := len(d)
 	nrhs := B.cols
 	assert(B.rows >= n && X.rows >= n, "Matrix dimensions incorrect")

@@ -47,7 +47,7 @@ packed_storage_size :: proc(n: int) -> int {
 // ===================================================================================
 
 // Create empty PackedSymmetric matrix
-make_packed_symmetric :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> PackedSymmetric(T) {
+pack_sym_make :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> PackedSymmetric(T) {
 	assert(n > 0, "Matrix dimension must be positive")
 
 	packed_size := packed_storage_size(n)
@@ -57,8 +57,8 @@ make_packed_symmetric :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, a
 }
 
 // Create PackedSymmetric matrix initialized to zero
-make_packed_symmetric_zero :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> PackedSymmetric(T) {
-	result := make_packed_symmetric(T)(n, uplo, allocator)
+pack_sym_make_zero :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> PackedSymmetric(T) {
+	result := pack_sym_make(T)(n, uplo, allocator)
 
 	// Initialize to zero
 	for i in 0 ..< len(result.data) {
@@ -69,12 +69,12 @@ make_packed_symmetric_zero :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upp
 }
 
 // Create PackedSymmetric identity matrix
-make_packed_symmetric_identity :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> PackedSymmetric(T) {
-	result := make_packed_symmetric_zero(T)(n, uplo, allocator)
+pack_sym_make_identity :: proc($T: typeid, n: int, uplo: MatrixRegion = .Upper, allocator := context.allocator) -> PackedSymmetric(T) {
+	result := pack_sym_make_zero(T)(n, uplo, allocator)
 
 	// Set diagonal elements to 1
 	for i in 0 ..< n {
-		set_packed_diagonal_element(result.data, n, i, T(1), uplo)
+		pack_sym_diagonal_set(result.data, n, i, T(1), uplo)
 	}
 
 	return result
@@ -85,7 +85,7 @@ make_packed_symmetric_identity :: proc($T: typeid, n: int, uplo: MatrixRegion = 
 // ===================================================================================
 
 // Get element from packed symmetric matrix
-packed_symmetric_get :: proc(
+pack_sym_get :: proc(
 	AP: []$T, // Packed array
 	n: int, // Matrix dimension
 	i, j: int, // Element indices
@@ -116,7 +116,7 @@ packed_symmetric_get :: proc(
 }
 
 // Set element in packed symmetric matrix
-packed_symmetric_set :: proc(
+pack_sym_set :: proc(
 	AP: []$T, // Packed array
 	n: int, // Matrix dimension
 	i, j: int, // Element indices
@@ -159,7 +159,7 @@ packed_symmetric_set :: proc(
 // ===================================================================================
 
 // Copy packed matrix
-copy_packed_symmetric :: proc(src: ^PackedSymmetric($T), allocator := context.allocator) -> PackedSymmetric(T) {
+pack_sym_copy :: proc(src: ^PackedSymmetric($T), allocator := context.allocator) -> PackedSymmetric(T) {
 	data := make([]T, len(src.data), allocator)
 	copy(data, src.data)
 
@@ -167,7 +167,7 @@ copy_packed_symmetric :: proc(src: ^PackedSymmetric($T), allocator := context.al
 }
 
 // Delete packed matrix
-delete_packed_symmetric :: proc(packed: ^PackedSymmetric($T)) {
+pack_sym_delete :: proc(packed: ^PackedSymmetric($T)) {
 	if packed.data != nil {
 		delete(packed.data)
 		packed.data = nil
@@ -175,14 +175,14 @@ delete_packed_symmetric :: proc(packed: ^PackedSymmetric($T)) {
 }
 
 // Memory usage comparison
-packed_memory_savings :: proc(n: int) -> f64 {
+pack_sym_memory_savings :: proc(n: int) -> f64 {
 	full_size := f64(n * n)
 	packed_size := f64(n * (n + 1) / 2)
 	return (full_size - packed_size) / full_size * 100.0
 }
 
 // Validate packed matrix consistency
-validate_packed_symmetric :: proc(packed: ^PackedSymmetric($T)) -> bool {
+pack_sym_validate :: proc(packed: ^PackedSymmetric($T)) -> bool {
 	if packed.n <= 0 {
 		return false
 	}
@@ -202,25 +202,6 @@ validate_packed_symmetric :: proc(packed: ^PackedSymmetric($T)) -> bool {
 	return false
 }
 
-// ===================================================================================
-// WORKSPACE QUERIES
-// ===================================================================================
-
-// Calculate workspace size for various operations
-packed_symmetric_workspace_size :: proc(operation: string, n: int) -> int {
-	switch operation {
-	case "eigenvalues":
-		return 3 * n - 1
-	case "eigenvectors":
-		return 3 * n - 1
-	case "inversion":
-		return n
-	case "factorization":
-		return 1
-	case:
-		return 0
-	}
-}
 
 // ===================================================================================
 // MATRIX PROPERTIES
@@ -228,11 +209,11 @@ packed_symmetric_workspace_size :: proc(operation: string, n: int) -> int {
 
 // Check if a packed matrix appears to be positive definite (diagonal elements > 0)
 // Note: This is a necessary but not sufficient condition
-is_packed_positive_definite_heuristic :: proc(packed: ^PackedSymmetric($T)) -> bool {
-	when T == complex64 || T == complex128 {
+pack_sym_is_positive_definite_heuristic :: proc(packed: ^PackedSymmetric($T)) -> bool {
+	when is_complex(T) {
 		// For complex matrices, check if diagonal elements have positive real parts
 		for i in 0 ..< packed.n {
-			diag_val := packed_symmetric_get(packed.data, packed.n, i, i, packed.uplo)
+			diag_val := pack_sym_get(packed.data, packed.n, i, i, packed.uplo)
 			if real(diag_val) <= 0 {
 				return false
 			}
@@ -240,7 +221,7 @@ is_packed_positive_definite_heuristic :: proc(packed: ^PackedSymmetric($T)) -> b
 	} else {
 		// For real matrices, check if diagonal elements are positive
 		for i in 0 ..< packed.n {
-			diag_val := packed_symmetric_get(packed.data, packed.n, i, i, packed.uplo)
+			diag_val := pack_sym_get(packed.data, packed.n, i, i, packed.uplo)
 			if diag_val <= 0 {
 				return false
 			}
@@ -250,7 +231,7 @@ is_packed_positive_definite_heuristic :: proc(packed: ^PackedSymmetric($T)) -> b
 }
 
 // Get diagonal element efficiently
-packed_diagonal_element :: proc(
+pack_sym_diagonal_get :: proc(
 	AP: []$T, // Packed array
 	n: int, // Matrix dimension
 	i: int, // Diagonal index
@@ -272,7 +253,7 @@ packed_diagonal_element :: proc(
 }
 
 // Set diagonal element efficiently
-set_packed_diagonal_element :: proc(
+pack_sym_diagonal_set :: proc(
 	AP: []$T, // Packed array
 	n: int, // Matrix dimension
 	i: int, // Diagonal index

@@ -6,7 +6,7 @@ Provides a complete set of bindings to [OpenBLAS 0.3.30](https://github.com/Open
 
 ## Status
 
-This library is in the *early* stages of design and should be considered unstable (and likely has errors). Raw bindings were produced with Odin-Bindgen, and have mostly not been cleaned up (eg ^ to [^] and other similar edits).
+This library is in the *early* stages of design and should be considered unstable (and likely has errors). Raw bindings were produced with Odin-Bindgen, and subsequently cleaned up.
 
 Files at the top level build okay, but need the design changes noted below. Files in the `_UNTESTED` folder are not yet cleaned up.
 
@@ -23,6 +23,8 @@ Darwin: may need to build openblas from source; could try `brew install openblas
 Raw bindings are located in `c/` and `f77/`.
 
 All bindings are wrapped in `Matrix($T)` and `Vector($T)` providing a higher level interface than the raw bindings. You may use these, or just the raw bindings.
+
+Reference `LAPACK_FUNCTION_TABLE.md` for a map of function and wrapping types
 
 ## Usage
 

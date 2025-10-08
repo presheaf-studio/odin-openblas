@@ -16,40 +16,37 @@ import "core:slice"
 // ===================================================================================
 
 // Query workspace for dense to tridiagonal reduction
-query_workspace_dense_to_tridiagonal :: proc($T: typeid, n: int) -> (work_size: int) {
+query_workspace_trid_from_dns :: proc(A: Matrix($T), uplo: MatrixRegion) -> (work_size: int) {
 	// Query LAPACK for optimal workspace sizes
-	n_blas := Blas_Int(n)
+	n_blas := A.rows
 	uplo_c := cast(u8)MatrixRegion.Upper
 	lwork := QUERY_WORKSPACE
 	info: Info
+	work_query: T
 
 	when T == f32 {
-		work_query: f32
 		lapack.ssytrd_(&uplo_c, &n_blas, nil, &n_blas, nil, nil, nil, &work_query, &lwork, &info)
 		return int(work_query)
 	} else when T == f64 {
-		work_query: f64
 		lapack.dsytrd_(&uplo_c, &n_blas, nil, &n_blas, nil, nil, nil, &work_query, &lwork, &info)
 		return int(work_query)
 	} else when T == complex64 {
-		work_query: complex64
 		lapack.chetrd_(&uplo_c, &n_blas, nil, &n_blas, nil, nil, nil, &work_query, &lwork, &info)
 		return int(real(work_query))
 	} else when T == complex128 {
-		work_query: complex128
 		lapack.zhetrd_(&uplo_c, &n_blas, nil, &n_blas, nil, nil, nil, &work_query, &lwork, &info)
 		return int(real(work_query))
 	}
 }
 
 // Convert dense symmetric/Hermitian matrix to tridiagonal form (SYTRD/HETRD)
-dense_to_tridiagonal :: proc {
-	dense_to_tridiagonal_f32_f64,
-	dense_to_tridiagonal_c64_c128,
+trid_from_dns :: proc {
+	trid_from_dns_real,
+	trid_from_dns_complex,
 }
 
 // Convert dense symmetric matrix to tridiagonal form for f32/f64
-dense_to_tridiagonal_f32_f64 :: proc(
+trid_from_dns_real :: proc(
 	A: ^Matrix($T), // Symmetric matrix (modified on output to orthogonal matrix)
 	d: []T, // Diagonal elements output (size n)
 	e: []T, // Off-diagonal elements output (size n-1)
@@ -59,7 +56,7 @@ dense_to_tridiagonal_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := A.rows
 	assert(A.rows == A.cols, "Matrix must be square")
 	assert(len(d) >= n, "Diagonal array too small")
@@ -82,7 +79,7 @@ dense_to_tridiagonal_f32_f64 :: proc(
 }
 
 // Convert dense Hermitian matrix to tridiagonal form for c64/c128
-dense_to_tridiagonal_c64_c128 :: proc(
+trid_from_dns_complex :: proc(
 	A: ^Matrix($T), // Hermitian matrix (modified on output to unitary matrix)
 	d: []$R, // Diagonal elements output (real, size n)
 	e: []R, // Off-diagonal elements output (real, size n-1)
@@ -119,7 +116,7 @@ dense_to_tridiagonal_c64_c128 :: proc(
 // ===================================================================================
 
 // Query workspace for banded to tridiagonal reduction
-query_workspace_banded_to_tridiagonal :: proc($T: typeid, n: int) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_trid_from_band :: proc(A: BandedMatrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
 	// SBTRD/HBTRD requires n workspace for real types, none for complex
 	when is_float(T) {
 		return n
@@ -129,13 +126,13 @@ query_workspace_banded_to_tridiagonal :: proc($T: typeid, n: int) -> (work_size:
 }
 
 // Convert banded symmetric/Hermitian matrix to tridiagonal form (SBTRD/HBTRD)
-banded_to_tridiagonal :: proc {
-	banded_to_tridiagonal_f32_f64,
-	banded_to_tridiagonal_c64_c128,
+trid_from_band :: proc {
+	trid_from_band_real,
+	trid_from_band_complex,
 }
 
 // Convert banded symmetric matrix to tridiagonal form for f32/f64
-banded_to_tridiagonal_f32_f64 :: proc(
+trid_from_band_real :: proc(
 	AB: ^BandedMatrix($T), // Banded symmetric matrix (modified)
 	d: []T, // Diagonal elements output (size n)
 	e: []T, // Off-diagonal elements output (size n-1)
@@ -146,7 +143,7 @@ banded_to_tridiagonal_f32_f64 :: proc(
 ) -> (
 	info: Info,
 	ok: bool,
-) where T == f32 || T == f64 {
+) where is_float(T) {
 	n := AB.rows
 	assert(AB.rows == AB.cols, "Matrix must be square")
 	assert(len(d) >= n, "Diagonal array too small")
@@ -160,7 +157,7 @@ banded_to_tridiagonal_f32_f64 :: proc(
 	vect_c := cast(u8)vect
 	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	kd_int := Blas_Int(AB.ku) // For symmetric banded, kd = ku = kl
+	kd_int := AB.ku // For symmetric banded, kd = ku = kl
 	ldab := AB.ldab
 
 	// Handle Q matrix
@@ -186,7 +183,7 @@ banded_to_tridiagonal_f32_f64 :: proc(
 }
 
 // Convert banded Hermitian matrix to tridiagonal form for c64/c128
-banded_to_tridiagonal_c64_c128 :: proc(
+trid_from_band_complex :: proc(
 	AB: ^BandedMatrix($T), // Banded Hermitian matrix (modified)
 	d: []$R, // Diagonal elements output (real, size n)
 	e: []R, // Off-diagonal elements output (real, size n-1)
@@ -209,7 +206,7 @@ banded_to_tridiagonal_c64_c128 :: proc(
 	vect_c := cast(u8)vect
 	uplo_c := cast(u8)uplo
 	n_int := Blas_Int(n)
-	kd_int := Blas_Int(AB.ku) // For Hermitian banded, kd = ku = kl
+	kd_int := AB.ku // For Hermitian banded, kd = ku = kl
 	ldab := AB.ldab
 
 	// Handle Q matrix
@@ -234,7 +231,7 @@ banded_to_tridiagonal_c64_c128 :: proc(
 // ===================================================================================
 
 // Extract tridiagonal elements from a Tridiagonal into separate arrays
-extract_tridiagonal_arrays :: proc(
+trid_extract_arrays :: proc(
 	tm: ^Tridiagonal($T),
 	d: []T, // Diagonal output (size n)
 	e: []T, // Off-diagonal output (size n-1)
@@ -253,13 +250,13 @@ extract_tridiagonal_arrays :: proc(
 }
 
 // Create Tridiagonal from separate arrays
-create_tridiagonal :: proc(
+trid_make_from_arrays :: proc(
 	d: []$T, // Diagonal elements (size n)
 	e: []T, // Off-diagonal elements (size n-1)
 	allocator := context.allocator,
 ) -> Tridiagonal(T) {
 	n := len(d)
-	tm := make_tridiagonal(n, T, allocator)
+	tm := trid_make(n, T, allocator)
 
 	slice.copy(tm.d, d)
 	if n > 1 {
@@ -271,13 +268,13 @@ create_tridiagonal :: proc(
 }
 
 // Create symmetric Tridiagonal from diagonal and off-diagonal arrays
-create_symmetric_tridiagonal :: proc(
+trid_make_symmetric_from_arrays :: proc(
 	d: []$T, // Diagonal elements (size n)
 	e: []T, // Off-diagonal elements (size n-1)
 	allocator := context.allocator,
 ) -> Tridiagonal(T) {
 	n := len(d)
-	tm := make_symmetric_tridiagonal(n, T, allocator)
+	tm := trid_make_symmetric(n, T, allocator)
 
 	slice.copy(tm.d, d)
 	if n > 1 {
@@ -295,7 +292,7 @@ create_symmetric_tridiagonal :: proc(
 }
 
 // Compute matrix norm for tridiagonal matrix
-tridiagonal_norm :: proc(tm: ^Tridiagonal($T), norm_type: MatrixNorm) -> f64 where is_float(T) || is_complex(T) {
+trid_matrix_norm :: proc(tm: ^Tridiagonal($T), norm_type: MatrixNorm) -> f64 where is_float(T) || is_complex(T) {
 	n := int(tm.n)
 	if n == 0 do return 0
 
