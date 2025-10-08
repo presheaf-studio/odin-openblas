@@ -143,8 +143,10 @@ dns_svd_jacobi_variant :: proc {
 // ===================================================================================
 
 // Query result sizes for SVD
-query_result_sizes_dns_svd_simple :: proc(m: int, n: int, jobu: SVD_Job = .Some, jobvt: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
+query_result_sizes_dns_svd_simple :: proc(A: ^Matrix($T), jobu: SVD_Job = .Some, jobvt: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) where is_float(T) || is_complex(T) {
 	assert(!(jobu == .Overwrite && jobvt == .Overwrite), "Cannot store U and VT in A")
+	m := int(A.rows)
+	n := int(A.cols)
 	min_mn := min(m, n)
 
 	S_size = min_mn
@@ -322,7 +324,9 @@ dns_svd_simple_complex :: proc(
 // ===================================================================================
 
 // Query result sizes for QR-based SVD
-query_result_sizes_dns_svd_qr :: proc(m: int, n: int, jobu: SVD_Job = .All, jobv: SVD_Job = .All) -> (S_size: int, U_rows: int, U_cols: int, V_rows: int, V_cols: int, iwork_size: int) {
+query_result_sizes_dns_svd_qr :: proc(A: ^Matrix($T), jobu: SVD_Job = .All, jobv: SVD_Job = .All) -> (S_size: int, U_rows: int, U_cols: int, V_rows: int, V_cols: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	m := int(A.rows)
+	n := int(A.cols)
 	min_mn := min(m, n)
 	S_size = min_mn
 
@@ -555,7 +559,9 @@ dns_svd_qr_complex :: proc(
 
 // Query result sizes for divide-and-conquer SVD
 // Same as regular SVD result sizes
-query_result_sizes_dns_svd_dc :: proc(m: int, n: int, jobz: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) {
+query_result_sizes_dns_svd_dc :: proc(A: ^Matrix($T), jobz: SVD_Job = .Some) -> (S_size: int, U_rows: int, U_cols: int, VT_rows: int, VT_cols: int) where is_float(T) || is_complex(T) {
+	m := int(A.rows)
+	n := int(A.cols)
 	min_mn := min(m, n)
 
 	S_size = min_mn
@@ -893,8 +899,7 @@ dns_svd_dc_complex :: proc(
 // Returns sizes based on the selection criteria
 // max_ns: Maximum number of singular values that could be found
 query_result_sizes_dns_svd_select :: proc(
-	m: int,
-	n: int,
+	A: ^Matrix($T),
 	range_mode: SVD_Range_Option = .All,
 	il: Blas_Int = 1, // Lower index (for range=.Index)
 	iu: Blas_Int = -1, // Upper index (for range=.Index, -1 = min(m,n))
@@ -907,7 +912,9 @@ query_result_sizes_dns_svd_select :: proc(
 	U_cols: int,
 	VT_rows: int,
 	VT_cols: int,
-) {
+) where is_float(T) || is_complex(T) {
+	m := int(A.rows)
+	n := int(A.cols)
 	min_mn := Blas_Int(min(m, n))
 
 	// Adjust upper index if needed
@@ -1896,23 +1903,23 @@ GSVD_Job :: enum u8 {
 }
 
 // Query workspace size for blocked generalized SVD
-query_workspace_gsvd_blocked :: proc($T: typeid, m, n, p: int, jobu := GSVD_Job.Compute, jobv := GSVD_Job.Full, jobq := GSVD_Job.Right) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	m_int := Blas_Int(m)
-	n_int := Blas_Int(n)
-	p_int := Blas_Int(p)
+query_workspace_dns_svd_generalized_blocked :: proc(A: ^Matrix($T), B: ^Matrix(T), jobu := GSVD_Job.Compute, jobv := GSVD_Job.Full, jobq := GSVD_Job.Right) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	m_int := A.rows
+	n_int := A.cols
+	p_int := B.rows
 
 	jobu_c := cast(u8)jobu
 	jobv_c := cast(u8)jobv
 	jobq_c := cast(u8)jobq
 
 	// Integer workspace is always n
-	iwork_size = n
+	iwork_size = int(n_int)
 
 	// Real workspace depends on type
 	when is_float(T) {
 		rwork_size = 0 // No real workspace for real types
 	} else {
-		rwork_size = 2 * n // Complex types need real workspace
+		rwork_size = 2 * int(n_int) // Complex types need real workspace
 	}
 
 	// Query for optimal workspace
@@ -2089,7 +2096,11 @@ dns_svd_generalized_blocked_complex :: proc(
 // GENERALIZED SINGULAR VALUE DECOMPOSITION
 // ===================================================================================
 // Query workspace size for standard generalized SVD
-query_workspace_gsvd :: proc($T: typeid, m, n, p: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_svd_generalized :: proc(A: ^Matrix($T), B: ^Matrix(T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	m := int(A.rows)
+	n := int(A.cols)
+	p := int(B.rows)
+
 	// Integer workspace is always n
 	iwork_size = n
 
@@ -2252,7 +2263,11 @@ dns_svd_generalized_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for generalized SVD preprocessing
-query_workspace_gsvd_preprocess :: proc($T: typeid, m, p, n: int) -> (work_size: int, rwork_size: int, iwork_size: int, tau_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_svd_generalized_preprocess :: proc(A: ^Matrix($T), B: ^Matrix(T)) -> (work_size: int, rwork_size: int, iwork_size: int, tau_size: int) where is_float(T) || is_complex(T) {
+	m := int(A.rows)
+	n := int(A.cols)
+	p := int(B.rows)
+
 	tau_size = n
 	iwork_size = n
 
@@ -2414,22 +2429,22 @@ dns_svd_generalized_preprocess_complex :: proc(
 
 
 // Query workspace size for blocked generalized SVD preprocessing
-query_workspace_gsvd_preprocess_blocked :: proc($T: typeid, m, p, n: int, jobu := GSVD_Job.Compute, jobv := GSVD_Job.Full, jobq := GSVD_Job.Right) -> (work_size: int, rwork_size: int, iwork_size: int, tau_size: int) where is_float(T) || is_complex(T) {
-	m_int := Blas_Int(m)
-	p_int := Blas_Int(p)
-	n_int := Blas_Int(n)
+query_workspace_dns_svd_generalized_preprocess_blocked :: proc(A: ^Matrix($T), B: ^Matrix(T), jobu := GSVD_Job.Compute, jobv := GSVD_Job.Full, jobq := GSVD_Job.Right) -> (work_size: int, rwork_size: int, iwork_size: int, tau_size: int) where is_float(T) || is_complex(T) {
+	m_int := A.rows
+	p_int := B.rows
+	n_int := A.cols
 
 	jobu_c := cast(u8)jobu
 	jobv_c := cast(u8)jobv
 	jobq_c := cast(u8)jobq
 
-	tau_size = n
-	iwork_size = n
+	tau_size = int(n_int)
+	iwork_size = int(n_int)
 
 	when is_float(T) {
 		rwork_size = 0 // No real workspace for real types
 	} else {
-		rwork_size = 2 * n
+		rwork_size = 2 * int(n_int)
 	}
 
 	lwork := QUERY_WORKSPACE

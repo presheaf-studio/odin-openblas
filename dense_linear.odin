@@ -525,7 +525,10 @@ dns_solve_mixed_precision :: proc {
 }
 
 // Query workspace size for mixed precision solver
-query_workspace_dns_solve_mixed_precision :: proc($T: typeid, n: int, nrhs: int) -> (work_size: int, swork_size: int, rwork_size: int) where T == f64 || T == complex128 {
+query_workspace_dns_solve_mixed_precision :: proc(A: ^Matrix($T), B: ^Matrix(T)) -> (work_size: int, swork_size: int, rwork_size: int) where T == f64 || T == complex128 {
+	n := A.rows
+	nrhs := B.cols
+
 	when T == f64 {
 		work_size = int(n * nrhs)
 		swork_size = int(n * (n + nrhs))
@@ -650,7 +653,9 @@ dns_solve_expert_extended :: proc {
 }
 
 // Query workspace size for extended iterative refinement
-query_workspace_dns_solve_refine_extended :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_solve_refine_extended :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	n := A.rows
+
 	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)
@@ -885,7 +890,9 @@ dns_solve_refine_extended_complex :: proc(
 }
 
 // Query workspace size for expert extended solver
-query_workspace_dns_solve_expert_extended :: proc($T: typeid, n: int) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_solve_expert_extended :: proc(A: ^Matrix($T)) -> (work_size: int, rwork_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	n := A.rows
+
 	when is_float(T) {
 		work_size = int(4 * n)
 		iwork_size = int(n)

@@ -378,7 +378,8 @@ dns_hermitian_solve_factorized_improved :: proc(
 // CONDITION NUMBER ESTIMATION (HECON family)
 // ============================================================================
 
-query_workspace_dns_hermitian_condition :: proc(n: int) -> (work_size: int) {
+query_workspace_dns_hermitian_condition :: proc(A: ^Matrix($Cmplx)) -> (work_size: int) where is_complex(Cmplx) {
+	n := A.rows
 	return int(2 * n)
 }
 
@@ -416,7 +417,8 @@ dns_hermitian_condition :: proc(
 // IMPROVED EQUILIBRATION (HEEQUB family)
 // ============================================================================
 
-query_workspace_dns_hermitian_equilibrate :: proc(n: int) -> (work_size: int) {
+query_workspace_dns_hermitian_equilibrate :: proc(A: ^Matrix($Cmplx)) -> (work_size: int) where is_complex(Cmplx) {
+	n := A.rows
 	return int(3 * n)
 }
 
@@ -454,7 +456,8 @@ dns_hermitian_equilibrate :: proc(
 // ITERATIVE REFINEMENT (HERFS family)
 // ============================================================================
 
-query_workspace_dns_hermitian_refine :: proc(n: int) -> (work_size: int, rwork_size: int) {
+query_workspace_dns_hermitian_refine :: proc(A: ^Matrix($Cmplx)) -> (work_size: int, rwork_size: int) where is_complex(Cmplx) {
+	n := A.rows
 	return int(2 * n), int(n)
 }
 
@@ -503,7 +506,8 @@ dns_hermitian_refine :: proc(
 // EXPERT ITERATIVE REFINEMENT (HERFSX family)
 // ============================================================================
 
-query_workspace_dns_hermitian_refine_expert :: proc(n: int, n_err_bnds: int = 3) -> (work_size: int, rwork_size: int) {
+query_workspace_dns_hermitian_refine_expert :: proc(A: ^Matrix($Cmplx), n_err_bnds: int = 3) -> (work_size: int, rwork_size: int) where is_complex(Cmplx) {
+	n := A.rows
 	return int(2 * n), int(2 * n)
 }
 
@@ -611,7 +615,8 @@ dns_hermitian_refine_expert :: proc(
 // MATRIX INVERSION (HETRI family)
 // ============================================================================
 
-query_workspace_dns_hermitian_invert :: proc(n: int) -> (work_size: int) {
+query_workspace_dns_hermitian_invert :: proc(A: ^Matrix($Cmplx)) -> (work_size: int) where is_complex(Cmplx) {
+	n := A.rows
 	return int(n)
 }
 

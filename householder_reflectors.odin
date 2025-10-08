@@ -12,7 +12,7 @@ import "core:mem"
 // ===================================================================================
 
 // Query workspace for applying Householder reflector
-query_workspace_householder_reflector :: proc($T: typeid, m: int, n: int, side: ReflectorSide) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_householder_reflector :: proc(m: int, n: int, side: ReflectorSide) -> (work_size: int) {
 	return side == .Left ? n : m
 }
 

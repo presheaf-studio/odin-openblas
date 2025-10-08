@@ -350,7 +350,7 @@ dns_solve_symmetric_factorized_improved :: proc(
 // Transforms A*x = lambda*B*x into C*y = lambda*y where C = inv(U^T)*A*inv(U) or inv(L)*A*inv(L^T)
 
 // Reduce generalized symmetric eigenvalue problem to standard form (real)
-dns_reduce_symmetric_generalized_real :: proc(
+dns_reduce_symmetric_generalized :: proc(
 	A: ^Matrix($T), // Input/output: Symmetric matrix A, overwritten with transformed matrix
 	B: ^Matrix(T), // Input: Cholesky factor of B (from potrf)
 	itype: int = 1, // Problem type: 1: A*x=lambda*B*x, 2: A*B*x=lambda*x, 3: B*A*x=lambda*x FIXME
@@ -374,77 +374,6 @@ dns_reduce_symmetric_generalized_real :: proc(
 		lapack.ssygst_(&itype_blas, &uplo_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
 	} else when T == f64 {
 		lapack.dsygst_(&itype_blas, &uplo_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &info)
-	}
-
-	return info, info == 0
-}
-
-dns_reduce_symmetric_generalized :: proc {
-	dns_reduce_symmetric_generalized_real,
-}
-
-// ============================================================================
-// SYMMETRIC TRIDIAGONAL REDUCTION (SYTRD)
-// ============================================================================
-// Reduce symmetric matrix to tridiagonal form using orthogonal similarity transformations
-
-// Query workspace for symmetric tridiagonal reduction
-query_workspace_dns_reduce_symmetric_to_tridiagonal :: proc(A: ^Matrix($T), uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) || is_complex(T) {
-	n := Blas_Int(n)
-	uplo_c := cast(u8)uplo
-	lda := A.ld
-	lwork := QUERY_WORKSPACE
-	info: Info
-	work_query: T
-
-	when T == f32 {
-		lapack.ssytrd_(&uplo_c, &n, nil, &lda, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == f64 {
-		lapack.dsytrd_(&uplo_c, &n, nil, &lda, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == complex64 {
-		lapack.csytrd_(&uplo_c, &n, nil, &lda, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	} else when T == complex128 {
-		lapack.zsytrd_(&uplo_c, &n, nil, &lda, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	}
-
-	return work_size
-}
-
-// Reduce symmetric matrix to tridiagonal form (complex-symmetric, not Hermitian)
-dns_reduce_symmetric_to_tridiagonal :: proc(
-	A: ^Matrix($T), // Input/output: Symmetric matrix, overwritten with Q
-	D: []T, // Output: Diagonal elements (length n)
-	E: []T, // Output: Off-diagonal elements (length n-1)
-	tau: []T, // Output: Scalar factors of elementary reflectors (length n-1)
-	work: []T, // Pre-allocated workspace
-	uplo := MatrixRegion.Upper,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) || is_complex(T) {
-	n := A.rows
-	assert(A.rows == A.cols, "Matrix must be square")
-	assert(len(D) >= n, "Diagonal array too small")
-	assert(len(E) >= n - 1, "Off-diagonal array too small")
-	assert(len(tau) >= n - 1, "Tau array too small")
-	assert(len(work) > 0, "Workspace required")
-
-	uplo_c := cast(u8)uplo
-	lda := A.ld
-	lwork := Blas_Int(len(work))
-
-	when T == f32 {
-		lapack.ssytrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tau), raw_data(work), &lwork, &info)
-	} else when T == f64 {
-		lapack.dsytrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tau), raw_data(work), &lwork, &info)
-	} else when T == complex64 {
-		lapack.csytrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tau), raw_data(work), &lwork, &info)
-	} else when T == complex128 {
-		lapack.zsytrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0

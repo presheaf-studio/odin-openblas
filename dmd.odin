@@ -32,8 +32,7 @@ DMDOptions :: struct {
 
 // Query workspace for DMD computation
 query_workspace_dmd :: proc(
-	$T: typeid,
-	X: ^Matrix(T),
+	X: ^Matrix($T),
 	Y: ^Matrix(T),
 	k: int,
 	options: DMDOptions = {compute_modes = true, compute_eigenvalues = true, svd_method = 1, rank_method = .Tolerance},
@@ -228,13 +227,13 @@ query_workspace_dmd :: proc(
 
 // Compute Dynamic Mode Decomposition (non-allocating API)
 // Analyzes time series data to extract dynamical modes
-m_dmd :: proc {
-	m_dmd_real,
-	m_dmd_complex,
+dmd :: proc {
+	dmd_real,
+	dmd_complex,
 }
 
 // DMD for f32/f64
-m_dmd_real :: proc(
+dmd_real :: proc(
 	X: ^Matrix($T), // Snapshot matrix X = [x0, x1, ..., xn-1]
 	Y: ^Matrix(T), // Shifted snapshots Y = [x1, x2, ..., xn]
 	eigenvalues_real: []T, // Pre-allocated real part of eigenvalues (size k)
@@ -373,7 +372,7 @@ m_dmd_real :: proc(
 }
 
 // DMD for complex64/complex128
-m_dmd_complex :: proc(
+dmd_complex :: proc(
 	X: ^Matrix($Cmplx), // Snapshot matrix
 	Y: ^Matrix(Cmplx), // Shifted snapshots
 	eigenvalues: []Cmplx, // Pre-allocated eigenvalues (size k)

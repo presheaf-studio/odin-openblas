@@ -6,17 +6,7 @@ import "base:intrinsics"
 // ===================================================================================
 // QR FACTORIZATION (GEQRF family)
 // ===================================================================================
-
-// TODO: Implement these procedures
-// qr_generate :: proc {
-// 	qr_generate_real,
-// 	qr_generate_complex,
-// }
-
-// qr_multiply :: proc {
-// 	qr_multiply_real,
-// 	qr_multiply_complex,
-// }
+//
 
 // Query workspace size for QR factorization
 query_workspace_dns_qr_factorize :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
@@ -190,115 +180,6 @@ dns_lq_factorize :: proc(
 		lapack.cgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
 	} else when T == complex128 {
 		lapack.zgelqf_(&m, &n, raw_data(A.data), &lda, raw_data(tau), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-// ===================================================================================
-// BIDIAGONAL REDUCTION (GEBRD family)
-// ===================================================================================
-
-dns_bidiagonal_reduce :: proc {
-	dns_bidiagonal_reduce_real,
-	dns_bidiagonal_reduce_complex,
-}
-
-// Query workspace size for bidiagonal reduction
-query_workspace_dns_bidiagonal_reduce :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-
-	lwork: Blas_Int = QUERY_WORKSPACE
-
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.sgebrd_(&m, &n, nil, &lda, nil, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dgebrd_(&m, &n, nil, &lda, nil, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.cgebrd_(&m, &n, nil, &lda, nil, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zgebrd_(&m, &n, nil, &lda, nil, nil, nil, nil, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	}
-
-	return work_size
-}
-
-// Reduce a general matrix to bidiagonal form
-dns_bidiagonal_reduce_real :: proc(
-	A: ^Matrix($T), // Input matrix (overwritten with bidiagonal form)
-	D: []T, // Diagonal elements (pre-allocated, size min(m,n))
-	E: []T, // Super-diagonal elements (pre-allocated, size min(m,n)-1)
-	tauq: []T, // Left transformation scalars (pre-allocated, size min(m,n))
-	taup: []T, // Right transformation scalars (pre-allocated, size min(m,n))
-	work: []T, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(D) >= int(min_mn), "D array too small")
-	assert(len(E) >= int(min_mn - 1), "E array too small")
-	assert(len(tauq) >= int(min_mn), "tauq array too small")
-	assert(len(taup) >= int(min_mn), "taup array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when T == f32 {
-		lapack.sgebrd_(&m, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tauq), raw_data(taup), raw_data(work), &lwork, &info)
-	} else when T == f64 {
-		lapack.dgebrd_(&m, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tauq), raw_data(taup), raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-dns_bidiagonal_reduce_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix (overwritten with bidiagonal form)
-	D: []$Real, // Diagonal elements (pre-allocated, size min(m,n))
-	E: []Real, // Super-diagonal elements (pre-allocated, size min(m,n)-1)
-	tauq: []Cmplx, // Left transformation scalars (pre-allocated, size min(m,n))
-	taup: []Cmplx, // Right transformation scalars (pre-allocated, size min(m,n))
-	work: []Cmplx, // Workspace (pre-allocated)
-) -> (
-	info: Info,
-	ok: bool,
-) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
-	m := A.rows
-	n := A.cols
-	lda := A.ld
-	min_mn := min(m, n)
-
-	assert(len(D) >= int(min_mn), "D array too small")
-	assert(len(E) >= int(min_mn - 1), "E array too small")
-	assert(len(tauq) >= int(min_mn), "tauq array too small")
-	assert(len(taup) >= int(min_mn), "taup array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
-		lapack.cgebrd_(&m, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tauq), raw_data(taup), raw_data(work), &lwork, &info)
-	} else when Cmplx == complex128 {
-		lapack.zgebrd_(&m, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tauq), raw_data(taup), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0
@@ -705,36 +586,31 @@ dns_qr_pivoted_v3_complex :: proc(
 // ===================================================================================
 
 // Query workspace size for QR with non-negative diagonal
-query_workspace_dns_qr_nonnegative_diag :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_dns_qr_nonnegative_diag :: proc(A: ^Matrix($T)) -> (work: int) where is_float(T) || is_complex(T) {
 	m := A.rows
 	n := A.cols
 	lda := A.ld
-
 	lwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	work_query: T
 
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.sgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.cgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
+	when is_float(T) {
+		when T == f32 {
+			lapack.sgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
+		} else when T == f64 {
+			lapack.dgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
+		}
+		work = int(work_query)
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.cgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
+		} else when T == complex128 {
+			lapack.zgeqrfp_(&m, &n, nil, &lda, nil, &work_query, &lwork, &info)
+		}
+		work = int(real(work_query))
 	}
 
-	return work_size
+	return
 }
 
 // QR factorization with non-negative diagonal elements: A = Q * R (R has non-negative diagonal)
@@ -778,32 +654,27 @@ query_workspace_dns_qr_tall_skinny :: proc(A: ^Matrix($T), mb1: Blas_Int, nb1: B
 	m := A.rows
 	n := A.cols
 	lda := A.ld
-
 	lwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	work_query: T
 
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.sgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
+	when is_float(T) {
+		when T == f32 {
+			lapack.sgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
+		} else when T == f64 {
+			lapack.dgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
+		}
 		work_size = int(work_query)
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.cgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.cgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
+		} else when T == complex128 {
+			lapack.zgetsqrhrt_(&m, &n, &mb1, &nb1, &nb2, nil, &lda, nil, &n, &work_query, &lwork, &info)
+		}
 		work_size = int(real(work_query))
 	}
 
-	return work_size
+	return
 }
 
 // Optimized QR factorization for tall-skinny matrices (m >> n)

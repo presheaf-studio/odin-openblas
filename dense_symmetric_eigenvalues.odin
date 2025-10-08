@@ -13,7 +13,7 @@ import "core:slice"
 // Using standard QR algorithm and more advanced methods
 
 // Query workspace for symmetric eigenvalue computation (QR algorithm)
-query_workspace_dns_eigen_symmetric :: proc(A: ^Matrix($T), n: int, jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) {
+query_workspace_dns_eigen_symmetric :: proc(A: ^Matrix($T), jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int) where is_float(T) {
 	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
 	n := A.cols
@@ -90,7 +90,7 @@ dns_eigen_symmetric :: proc(
 // ============================================================================
 
 // Query workspace for symmetric eigenvalue computation (Divide and Conquer)
-query_workspace_dns_eigen_symmetric_dc :: proc(A: ^Matrix($T), n: int, jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, iwork_size: int) where is_float(T) {
+query_workspace_dns_eigen_symmetric_dc :: proc(A: ^Matrix($T), jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, iwork_size: int) where is_float(T) {
 	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
 	n := A.cols
@@ -174,7 +174,7 @@ dns_eigen_symmetric_dc :: proc(
 // ============================================================================
 
 // Query workspace for symmetric eigenvalue computation (RRR algorithm)
-query_workspace_dns_eigen_symmetric_mrrr :: proc(A: ^Matrix($T), Z: ^Matrix(T), n: int, range: EigenRangeOption, jobz: EigenJobOption, uplo: MatrixRegion) -> (work_size: int, iwork_size: int) where is_float(T) {
+query_workspace_dns_eigen_symmetric_mrrr :: proc(A: ^Matrix($T), Z: ^Matrix(T), range: EigenRangeOption, jobz: EigenJobOption, uplo: MatrixRegion) -> (work_size: int, iwork_size: int) where is_float(T) {
 	jobz_c := cast(u8)jobz
 	range_c := cast(u8)range
 	uplo_c := cast(u8)uplo
@@ -302,11 +302,11 @@ dns_eigen_symmetric_mrrr :: proc(
 // ============================================================================
 
 // Query workspace for symmetric eigenvalue computation (Expert driver)
-query_workspace_dns_eigen_symmetric_expert :: proc(A: ^Matrix($T), n: int, range: EigenRangeOption, jobz: EigenJobOption, uplo: MatrixRegion) -> (work_size: int, iwork_size: int) where is_float(T) {
+query_workspace_dns_eigen_symmetric_expert :: proc(A: ^Matrix($T), range: EigenRangeOption, jobz: EigenJobOption, uplo: MatrixRegion) -> (work_size: int, iwork_size: int) where is_float(T) {
 	jobz_c := cast(u8)jobz
 	range_c := cast(u8)range
 	uplo_c := cast(u8)uplo
-	n := Blas_Int(n)
+	n := Blas_Int(A.cols)
 	lda := A.ld
 	ldz := Blas_Int(max(1, n))
 	lwork := QUERY_WORKSPACE
@@ -702,7 +702,7 @@ query_workspace_dns_eigen_symmetric_generalized_expert :: proc(A: ^Matrix($T), B
 	jobz_c := cast(u8)jobz
 	range_c := cast(u8)range
 	uplo_c := cast(u8)uplo
-	n := Blas_Int(n)
+	n := Blas_Int(A.cols)
 	lda := A.ld
 	ldb := B.ld
 	ldz := Z.ld

@@ -13,8 +13,8 @@ import "core:slice"
 // Using standard QR algorithm and more advanced methods
 
 // Query workspace for Hermitian eigenvalue computation (QR algorithm)
-// NOTE: `rwork` must be pre-allocated as `make([]Real, max(1, 3 * n - 2))`
-query_workspace_dns_eigen_hermitian :: proc(A: ^Matrix($Cmplx), rwork: []$Real, jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+// Returns both work and rwork sizes (rwork has fixed size max(1, 3*n-2))
+query_workspace_dns_eigen_hermitian :: proc(A: ^Matrix($Cmplx), jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, rwork_size: int) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
 	n := A.cols
@@ -33,7 +33,7 @@ query_workspace_dns_eigen_hermitian :: proc(A: ^Matrix($Cmplx), rwork: []$Real, 
 			nil, // w
 			&work_query,
 			&lwork,
-			raw_data(rwork),
+			nil,
 			&info,
 		)
 	} else when Cmplx == complex128 {
@@ -46,13 +46,14 @@ query_workspace_dns_eigen_hermitian :: proc(A: ^Matrix($Cmplx), rwork: []$Real, 
 			nil, // w
 			&work_query,
 			&lwork,
-			raw_data(rwork),
+			nil,
 			&info,
 		)
 	}
 
 	work_size = int(real(work_query))
-	return work_size
+	rwork_size = max(1, 3 * int(n) - 2)
+	return work_size, rwork_size
 }
 
 // Compute eigenvalues and eigenvectors of Hermitian matrix using QR algorithm
@@ -93,8 +94,7 @@ dns_eigen_hermitian :: proc(
 // ============================================================================
 
 // Query workspace for Hermitian eigenvalue computation (Divide and Conquer)
-// NOTE: rwork must be pre-allocated as `make([]Real, max(1, 3 * n - 2))`
-query_workspace_dns_eigen_hermitian_dc :: proc(A: ^Matrix($Cmplx), rwork: []$Real, jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, iwork_size: int) where is_complex(Cmplx) {
+query_workspace_dns_eigen_hermitian_dc :: proc(A: ^Matrix($Cmplx), jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, rwork_size: int, iwork_size: int) where is_complex(Cmplx) {
 	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
 	n := A.cols
@@ -143,8 +143,9 @@ query_workspace_dns_eigen_hermitian_dc :: proc(A: ^Matrix($Cmplx), rwork: []$Rea
 	}
 
 	work_size = int(real(work_query))
+	rwork_size = int(rwork_query)
 	iwork_size = int(iwork_query)
-	return work_size, iwork_size
+	return work_size, rwork_size, iwork_size
 }
 
 // Compute eigenvalues and eigenvectors using Divide and Conquer algorithm
@@ -469,10 +470,11 @@ dns_eigen_hermitian_expert :: proc(
 // ============================================================================
 
 // Query workspace for two-stage Hermitian eigenvalue computation
-// NOTE: Must Pre-allocate `rwork` for query: `make([]Real, max(1, 3 * n - 2))`
-query_workspace_dns_eigen_hermitian_2stage :: proc(A: ^Matrix($Cmplx), rwork: []$Real, jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+// Returns both work and rwork sizes (rwork has fixed size max(1, 3*n-2))
+query_workspace_dns_eigen_hermitian_2stage :: proc(A: ^Matrix($Cmplx), jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, rwork_size: int) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
+	n := A.cols
 	lda := A.ld
 	lwork := QUERY_WORKSPACE
 	info: Info
@@ -489,7 +491,7 @@ query_workspace_dns_eigen_hermitian_2stage :: proc(A: ^Matrix($Cmplx), rwork: []
 			nil, // w
 			&work_query,
 			&lwork,
-			raw_data(rwork),
+			nil,
 			&info,
 		)
 	} else when Cmplx == complex128 {
@@ -502,13 +504,14 @@ query_workspace_dns_eigen_hermitian_2stage :: proc(A: ^Matrix($Cmplx), rwork: []
 			nil, // w
 			&work_query,
 			&lwork,
-			raw_data(rwork),
+			nil,
 			&info,
 		)
 	}
 
 	work_size = int(real(work_query))
-	return work_size
+	rwork_size = max(1, 3 * int(n) - 2)
+	return work_size, rwork_size
 }
 
 // Compute eigenvalues and eigenvectors using two-stage algorithm
@@ -553,9 +556,11 @@ dns_eigen_hermitian_2stage_complex :: proc(
 // where A is Hermitian and B is Hermitian positive definite
 
 // Query workspace for generalized Hermitian eigenvalue computation (QR algorithm)
-query_workspace_dns_eigen_hermitian_generalized :: proc(A: ^Matrix($Cmplx), B: ^Matrix(Cmplx), rwork: []$Real, jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+// Returns both work and rwork sizes (rwork has fixed size max(1, 3*n-2))
+query_workspace_dns_eigen_hermitian_generalized :: proc(A: ^Matrix($Cmplx), B: ^Matrix(Cmplx), jobz: EigenJobOption, uplo := MatrixRegion.Upper) -> (work_size: int, rwork_size: int) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	jobz_c := cast(u8)jobz
 	uplo_c := cast(u8)uplo
+	n := A.cols
 	lda := A.ld
 	ldb := B.ld
 	lwork := QUERY_WORKSPACE
@@ -577,7 +582,7 @@ query_workspace_dns_eigen_hermitian_generalized :: proc(A: ^Matrix($Cmplx), B: ^
 			nil, // w
 			&work_query,
 			&lwork,
-			raw_data(rwork),
+			nil,
 			&info,
 		)
 	} else when Cmplx == complex128 {
@@ -593,13 +598,14 @@ query_workspace_dns_eigen_hermitian_generalized :: proc(A: ^Matrix($Cmplx), B: ^
 			nil, // w
 			&work_query,
 			&lwork,
-			raw_data(rwork),
+			nil,
 			&info,
 		)
 	}
 
 	work_size = int(real(work_query))
-	return work_size
+	rwork_size = max(1, 3 * int(n) - 2)
+	return work_size, rwork_size
 }
 
 // Compute generalized eigenvalues and eigenvectors using QR algorithm
@@ -949,6 +955,7 @@ dns_hermitian_reduce_generalized :: proc(
 // Query workspace for Hermitian tridiagonal reduction
 query_workspace_dns_hermitian_reduce_tridiagonal :: proc(A: ^Matrix($Cmplx), uplo := MatrixRegion.Upper) -> (work_size: int) where is_complex(Cmplx) {
 	uplo_c := cast(u8)uplo
+	n := A.cols
 	lda := A.ld
 	lwork := QUERY_WORKSPACE
 	info: Info
@@ -966,10 +973,10 @@ query_workspace_dns_hermitian_reduce_tridiagonal :: proc(A: ^Matrix($Cmplx), upl
 }
 
 // Reduce Hermitian matrix to tridiagonal form (complex)
+// Output tridiagonal matrix has real diagonal and real off-diagonal (symmetric tridiagonal)
 dns_hermitian_reduce_tridiagonal :: proc(
 	A: ^Matrix($Cmplx), // Input/output: Hermitian matrix, overwritten with Q
-	D: []$Real, // Output: Diagonal elements (length n, real values)
-	E: []Real, // Output: Off-diagonal elements (length n-1, real values)
+	T: ^Tridiagonal($Real), // Output: Real symmetric tridiagonal matrix (d and dl/du are real)
 	tau: []Cmplx, // Output: Scalar factors of elementary reflectors (length n-1)
 	work: []Cmplx, // Pre-allocated workspace
 	uplo := MatrixRegion.Upper,
@@ -979,9 +986,10 @@ dns_hermitian_reduce_tridiagonal :: proc(
 ) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
 	n := A.rows
 	assert(A.rows == A.cols, "Matrix must be square")
-	assert(len(D) >= n, "Diagonal array too small")
-	assert(len(E) >= n - 1, "Off-diagonal array too small")
-	assert(len(tau) >= n - 1, "Tau array too small")
+	assert(T.n == n, "Tridiagonal matrix dimension mismatch")
+	assert(len(T.d) >= int(n), "Tridiagonal diagonal array too small")
+	assert(len(T.dl) >= int(n) - 1, "Tridiagonal off-diagonal array too small")
+	assert(len(tau) >= int(n) - 1, "Tau array too small")
 	assert(len(work) > 0, "Workspace required")
 
 	uplo_c := cast(u8)uplo
@@ -989,9 +997,9 @@ dns_hermitian_reduce_tridiagonal :: proc(
 	lwork := Blas_Int(len(work))
 
 	when Cmplx == complex64 {
-		lapack.chetrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tau), raw_data(work), &lwork, &info)
+		lapack.chetrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(T.d), raw_data(T.dl), raw_data(tau), raw_data(work), &lwork, &info)
 	} else when Cmplx == complex128 {
-		lapack.zhetrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(D), raw_data(E), raw_data(tau), raw_data(work), &lwork, &info)
+		lapack.zhetrd_(&uplo_c, &n, raw_data(A.data), &lda, raw_data(T.d), raw_data(T.dl), raw_data(tau), raw_data(work), &lwork, &info)
 	}
 
 	return info, info == 0

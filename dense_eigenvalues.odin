@@ -365,11 +365,10 @@ dns_schur :: proc {
 	dns_schur_complex,
 }
 
-// TODO: Implement expert Schur form procedures
-// dns_schur_expert :: proc {
-// 	dns_schur_expert_real,
-// 	dns_schur_expert_complex,
-// }
+dns_schur_expert :: proc {
+	dns_schur_expert_real,
+	dns_schur_expert_complex,
+}
 
 // Query workspace size for Schur decomposition
 query_workspace_dns_schur :: proc(A: ^Matrix($T), jobvs: Schur_Job = .Compute) -> (work_size: int, rwork_size: int, bwork_size: int) where is_float(T) || is_complex(T) {
@@ -477,6 +476,141 @@ dns_schur_complex :: proc(
 		lapack.cgees_(&jobvs_c, &sort_c, select, &n, raw_data(A.data), &lda, &sdim, raw_data(W), vs_ptr, &ldvs, raw_data(work), &lwork, raw_data(rwork), raw_data(bwork), &info)
 	} else when Cmplx == complex128 {
 		lapack.zgees_(&jobvs_c, &sort_c, select, &n, raw_data(A.data), &lda, &sdim, raw_data(W), vs_ptr, &ldvs, raw_data(work), &lwork, raw_data(rwork), raw_data(bwork), &info)
+	}
+
+	return sdim, info, info == 0
+}
+
+// Query workspace size for expert Schur decomposition
+query_workspace_dns_schur_expert :: proc(A: ^Matrix($T), jobvs: Schur_Job = .Compute) -> (work: int, iwork: int, rwork: int, bwork: int) where is_float(T) || is_complex(T) {
+	n := A.rows
+	lda := A.ld
+	lwork := QUERY_WORKSPACE
+	liwork := QUERY_WORKSPACE
+	info: Info
+	work_query: T
+	iwork_query: Blas_Int
+
+	jobvs_c := cast(u8)jobvs
+	sort_c := u8('N')
+	sense_c := u8('B') // Both condition numbers
+
+	when is_float(T) {
+		when T == f32 {
+			lapack.sgeesx_(&jobvs_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, nil, nil, nil, nil, nil, nil, &work_query, &lwork, &iwork_query, &liwork, nil, &info)
+		} else when T == f64 {
+			lapack.dgeesx_(&jobvs_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, nil, nil, nil, nil, nil, nil, &work_query, &lwork, &iwork_query, &liwork, nil, &info)
+		}
+		return int(work_query), int(iwork_query), 0, int(n)
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.cgeesx_(&jobvs_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, nil, nil, nil, nil, nil, &work_query, &lwork, nil, nil, &info)
+		} else when T == complex128 {
+			lapack.zgeesx_(&jobvs_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, nil, nil, nil, nil, nil, &work_query, &lwork, nil, nil, &info)
+		}
+		return int(real(work_query)), 0, int(n), int(n)
+	}
+}
+
+// Expert Schur decomposition with condition number estimates
+dns_schur_expert_real :: proc(
+	A: ^Matrix($T), // Input matrix (overwritten with Schur form)
+	WR: []T, // Real parts of eigenvalues (pre-allocated, size n)
+	WI: []T, // Imaginary parts of eigenvalues (pre-allocated, size n)
+	VS: ^Matrix(T), // Schur vectors (pre-allocated, optional)
+	rconde: ^T, // Reciprocal condition number for eigenvalues (output)
+	rcondv: ^T, // Reciprocal condition number for eigenvectors (output)
+	work: []T, // Workspace (pre-allocated)
+	iwork: []Blas_Int, // Integer workspace (pre-allocated)
+	bwork: []Blas_Int, // Boolean workspace (pre-allocated, size n)
+	jobvs: Schur_Job = .Compute,
+	sort: Schur_Sort = .None,
+	sense: Sense_Job = .Both,
+	select: rawptr = nil, // Function pointer for sorting (optional)
+) -> (
+	sdim: Blas_Int,
+	info: Info,
+	ok: bool,
+) where is_float(T) {
+	n := A.rows
+	lda := A.ld
+
+	assert(A.rows == A.cols, "Matrix A must be square")
+	assert(len(WR) >= int(n), "WR array too small")
+	assert(len(WI) >= int(n), "WI array too small")
+	assert(len(work) > 0, "work array must be provided")
+	assert(len(iwork) > 0, "iwork array must be provided")
+	assert(len(bwork) >= int(n), "bwork array too small")
+
+	jobvs_c := cast(u8)jobvs
+	sort_c := cast(u8)sort
+	sense_c := cast(u8)sense
+
+	ldvs: Blas_Int = 1
+	vs_ptr: ^T = nil
+	if jobvs != .None && VS != nil {
+		ldvs = VS.ld
+		assert(VS.rows == n && VS.cols == n, "VS matrix dimensions incorrect")
+		vs_ptr = raw_data(VS.data)
+	}
+
+	lwork := Blas_Int(len(work))
+	liwork := Blas_Int(len(iwork))
+
+	when T == f32 {
+		lapack.sgeesx_(&jobvs_c, &sort_c, select, &sense_c, &n, raw_data(A.data), &lda, &sdim, raw_data(WR), raw_data(WI), vs_ptr, &ldvs, rconde, rcondv, raw_data(work), &lwork, raw_data(iwork), &liwork, raw_data(bwork), &info)
+	} else when T == f64 {
+		lapack.dgeesx_(&jobvs_c, &sort_c, select, &sense_c, &n, raw_data(A.data), &lda, &sdim, raw_data(WR), raw_data(WI), vs_ptr, &ldvs, rconde, rcondv, raw_data(work), &lwork, raw_data(iwork), &liwork, raw_data(bwork), &info)
+	}
+
+	return sdim, info, info == 0
+}
+
+dns_schur_expert_complex :: proc(
+	A: ^Matrix($Cmplx), // Input matrix (overwritten with Schur form)
+	W: []Cmplx, // Eigenvalues (pre-allocated, size n)
+	VS: ^Matrix(Cmplx), // Schur vectors (pre-allocated, optional)
+	rconde: ^$Real, // Reciprocal condition number for eigenvalues (output)
+	rcondv: ^Real, // Reciprocal condition number for eigenvectors (output)
+	work: []Cmplx, // Workspace (pre-allocated)
+	rwork: []Real, // Real workspace (pre-allocated)
+	bwork: []Blas_Int, // Boolean workspace (pre-allocated, size n)
+	jobvs: Schur_Job = .Compute,
+	sort: Schur_Sort = .None,
+	sense: Sense_Job = .Both,
+	select: rawptr = nil, // Function pointer for sorting (optional)
+) -> (
+	sdim: Blas_Int,
+	info: Info,
+	ok: bool,
+) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
+	n := A.rows
+	lda := A.ld
+
+	assert(A.rows == A.cols, "Matrix A must be square")
+	assert(len(W) >= int(n), "W array too small")
+	assert(len(work) > 0, "work array must be provided")
+	assert(len(rwork) >= int(n), "rwork array too small")
+	assert(len(bwork) >= int(n), "bwork array too small")
+
+	jobvs_c := cast(u8)jobvs
+	sort_c := cast(u8)sort
+	sense_c := cast(u8)sense
+
+	ldvs: Blas_Int = 1
+	vs_ptr: ^Cmplx = nil
+	if jobvs != .None && VS != nil {
+		ldvs = VS.ld
+		assert(VS.rows == n && VS.cols == n, "VS matrix dimensions incorrect")
+		vs_ptr = raw_data(VS.data)
+	}
+
+	lwork := Blas_Int(len(work))
+
+	when Cmplx == complex64 {
+		lapack.cgeesx_(&jobvs_c, &sort_c, select, &sense_c, &n, raw_data(A.data), &lda, &sdim, raw_data(W), vs_ptr, &ldvs, rconde, rcondv, raw_data(work), &lwork, raw_data(rwork), raw_data(bwork), &info)
+	} else when Cmplx == complex128 {
+		lapack.zgeesx_(&jobvs_c, &sort_c, select, &sense_c, &n, raw_data(A.data), &lda, &sdim, raw_data(W), vs_ptr, &ldvs, rconde, rcondv, raw_data(work), &lwork, raw_data(rwork), raw_data(bwork), &info)
 	}
 
 	return sdim, info, info == 0
@@ -1784,16 +1918,18 @@ generalized_triangular_eigenvectors :: proc {
 }
 
 // Query workspace size for generalized triangular eigenvector computation
-query_workspace_generalized_triangular_eigenvectors :: proc(n: int, $T: typeid) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_generalized_triangular_eigenvectors :: proc(S: ^Matrix($T)) -> (work: int, rwork: int) where is_float(T) || is_complex(T) {
+	n := int(S.rows)
+
 	when is_float(T) {
-		work_size = int(6 * n)
-		rwork_size = 0
+		work = 6 * n
+		rwork = 0
 	} else when is_complex(T) {
-		work_size = int(2 * n)
-		rwork_size = int(2 * n)
+		work = 2 * n
+		rwork = 2 * n
 	}
 
-	return work_size, rwork_size
+	return
 }
 
 // Compute eigenvectors of a generalized eigenvalue problem from generalized Schur form (real)
@@ -2044,51 +2180,27 @@ query_workspace_reorder_schur_condition :: proc(schur: ^Matrix($T), job: Conditi
 	compq_c := cast(u8)Schur_Computation.Update
 	lwork: Blas_Int = QUERY_WORKSPACE
 	liwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	m: Blas_Int
+	work_query: T
+	iwork_query: Blas_Int
 
-	when T == f32 {
-		work_query: f32
-		info: Info
-		select_dummy := make([]Blas_Int, int(n), context.temp_allocator)
-		defer delete(select_dummy, context.temp_allocator)
-		m: Blas_Int
-		s_dummy: f32
-		sep_dummy: f32
-		lapack.strsen_(&job_c, &compq_c, raw_data(select_dummy), &n, nil, &ldt, nil, &ldt, nil, nil, &m, &s_dummy, &sep_dummy, &work_query, &lwork, raw_data(select_dummy), &liwork, &info)
+	when is_float(T) {
+		when T == f32 {
+			lapack.strsen_(&job_c, &compq_c, nil, &n, nil, &ldt, nil, &ldt, nil, nil, &m, nil, nil, &work_query, &lwork, &iwork_query, &liwork, &info)
+		} else when T == f64 {
+			lapack.dtrsen_(&job_c, &compq_c, nil, &n, nil, &ldt, nil, &ldt, nil, nil, &m, nil, nil, &work_query, &lwork, &iwork_query, &liwork, &info)
+		}
 		work_size = int(work_query)
-		iwork_size = int(select_dummy[0])
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		select_dummy := make([]Blas_Int, int(n), context.temp_allocator)
-		defer delete(select_dummy, context.temp_allocator)
-		m: Blas_Int
-		s_dummy: f64
-		sep_dummy: f64
-		lapack.dtrsen_(&job_c, &compq_c, raw_data(select_dummy), &n, nil, &ldt, nil, &ldt, nil, nil, &m, &s_dummy, &sep_dummy, &work_query, &lwork, raw_data(select_dummy), &liwork, &info)
-		work_size = int(work_query)
-		iwork_size = int(select_dummy[0])
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		select_dummy := make([]Blas_Int, int(n), context.temp_allocator)
-		defer delete(select_dummy, context.temp_allocator)
-		m: Blas_Int
-		s_dummy: f32
-		sep_dummy: f32
-		lapack.ctrsen_(&job_c, &compq_c, raw_data(select_dummy), &n, nil, &ldt, nil, &ldt, nil, &m, &s_dummy, &sep_dummy, &work_query, &lwork, &info)
+		iwork_size = int(iwork_query)
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.ctrsen_(&job_c, &compq_c, nil, &n, nil, &ldt, nil, &ldt, nil, &m, nil, nil, &work_query, &lwork, &info)
+		} else when T == complex128 {
+			lapack.ztrsen_(&job_c, &compq_c, nil, &n, nil, &ldt, nil, &ldt, nil, &m, nil, nil, &work_query, &lwork, &info)
+		}
 		work_size = int(real(work_query))
-		iwork_size = 0 // Complex versions don't use iwork
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		select_dummy := make([]Blas_Int, int(n), context.temp_allocator)
-		defer delete(select_dummy, context.temp_allocator)
-		m: Blas_Int
-		s_dummy: f64
-		sep_dummy: f64
-		lapack.ztrsen_(&job_c, &compq_c, raw_data(select_dummy), &n, nil, &ldt, nil, &ldt, nil, &m, &s_dummy, &sep_dummy, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-		iwork_size = 0 // Complex versions don't use iwork
+		iwork_size = 0
 	}
 
 	return work_size, iwork_size
@@ -2219,38 +2331,18 @@ condition_numbers_eigenvalues :: proc {
 }
 
 // Query workspace sizes for condition number computation
-query_workspace_condition_numbers :: proc(schur: ^Matrix($T), VL: ^Matrix(T) = nil, VR: ^Matrix(T) = nil) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
-	n := schur.rows
-	ldt := schur.ld
-	ldvl: Blas_Int = 1
-	ldvr: Blas_Int = 1
-
-	if VL != nil {
-		ldvl = VL.ld
-	}
-	if VR != nil {
-		ldvr = VR.ld
-	}
-
-	job_c := cast(u8)Sensitivity_Job.Both
-	howmny_c := cast(u8)Howmny.All
-	select_dummy := make([]Blas_Int, int(n), context.temp_allocator)
-	defer delete(select_dummy, context.temp_allocator)
-	mm: Blas_Int = n
-	m: Blas_Int
-	ldwork: Blas_Int = n
+query_workspace_condition_numbers :: proc(schur: ^Matrix($T)) -> (work: int, iwork: int) where is_float(T) || is_complex(T) {
+	n := int(schur.rows)
 
 	when is_float(T) {
-		// Real types need iwork
-		work_size = int(3 * n)
-		iwork_size = int(2 * (n - 1))
+		work = 3 * n
+		iwork = 2 * (n - 1)
 	} else when is_complex(T) {
-		// Complex types need no iwork but do need rwork
-		work_size = int(2 * n * n)
-		iwork_size = 0 // rwork size would be n
+		work = 2 * n * n
+		iwork = 0
 	}
 
-	return work_size, iwork_size
+	return
 }
 
 // Compute condition numbers for eigenvalues and eigenvectors (real)
@@ -2388,1058 +2480,6 @@ condition_numbers_eigenvalues_complex :: proc(
 }
 
 // ===================================================================================
-// GENERALIZED NONSYMMETRIC EIGENVALUE PROBLEMS (Standard GGES/GGEV families)
-// ===================================================================================
-
-// gges (standard Generalized Schur) - uses QR algorithm
-gges :: proc {
-	gges_real,
-	gges_complex,
-}
-
-// Query workspace size for gges (standard generalized Schur)
-query_workspace_gges :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvsl: Schur_Job = .Compute, jobvsr: Schur_Job = .Compute, sort: Schur_Sort = .None) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	jobvsl_c := cast(u8)jobvsl
-	jobvsr_c := cast(u8)jobvsr
-	sort_c := cast(u8)sort
-	lwork: Blas_Int = QUERY_WORKSPACE
-
-	when T == f32 {
-		work_query: f32
-		info: Info
-		sdim: Blas_Int
-		lapack.sgges_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
-		work_size = int(work_query)
-		rwork_size = 0
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		sdim: Blas_Int
-		lapack.dgges_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
-		work_size = int(work_query)
-		rwork_size = 0
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		sdim: Blas_Int
-		lapack.cgges_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, nil, &info)
-		work_size = int(real(work_query))
-		rwork_size = int(8 * n)
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		sdim: Blas_Int
-		lapack.zgges_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, nil, &info)
-		work_size = int(real(work_query))
-		rwork_size = int(8 * n)
-	}
-
-	return work_size, rwork_size
-}
-
-// Standard generalized Schur decomposition (real matrices, QR algorithm)
-gges_real :: proc(
-	A: ^Matrix($T), // Input matrix A (overwritten with S)
-	B: ^Matrix(T), // Input matrix B (overwritten with T)
-	alphar: []T, // Real parts of alpha (pre-allocated, size n)
-	alphai: []T, // Imaginary parts of alpha (pre-allocated, size n)
-	beta: []T, // Beta values (pre-allocated, size n)
-	VSL: ^Matrix(T), // Left Schur vectors (pre-allocated, optional)
-	VSR: ^Matrix(T), // Right Schur vectors (pre-allocated, optional)
-	work: []T, // Workspace (pre-allocated)
-	bwork: []Blas_Int, // Boolean work array for sorting (pre-allocated if sorting, size n)
-	jobvsl: Schur_Job = .Compute,
-	jobvsr: Schur_Job = .Compute,
-	sort: Schur_Sort = .None,
-	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_S_SELECT3 or LAPACK_D_SELECT3)
-) -> (
-	sdim: Blas_Int,
-	info: Info,
-	ok: bool, // Number of eigenvalues selected (if sorting)
-) where is_float(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alphar) >= int(n), "alphar array too small")
-	assert(len(alphai) >= int(n), "alphai array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(work) > 0, "work array must be provided")
-	if sort == .Sort {
-		assert(len(bwork) >= int(n), "bwork array too small for sorting")
-		assert(select_fn != nil, "select_fn must be provided when sorting")
-	}
-
-	jobvsl_c := cast(u8)jobvsl
-	jobvsr_c := cast(u8)jobvsr
-	sort_c := cast(u8)sort
-
-	ldvsl: Blas_Int = 1
-	vsl_ptr: ^T = nil
-	if jobvsl != .None && VSL != nil {
-		ldvsl = VSL.ld
-		assert(VSL.rows == n && VSL.cols == n, "VSL matrix dimensions incorrect")
-		vsl_ptr = raw_data(VSL.data)
-	}
-
-	ldvsr: Blas_Int = 1
-	vsr_ptr: ^T = nil
-	if jobvsr != .None && VSR != nil {
-		ldvsr = VSR.ld
-		assert(VSR.rows == n && VSR.cols == n, "VSR matrix dimensions incorrect")
-		vsr_ptr = raw_data(VSR.data)
-	}
-
-	bwork_ptr: ^Blas_Int = nil
-	if sort == .Sort {
-		bwork_ptr = raw_data(bwork)
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when T == f32 {
-		lapack.sgges_(&jobvsl_c, &jobvsr_c, &sort_c, cast(LAPACK_S_SELECT3)select_fn, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &sdim, raw_data(alphar), raw_data(alphai), raw_data(beta), vsl_ptr, &ldvsl, vsr_ptr, &ldvsr, raw_data(work), &lwork, bwork_ptr, &info)
-	} else when T == f64 {
-		lapack.dgges_(&jobvsl_c, &jobvsr_c, &sort_c, cast(LAPACK_D_SELECT3)select_fn, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &sdim, raw_data(alphar), raw_data(alphai), raw_data(beta), vsl_ptr, &ldvsl, vsr_ptr, &ldvsr, raw_data(work), &lwork, bwork_ptr, &info)
-	}
-
-	return sdim, info, info == 0
-}
-
-// Standard generalized Schur decomposition (complex matrices, QR algorithm)
-gges_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix A (overwritten with S)
-	B: ^Matrix(Cmplx), // Input matrix B (overwritten with T)
-	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
-	beta: []Cmplx, // Beta values (pre-allocated, size n)
-	VSL: ^Matrix(Cmplx), // Left Schur vectors (pre-allocated, optional)
-	VSR: ^Matrix(Cmplx), // Right Schur vectors (pre-allocated, optional)
-	work: []Cmplx, // Workspace (pre-allocated)
-	rwork: []$Real, // Real workspace (pre-allocated, size 8*n)
-	bwork: []Blas_Int, // Boolean work array for sorting (pre-allocated if sorting, size n)
-	jobvsl: Schur_Job = .Compute,
-	jobvsr: Schur_Job = .Compute,
-	sort: Schur_Sort = .None,
-	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_C_SELECT2 or LAPACK_Z_SELECT2)
-) -> (
-	sdim: Blas_Int,
-	info: Info,
-	ok: bool, // Number of eigenvalues selected (if sorting)
-) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alpha) >= int(n), "alpha array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(work) > 0, "work array must be provided")
-	assert(len(rwork) >= int(8 * n), "rwork array too small")
-	if sort == .Sort {
-		assert(len(bwork) >= int(n), "bwork array too small for sorting")
-		assert(select_fn != nil, "select_fn must be provided when sorting")
-	}
-
-	jobvsl_c := cast(u8)jobvsl
-	jobvsr_c := cast(u8)jobvsr
-	sort_c := cast(u8)sort
-
-	ldvsl: Blas_Int = 1
-	vsl_ptr: ^Cmplx = nil
-	if jobvsl != .None && VSL != nil {
-		ldvsl = VSL.ld
-		assert(VSL.rows == n && VSL.cols == n, "VSL matrix dimensions incorrect")
-		vsl_ptr = raw_data(VSL.data)
-	}
-
-	ldvsr: Blas_Int = 1
-	vsr_ptr: ^Cmplx = nil
-	if jobvsr != .None && VSR != nil {
-		ldvsr = VSR.ld
-		assert(VSR.rows == n && VSR.cols == n, "VSR matrix dimensions incorrect")
-		vsr_ptr = raw_data(VSR.data)
-	}
-
-	bwork_ptr: ^Blas_Int = nil
-	if sort == .Sort {
-		bwork_ptr = raw_data(bwork)
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
-		lapack.cgges_(&jobvsl_c, &jobvsr_c, &sort_c, cast(LAPACK_C_SELECT2)select_fn, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &sdim, raw_data(alpha), raw_data(beta), vsl_ptr, &ldvsl, vsr_ptr, &ldvsr, raw_data(work), &lwork, raw_data(rwork), bwork_ptr, &info)
-	} else when Cmplx == complex128 {
-		lapack.zgges_(&jobvsl_c, &jobvsr_c, &sort_c, cast(LAPACK_Z_SELECT2)select_fn, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, &sdim, raw_data(alpha), raw_data(beta), vsl_ptr, &ldvsl, vsr_ptr, &ldvsr, raw_data(work), &lwork, raw_data(rwork), bwork_ptr, &info)
-	}
-
-	return sdim, info, info == 0
-}
-
-// ggesx (expert Generalized Schur with condition numbers)
-ggesx :: proc {
-	ggesx_real,
-	ggesx_complex,
-}
-
-// Query workspace size for ggesx (expert generalized Schur)
-query_workspace_ggesx :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvsl: Schur_Job = .Compute, jobvsr: Schur_Job = .Compute, sort: Schur_Sort = .None, sense: Sense_Job = .None) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	jobvsl_c := cast(u8)jobvsl
-	jobvsr_c := cast(u8)jobvsr
-	sort_c := cast(u8)sort
-	sense_c := cast(u8)sense
-	lwork: Blas_Int = QUERY_WORKSPACE
-	liwork: Blas_Int = QUERY_WORKSPACE
-
-	when T == f32 {
-		work_query: f32
-		iwork_query: Blas_Int
-		info: Info
-		sdim: Blas_Int
-		lapack.sggesx_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, nil, &n, nil, &n, nil, nil, &work_query, &lwork, &iwork_query, &liwork, nil, &info)
-		work_size = int(work_query)
-		iwork_size = int(iwork_query)
-		rwork_size = 0
-	} else when T == f64 {
-		work_query: f64
-		iwork_query: Blas_Int
-		info: Info
-		sdim: Blas_Int
-		lapack.dggesx_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, nil, &n, nil, &n, nil, nil, &work_query, &lwork, &iwork_query, &liwork, nil, &info)
-		work_size = int(work_query)
-		iwork_size = int(iwork_query)
-		rwork_size = 0
-	} else when T == complex64 {
-		work_query: complex64
-		iwork_query: Blas_Int
-		info: Info
-		sdim: Blas_Int
-		lapack.cggesx_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, &n, nil, &n, nil, nil, &work_query, &lwork, nil, &iwork_query, &liwork, nil, &info)
-		work_size = int(real(work_query))
-		iwork_size = int(iwork_query)
-		rwork_size = int(n)
-	} else when T == complex128 {
-		work_query: complex128
-		iwork_query: Blas_Int
-		info: Info
-		sdim: Blas_Int
-		lapack.zggesx_(&jobvsl_c, &jobvsr_c, &sort_c, nil, &sense_c, &n, nil, &lda, nil, &ldb, &sdim, nil, nil, nil, &n, nil, &n, nil, nil, &work_query, &lwork, nil, &iwork_query, &liwork, nil, &info)
-		work_size = int(real(work_query))
-		iwork_size = int(iwork_query)
-		rwork_size = int(n)
-	}
-
-	return work_size, iwork_size, rwork_size
-}
-
-// Expert generalized Schur decomposition with condition numbers (real matrices)
-ggesx_real :: proc(
-	A: ^Matrix($T), // Input matrix A (overwritten with S)
-	B: ^Matrix(T), // Input matrix B (overwritten with T)
-	alphar: []T, // Real parts of alpha (pre-allocated, size n)
-	alphai: []T, // Imaginary parts of alpha (pre-allocated, size n)
-	beta: []T, // Beta values (pre-allocated, size n)
-	VSL: ^Matrix(T), // Left Schur vectors (pre-allocated, optional)
-	VSR: ^Matrix(T), // Right Schur vectors (pre-allocated, optional)
-	rconde: []T, // Reciprocal condition numbers for eigenvalues (pre-allocated, size 2)
-	rcondv: []T, // Reciprocal condition numbers for eigenvectors (pre-allocated, size 2)
-	work: []T, // Workspace (pre-allocated)
-	iwork: []Blas_Int, // Integer workspace (pre-allocated)
-	bwork: []Blas_Int, // Boolean work array for sorting (pre-allocated if sorting, size n)
-	jobvsl: Schur_Job = .Compute,
-	jobvsr: Schur_Job = .Compute,
-	sort: Schur_Sort = .None,
-	sense: Sense_Job = .None,
-	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_S_SELECT3 or LAPACK_D_SELECT3)
-) -> (
-	sdim: Blas_Int,
-	info: Info,
-	ok: bool, // Number of eigenvalues selected (if sorting)
-) where is_float(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alphar) >= int(n), "alphar array too small")
-	assert(len(alphai) >= int(n), "alphai array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(work) > 0, "work array must be provided")
-	assert(len(iwork) > 0, "iwork array must be provided")
-	if sort == .Sort {
-		assert(len(bwork) >= int(n), "bwork array too small for sorting")
-		assert(select_fn != nil, "select_fn must be provided when sorting")
-	}
-	if sense != .None {
-		assert(len(rconde) >= 2, "rconde array too small")
-		assert(len(rcondv) >= 2, "rcondv array too small")
-	}
-
-	jobvsl_c := cast(u8)jobvsl
-	jobvsr_c := cast(u8)jobvsr
-	sort_c := cast(u8)sort
-	sense_c := cast(u8)sense
-
-	ldvsl: Blas_Int = 1
-	vsl_ptr: ^T = nil
-	if jobvsl != .None && VSL != nil {
-		ldvsl = VSL.ld
-		assert(VSL.rows == n && VSL.cols == n, "VSL matrix dimensions incorrect")
-		vsl_ptr = raw_data(VSL.data)
-	}
-
-	ldvsr: Blas_Int = 1
-	vsr_ptr: ^T = nil
-	if jobvsr != .None && VSR != nil {
-		ldvsr = VSR.ld
-		assert(VSR.rows == n && VSR.cols == n, "VSR matrix dimensions incorrect")
-		vsr_ptr = raw_data(VSR.data)
-	}
-
-	bwork_ptr: ^Blas_Int = nil
-	if sort == .Sort {
-		bwork_ptr = raw_data(bwork)
-	}
-
-	rconde_ptr: ^T = nil
-	rcondv_ptr: ^T = nil
-	if sense != .None {
-		rconde_ptr = raw_data(rconde)
-		rcondv_ptr = raw_data(rcondv)
-	}
-
-	lwork := Blas_Int(len(work))
-	liwork := Blas_Int(len(iwork))
-
-	when T == f32 {
-		lapack.sggesx_(
-			&jobvsl_c,
-			&jobvsr_c,
-			&sort_c,
-			cast(LAPACK_S_SELECT3)select_fn,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&sdim,
-			raw_data(alphar),
-			raw_data(alphai),
-			raw_data(beta),
-			vsl_ptr,
-			&ldvsl,
-			vsr_ptr,
-			&ldvsr,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&liwork,
-			bwork_ptr,
-			&info,
-		)
-	} else when T == f64 {
-		lapack.dggesx_(
-			&jobvsl_c,
-			&jobvsr_c,
-			&sort_c,
-			cast(LAPACK_D_SELECT3)select_fn,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&sdim,
-			raw_data(alphar),
-			raw_data(alphai),
-			raw_data(beta),
-			vsl_ptr,
-			&ldvsl,
-			vsr_ptr,
-			&ldvsr,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			&liwork,
-			bwork_ptr,
-			&info,
-		)
-	}
-
-	return sdim, info, info == 0
-}
-
-// Expert generalized Schur decomposition with condition numbers (complex matrices)
-ggesx_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix A (overwritten with S)
-	B: ^Matrix(Cmplx), // Input matrix B (overwritten with T)
-	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
-	beta: []Cmplx, // Beta values (pre-allocated, size n)
-	VSL: ^Matrix(Cmplx), // Left Schur vectors (pre-allocated, optional)
-	VSR: ^Matrix(Cmplx), // Right Schur vectors (pre-allocated, optional)
-	rconde: []$Real, // Reciprocal condition numbers for eigenvalues (pre-allocated, size 2)
-	rcondv: []Real, // Reciprocal condition numbers for eigenvectors (pre-allocated, size 2)
-	work: []Cmplx, // Workspace (pre-allocated)
-	rwork: []Real, // Real workspace (pre-allocated, size n)
-	iwork: []Blas_Int, // Integer workspace (pre-allocated)
-	bwork: []Blas_Int, // Boolean work array for sorting (pre-allocated if sorting, size n)
-	jobvsl: Schur_Job = .Compute,
-	jobvsr: Schur_Job = .Compute,
-	sort: Schur_Sort = .None,
-	sense: Sense_Job = .None,
-	select_fn: rawptr = nil, // Selection function for sorting (LAPACK_C_SELECT2 or LAPACK_Z_SELECT2)
-) -> (
-	sdim: Blas_Int,
-	info: Info,
-	ok: bool, // Number of eigenvalues selected (if sorting)
-) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alpha) >= int(n), "alpha array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(work) > 0, "work array must be provided")
-	assert(len(rwork) >= int(n), "rwork array too small")
-	assert(len(iwork) > 0, "iwork array must be provided")
-	if sort == .Sort {
-		assert(len(bwork) >= int(n), "bwork array too small for sorting")
-		assert(select_fn != nil, "select_fn must be provided when sorting")
-	}
-	if sense != .None {
-		assert(len(rconde) >= 2, "rconde array too small")
-		assert(len(rcondv) >= 2, "rcondv array too small")
-	}
-
-	jobvsl_c := cast(u8)jobvsl
-	jobvsr_c := cast(u8)jobvsr
-	sort_c := cast(u8)sort
-	sense_c := cast(u8)sense
-
-	ldvsl: Blas_Int = 1
-	vsl_ptr: ^Cmplx = nil
-	if jobvsl != .None && VSL != nil {
-		ldvsl = VSL.ld
-		assert(VSL.rows == n && VSL.cols == n, "VSL matrix dimensions incorrect")
-		vsl_ptr = raw_data(VSL.data)
-	}
-
-	ldvsr: Blas_Int = 1
-	vsr_ptr: ^Cmplx = nil
-	if jobvsr != .None && VSR != nil {
-		ldvsr = VSR.ld
-		assert(VSR.rows == n && VSR.cols == n, "VSR matrix dimensions incorrect")
-		vsr_ptr = raw_data(VSR.data)
-	}
-
-	bwork_ptr: ^Blas_Int = nil
-	if sort == .Sort {
-		bwork_ptr = raw_data(bwork)
-	}
-
-	rconde_ptr: ^Real = nil
-	rcondv_ptr: ^Real = nil
-	if sense != .None {
-		rconde_ptr = raw_data(rconde)
-		rcondv_ptr = raw_data(rcondv)
-	}
-
-	lwork := Blas_Int(len(work))
-	liwork := Blas_Int(len(iwork))
-
-	when Cmplx == complex64 {
-		lapack.cggesx_(
-			&jobvsl_c,
-			&jobvsr_c,
-			&sort_c,
-			cast(LAPACK_C_SELECT2)select_fn,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&sdim,
-			raw_data(alpha),
-			raw_data(beta),
-			vsl_ptr,
-			&ldvsl,
-			vsr_ptr,
-			&ldvsr,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			raw_data(iwork),
-			&liwork,
-			bwork_ptr,
-			&info,
-		)
-	} else when Cmplx == complex128 {
-		lapack.zggesx_(
-			&jobvsl_c,
-			&jobvsr_c,
-			&sort_c,
-			cast(LAPACK_Z_SELECT2)select_fn,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			&sdim,
-			raw_data(alpha),
-			raw_data(beta),
-			vsl_ptr,
-			&ldvsl,
-			vsr_ptr,
-			&ldvsr,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			raw_data(iwork),
-			&liwork,
-			bwork_ptr,
-			&info,
-		)
-	}
-
-	return sdim, info, info == 0
-}
-
-// ggev (standard Generalized eigenvalues) - uses QR algorithm
-ggev :: proc {
-	ggev_real,
-	ggev_complex,
-}
-
-// Query workspace size for ggev (standard generalized eigenvalues)
-query_workspace_ggev :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvl: Eigen_Job_Left = .None, jobvr: Eigen_Job_Right = .Compute) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	jobvl_c := cast(u8)jobvl
-	jobvr_c := cast(u8)jobvr
-	lwork: Blas_Int = QUERY_WORKSPACE
-
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.sggev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-		rwork_size = 0
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dggev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-		rwork_size = 0
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.cggev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
-		work_size = int(real(work_query))
-		rwork_size = int(8 * n)
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zggev_(&jobvl_c, &jobvr_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
-		work_size = int(real(work_query))
-		rwork_size = int(8 * n)
-	}
-
-	return work_size, rwork_size
-}
-
-// Standard generalized eigenvalue problem (real matrices, QR algorithm)
-ggev_real :: proc(
-	A: ^Matrix($T), // Input matrix A (overwritten)
-	B: ^Matrix(T), // Input matrix B (overwritten)
-	alphar: []T, // Real parts of alpha (pre-allocated, size n)
-	alphai: []T, // Imaginary parts of alpha (pre-allocated, size n)
-	beta: []T, // Beta values (pre-allocated, size n)
-	VL: ^Matrix(T), // Left eigenvectors (pre-allocated, optional)
-	VR: ^Matrix(T), // Right eigenvectors (pre-allocated, optional)
-	work: []T, // Workspace (pre-allocated)
-	jobvl: Eigen_Job_Left = .None,
-	jobvr: Eigen_Job_Right = .Compute,
-) -> (
-	info: Info,
-	ok: bool,
-) where is_float(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alphar) >= int(n), "alphar array too small")
-	assert(len(alphai) >= int(n), "alphai array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(work) > 0, "work array must be provided")
-
-	jobvl_c := cast(u8)jobvl
-	jobvr_c := cast(u8)jobvr
-
-	ldvl: Blas_Int = 1
-	vl_ptr: ^T = nil
-	if jobvl != .None && VL != nil {
-		ldvl = VL.ld
-		assert(VL.rows == n && VL.cols == n, "VL matrix dimensions incorrect")
-		vl_ptr = raw_data(VL.data)
-	}
-
-	ldvr: Blas_Int = 1
-	vr_ptr: ^T = nil
-	if jobvr != .None && VR != nil {
-		ldvr = VR.ld
-		assert(VR.rows == n && VR.cols == n, "VR matrix dimensions incorrect")
-		vr_ptr = raw_data(VR.data)
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when T == f32 {
-		lapack.sggev_(&jobvl_c, &jobvr_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alphar), raw_data(alphai), raw_data(beta), vl_ptr, &ldvl, vr_ptr, &ldvr, raw_data(work), &lwork, &info)
-	} else when T == f64 {
-		lapack.dggev_(&jobvl_c, &jobvr_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alphar), raw_data(alphai), raw_data(beta), vl_ptr, &ldvl, vr_ptr, &ldvr, raw_data(work), &lwork, &info)
-	}
-
-	return info, info == 0
-}
-
-// Standard generalized eigenvalue problem (complex matrices, QR algorithm)
-ggev_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix A (overwritten)
-	B: ^Matrix(Cmplx), // Input matrix B (overwritten)
-	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
-	beta: []Cmplx, // Beta values (pre-allocated, size n)
-	VL: ^Matrix(Cmplx), // Left eigenvectors (pre-allocated, optional)
-	VR: ^Matrix(Cmplx), // Right eigenvectors (pre-allocated, optional)
-	work: []Cmplx, // Workspace (pre-allocated)
-	rwork: []$Real, // Real workspace (pre-allocated, size 8*n)
-	jobvl: Eigen_Job_Left = .None,
-	jobvr: Eigen_Job_Right = .Compute,
-) -> (
-	info: Info,
-	ok: bool,
-) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alpha) >= int(n), "alpha array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(work) > 0, "work array must be provided")
-	assert(len(rwork) >= int(8 * n), "rwork array too small")
-
-	jobvl_c := cast(u8)jobvl
-	jobvr_c := cast(u8)jobvr
-
-	ldvl: Blas_Int = 1
-	vl_ptr: ^Cmplx = nil
-	if jobvl != .None && VL != nil {
-		ldvl = VL.ld
-		assert(VL.rows == n && VL.cols == n, "VL matrix dimensions incorrect")
-		vl_ptr = raw_data(VL.data)
-	}
-
-	ldvr: Blas_Int = 1
-	vr_ptr: ^Cmplx = nil
-	if jobvr != .None && VR != nil {
-		ldvr = VR.ld
-		assert(VR.rows == n && VR.cols == n, "VR matrix dimensions incorrect")
-		vr_ptr = raw_data(VR.data)
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
-		lapack.cggev_(&jobvl_c, &jobvr_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alpha), raw_data(beta), vl_ptr, &ldvl, vr_ptr, &ldvr, raw_data(work), &lwork, raw_data(rwork), &info)
-	} else when Cmplx == complex128 {
-		lapack.zggev_(&jobvl_c, &jobvr_c, &n, raw_data(A.data), &lda, raw_data(B.data), &ldb, raw_data(alpha), raw_data(beta), vl_ptr, &ldvl, vr_ptr, &ldvr, raw_data(work), &lwork, raw_data(rwork), &info)
-	}
-
-	return info, info == 0
-}
-
-// ggevx (expert Generalized eigenvalues with balancing)
-ggevx :: proc {
-	ggevx_real,
-	ggevx_complex,
-}
-
-// Query workspace size for ggevx (expert generalized eigenvalues)
-query_workspace_ggevx :: proc(A: ^Matrix($T), B: ^Matrix(T), jobvl: Eigen_Job_Left = .None, jobvr: Eigen_Job_Right = .Compute, balanc: Balance_Job = .Both, sense: Sense_Job = .None) -> (work_size: int, iwork_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	jobvl_c := cast(u8)jobvl
-	jobvr_c := cast(u8)jobvr
-	balanc_c := cast(u8)balanc
-	sense_c := cast(u8)sense
-	lwork: Blas_Int = QUERY_WORKSPACE
-
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.sggevx_(&balanc_c, &jobvl_c, &jobvr_c, &sense_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, nil, &n, nil, &n, nil, nil, nil, nil, nil, nil, nil, nil, &work_query, &lwork, nil, nil, &info)
-		work_size = int(work_query)
-		iwork_size = int(n + 2)
-		rwork_size = 0
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dggevx_(&balanc_c, &jobvl_c, &jobvr_c, &sense_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, nil, &n, nil, &n, nil, nil, nil, nil, nil, nil, nil, nil, &work_query, &lwork, nil, nil, &info)
-		work_size = int(work_query)
-		iwork_size = int(n + 2)
-		rwork_size = 0
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.cggevx_(&balanc_c, &jobvl_c, &jobvr_c, &sense_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, &n, nil, &n, nil, nil, nil, nil, nil, nil, nil, nil, &work_query, &lwork, nil, nil, nil, &info)
-		work_size = int(real(work_query))
-		iwork_size = int(n + 2)
-		rwork_size = int(6 * n)
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zggevx_(&balanc_c, &jobvl_c, &jobvr_c, &sense_c, &n, nil, &lda, nil, &ldb, nil, nil, nil, &n, nil, &n, nil, nil, nil, nil, nil, nil, nil, nil, &work_query, &lwork, nil, nil, nil, &info)
-		work_size = int(real(work_query))
-		iwork_size = int(n + 2)
-		rwork_size = int(6 * n)
-	}
-
-	return work_size, iwork_size, rwork_size
-}
-
-// Expert generalized eigenvalue problem with balancing (real matrices)
-ggevx_real :: proc(
-	A: ^Matrix($T), // Input matrix A (overwritten)
-	B: ^Matrix(T), // Input matrix B (overwritten)
-	alphar: []T, // Real parts of alpha (pre-allocated, size n)
-	alphai: []T, // Imaginary parts of alpha (pre-allocated, size n)
-	beta: []T, // Beta values (pre-allocated, size n)
-	VL: ^Matrix(T), // Left eigenvectors (pre-allocated, optional)
-	VR: ^Matrix(T), // Right eigenvectors (pre-allocated, optional)
-	lscale: []T, // Left scale factors (pre-allocated, size n)
-	rscale: []T, // Right scale factors (pre-allocated, size n)
-	rconde: []T, // Reciprocal condition numbers for eigenvalues (pre-allocated, size n)
-	rcondv: []T, // Reciprocal condition numbers for eigenvectors (pre-allocated, size n)
-	work: []T, // Workspace (pre-allocated)
-	iwork: []Blas_Int, // Integer workspace (pre-allocated, size n+2)
-	bwork: []Blas_Int, // Boolean work array (pre-allocated, size n)
-	jobvl: Eigen_Job_Left = .None,
-	jobvr: Eigen_Job_Right = .Compute,
-	balanc: Balance_Job = .Both,
-	sense: Sense_Job = .None,
-) -> (
-	ilo: Blas_Int,
-	ihi: Blas_Int,
-	abnrm: T,
-	bbnrm: T,
-	info: Info,
-	ok: bool, // Index of first balanced row// Index of last balanced row// Norm of balanced A// Norm of balanced B
-) where is_float(T) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alphar) >= int(n), "alphar array too small")
-	assert(len(alphai) >= int(n), "alphai array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(lscale) >= int(n), "lscale array too small")
-	assert(len(rscale) >= int(n), "rscale array too small")
-	assert(len(work) > 0, "work array must be provided")
-	assert(len(iwork) >= int(n + 2), "iwork array too small")
-	assert(len(bwork) >= int(n), "bwork array too small")
-	if sense != .None {
-		assert(len(rconde) >= int(n), "rconde array too small")
-		assert(len(rcondv) >= int(n), "rcondv array too small")
-	}
-
-	jobvl_c := cast(u8)jobvl
-	jobvr_c := cast(u8)jobvr
-	balanc_c := cast(u8)balanc
-	sense_c := cast(u8)sense
-
-	ldvl: Blas_Int = 1
-	vl_ptr: ^T = nil
-	if jobvl != .None && VL != nil {
-		ldvl = VL.ld
-		assert(VL.rows == n && VL.cols == n, "VL matrix dimensions incorrect")
-		vl_ptr = raw_data(VL.data)
-	}
-
-	ldvr: Blas_Int = 1
-	vr_ptr: ^T = nil
-	if jobvr != .None && VR != nil {
-		ldvr = VR.ld
-		assert(VR.rows == n && VR.cols == n, "VR matrix dimensions incorrect")
-		vr_ptr = raw_data(VR.data)
-	}
-
-	rconde_ptr: ^T = nil
-	rcondv_ptr: ^T = nil
-	if sense != .None {
-		rconde_ptr = raw_data(rconde)
-		rcondv_ptr = raw_data(rcondv)
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when T == f32 {
-		lapack.sggevx_(
-			&balanc_c,
-			&jobvl_c,
-			&jobvr_c,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alphar),
-			raw_data(alphai),
-			raw_data(beta),
-			vl_ptr,
-			&ldvl,
-			vr_ptr,
-			&ldvr,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			&abnrm,
-			&bbnrm,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			raw_data(bwork),
-			&info,
-		)
-	} else when T == f64 {
-		lapack.dggevx_(
-			&balanc_c,
-			&jobvl_c,
-			&jobvr_c,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alphar),
-			raw_data(alphai),
-			raw_data(beta),
-			vl_ptr,
-			&ldvl,
-			vr_ptr,
-			&ldvr,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			&abnrm,
-			&bbnrm,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(iwork),
-			raw_data(bwork),
-			&info,
-		)
-	}
-
-	return ilo, ihi, abnrm, bbnrm, info, info == 0
-}
-
-// Expert generalized eigenvalue problem with balancing (complex matrices)
-ggevx_complex :: proc(
-	A: ^Matrix($Cmplx), // Input matrix A (overwritten)
-	B: ^Matrix(Cmplx), // Input matrix B (overwritten)
-	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
-	beta: []Cmplx, // Beta values (pre-allocated, size n)
-	VL: ^Matrix(Cmplx), // Left eigenvectors (pre-allocated, optional)
-	VR: ^Matrix(Cmplx), // Right eigenvectors (pre-allocated, optional)
-	lscale: []$Real, // Left scale factors (pre-allocated, size n)
-	rscale: []Real, // Right scale factors (pre-allocated, size n)
-	rconde: []Real, // Reciprocal condition numbers for eigenvalues (pre-allocated, size n)
-	rcondv: []Real, // Reciprocal condition numbers for eigenvectors (pre-allocated, size n)
-	work: []Cmplx, // Workspace (pre-allocated)
-	rwork: []Real, // Real workspace (pre-allocated, size 6*n)
-	iwork: []Blas_Int, // Integer workspace (pre-allocated, size n+2)
-	bwork: []Blas_Int, // Boolean work array (pre-allocated, size n)
-	jobvl: Eigen_Job_Left = .None,
-	jobvr: Eigen_Job_Right = .Compute,
-	balanc: Balance_Job = .Both,
-	sense: Sense_Job = .None,
-) -> (
-	ilo: Blas_Int,
-	ihi: Blas_Int,
-	abnrm: Real,
-	bbnrm: Real,
-	info: Info,
-	ok: bool, // Index of first balanced row// Index of last balanced row// Norm of balanced A// Norm of balanced B
-) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
-	n := A.rows
-	lda := A.ld
-	ldb := B.ld
-
-	assert(A.rows == A.cols, "Matrix A must be square")
-	assert(B.rows == B.cols, "Matrix B must be square")
-	assert(A.rows == B.rows, "Matrices A and B must have same dimensions")
-	assert(len(alpha) >= int(n), "alpha array too small")
-	assert(len(beta) >= int(n), "beta array too small")
-	assert(len(lscale) >= int(n), "lscale array too small")
-	assert(len(rscale) >= int(n), "rscale array too small")
-	assert(len(work) > 0, "work array must be provided")
-	assert(len(rwork) >= int(6 * n), "rwork array too small")
-	assert(len(iwork) >= int(n + 2), "iwork array too small")
-	assert(len(bwork) >= int(n), "bwork array too small")
-	if sense != .None {
-		assert(len(rconde) >= int(n), "rconde array too small")
-		assert(len(rcondv) >= int(n), "rcondv array too small")
-	}
-
-	jobvl_c := cast(u8)jobvl
-	jobvr_c := cast(u8)jobvr
-	balanc_c := cast(u8)balanc
-	sense_c := cast(u8)sense
-
-	ldvl: Blas_Int = 1
-	vl_ptr: ^Cmplx = nil
-	if jobvl != .None && VL != nil {
-		ldvl = VL.ld
-		assert(VL.rows == n && VL.cols == n, "VL matrix dimensions incorrect")
-		vl_ptr = raw_data(VL.data)
-	}
-
-	ldvr: Blas_Int = 1
-	vr_ptr: ^Cmplx = nil
-	if jobvr != .None && VR != nil {
-		ldvr = VR.ld
-		assert(VR.rows == n && VR.cols == n, "VR matrix dimensions incorrect")
-		vr_ptr = raw_data(VR.data)
-	}
-
-	rconde_ptr: ^Real = nil
-	rcondv_ptr: ^Real = nil
-	if sense != .None {
-		rconde_ptr = raw_data(rconde)
-		rcondv_ptr = raw_data(rcondv)
-	}
-
-	lwork := Blas_Int(len(work))
-
-	when Cmplx == complex64 {
-		lapack.cggevx_(
-			&balanc_c,
-			&jobvl_c,
-			&jobvr_c,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			vl_ptr,
-			&ldvl,
-			vr_ptr,
-			&ldvr,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			&abnrm,
-			&bbnrm,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			raw_data(iwork),
-			raw_data(bwork),
-			&info,
-		)
-	} else when Cmplx == complex128 {
-		lapack.zggevx_(
-			&balanc_c,
-			&jobvl_c,
-			&jobvr_c,
-			&sense_c,
-			&n,
-			raw_data(A.data),
-			&lda,
-			raw_data(B.data),
-			&ldb,
-			raw_data(alpha),
-			raw_data(beta),
-			vl_ptr,
-			&ldvl,
-			vr_ptr,
-			&ldvr,
-			&ilo,
-			&ihi,
-			raw_data(lscale),
-			raw_data(rscale),
-			&abnrm,
-			&bbnrm,
-			rconde_ptr,
-			rcondv_ptr,
-			raw_data(work),
-			&lwork,
-			raw_data(rwork),
-			raw_data(iwork),
-			raw_data(bwork),
-			&info,
-		)
-	}
-
-	return ilo, ihi, abnrm, bbnrm, info, info == 0
-}
-
-// ===================================================================================
 // AUXILIARY EIGENVALUE FUNCTIONS
 // ===================================================================================
 
@@ -3472,51 +2512,46 @@ Initv :: enum u8 {
 // HGEQZ - Generalized Schur form using QZ algorithm
 // ===================================================================================
 
-hgeqz :: proc {
-	hgeqz_real,
-	hgeqz_complex,
+hessenberg_qz_iteration :: proc {
+	hessenberg_qz_iteration_real,
+	hessenberg_qz_iteration_complex,
 }
 
 // Query workspace size for generalized Schur form (QZ algorithm)
-query_workspace_hgeqz :: proc(n: Blas_Int, $T: typeid) -> (work_size: int, rwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_hessenberg_qz_iteration :: proc(H: ^Matrix($T)) -> (work: int, rwork: int) where is_float(T) || is_complex(T) {
+	n := H.rows
 	job_c := cast(u8)Hessenberg_Job.Schur
 	compq_c := cast(u8)Compz.Vectors
 	compz_c := cast(u8)Compz.Vectors
 	ilo: Blas_Int = 1
 	ihi := n
 	lwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	work_query: T
 
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.shgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-		rwork_size = 0
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dhgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-		rwork_size = 0
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.chgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
-		work_size = int(real(work_query))
-		rwork_size = int(n)
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zhgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
-		work_size = int(real(work_query))
-		rwork_size = int(n)
+	when is_float(T) {
+		when T == f32 {
+			lapack.shgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
+		} else when T == f64 {
+			lapack.dhgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, nil, &n, nil, &n, &work_query, &lwork, &info)
+		}
+		work = int(work_query)
+		rwork = 0
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.chgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
+		} else when T == complex128 {
+			lapack.zhgeqz_(&job_c, &compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, nil, nil, &n, nil, &n, &work_query, &lwork, nil, &info)
+		}
+		work = int(real(work_query))
+		rwork = int(n)
 	}
 
-	return work_size, rwork_size
+	return
 }
 
 // Compute generalized Schur form using QZ algorithm (real)
-hgeqz_real :: proc(
+hessenberg_qz_iteration_real :: proc(
 	H: ^Matrix($T), // Hessenberg matrix (input/output)
 	T_mat: ^Matrix(T), // Triangular matrix (input/output)
 	alphar: []T, // Real parts of alpha (pre-allocated, size n)
@@ -3583,7 +2618,7 @@ hgeqz_real :: proc(
 }
 
 // Compute generalized Schur form using QZ algorithm (complex)
-hgeqz_complex :: proc(
+hessenberg_qz_iteration_complex :: proc(
 	H: ^Matrix($Cmplx), // Hessenberg matrix (input/output)
 	T_mat: ^Matrix(Cmplx), // Triangular matrix (input/output)
 	alpha: []Cmplx, // Alpha values (pre-allocated, size n)
@@ -3653,13 +2688,13 @@ hgeqz_complex :: proc(
 // HSEIN - Inverse iteration for eigenvectors of upper Hessenberg
 // ===================================================================================
 
-hsein :: proc {
-	hsein_real,
-	hsein_complex,
+hessenberg_eigenvectors_inverse :: proc {
+	hessenberg_eigenvectors_inverse_real,
+	hessenberg_eigenvectors_inverse_complex,
 }
 
 // Compute eigenvectors of Hessenberg matrix by inverse iteration (real)
-hsein_real :: proc(
+hessenberg_eigenvectors_inverse_real :: proc(
 	H: ^Matrix($T), // Upper Hessenberg matrix (not modified)
 	WR: []T, // Real parts of eigenvalues (input)
 	WI: []T, // Imaginary parts of eigenvalues (input)
@@ -3724,7 +2759,7 @@ hsein_real :: proc(
 }
 
 // Compute eigenvectors of Hessenberg matrix by inverse iteration (complex)
-hsein_complex :: proc(
+hessenberg_eigenvectors_inverse_complex :: proc(
 	H: ^Matrix($Cmplx), // Upper Hessenberg matrix (not modified)
 	W: []Cmplx, // Eigenvalues (input)
 	VL: ^Matrix(Cmplx), // Left eigenvectors (pre-allocated, optional)
@@ -3792,46 +2827,43 @@ hsein_complex :: proc(
 // HSEQR - Compute Schur form of upper Hessenberg
 // ===================================================================================
 
-hseqr :: proc {
-	hseqr_real,
-	hseqr_complex,
+hessenberg_to_schur :: proc {
+	hessenberg_to_schur_real,
+	hessenberg_to_schur_complex,
 }
 
 // Query workspace size for Hessenberg Schur form
-query_workspace_hseqr :: proc(n: Blas_Int, $T: typeid) -> (work_size: int) where is_float(T) || is_complex(T) {
+query_workspace_hessenberg_to_schur :: proc(H: ^Matrix($T)) -> (work: int) where is_float(T) || is_complex(T) {
+	n := H.rows
 	job_c := cast(u8)Hessenberg_Job.Schur
 	compz_c := cast(u8)Compz.Vectors
 	ilo: Blas_Int = 1
 	ihi := n
 	lwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	work_query: T
 
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.shseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dhseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.chseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, &n, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zhseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, &n, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
+	when is_float(T) {
+		when T == f32 {
+			lapack.shseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, nil, &n, &work_query, &lwork, &info)
+		} else when T == f64 {
+			lapack.dhseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, nil, &n, &work_query, &lwork, &info)
+		}
+		work = int(work_query)
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.chseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, &n, &work_query, &lwork, &info)
+		} else when T == complex128 {
+			lapack.zhseqr_(&job_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, nil, &n, &work_query, &lwork, &info)
+		}
+		work = int(real(work_query))
 	}
 
-	return work_size
+	return
 }
 
 // Compute eigenvalues/Schur form of Hessenberg matrix (real)
-hseqr_real :: proc(
+hessenberg_to_schur_real :: proc(
 	H: ^Matrix($T), // Upper Hessenberg matrix (input/output)
 	WR: []T, // Real parts of eigenvalues (pre-allocated, size n)
 	WI: []T, // Imaginary parts of eigenvalues (pre-allocated, size n)
@@ -3881,7 +2913,7 @@ hseqr_real :: proc(
 }
 
 // Compute eigenvalues/Schur form of Hessenberg matrix (complex)
-hseqr_complex :: proc(
+hessenberg_to_schur_complex :: proc(
 	H: ^Matrix($Cmplx), // Upper Hessenberg matrix (input/output)
 	W: []Cmplx, // Eigenvalues (pre-allocated, size n)
 	Z: ^Matrix(Cmplx), // Schur vectors (optional, input/output)
@@ -3932,13 +2964,13 @@ hseqr_complex :: proc(
 // GGBAK - Back-transform eigenvectors after balancing
 // ===================================================================================
 
-ggbak :: proc {
-	ggbak_real,
-	ggbak_complex,
+balance_backtransform_generalized :: proc {
+	balance_backtransform_generalized_real,
+	balance_backtransform_generalized_complex,
 }
 
 // Back-transform eigenvectors after generalized balancing (real)
-ggbak_real :: proc(
+balance_backtransform_generalized_real :: proc(
 	lscale: []$T, // Left scale factors from ggbal (input, size n)
 	rscale: []T, // Right scale factors from ggbal (input, size n)
 	V: ^Matrix(T), // Eigenvectors to transform (input/output)
@@ -3974,7 +3006,7 @@ ggbak_real :: proc(
 }
 
 // Back-transform eigenvectors after generalized balancing (complex)
-ggbak_complex :: proc(
+balance_backtransform_generalized_complex :: proc(
 	lscale: []$Real, // Left scale factors from ggbal (input, size n)
 	rscale: []Real, // Right scale factors from ggbal (input, size n)
 	V: ^Matrix($Cmplx), // Eigenvectors to transform (input/output)
@@ -3992,14 +3024,8 @@ ggbak_complex :: proc(
 // ===================================================================================
 // GGBAL - Balance matrix pair for better eigenvalue conditioning
 // ===================================================================================
-
-ggbal :: proc {
-	ggbal_real,
-	ggbal_complex,
-}
-
 // Balance matrix pair for generalized eigenvalue problem
-ggbal_real :: proc(
+balance_generalized :: proc(
 	A: ^Matrix($T), // First matrix (input/output)
 	B: ^Matrix(T), // Second matrix (input/output)
 	lscale: []T, // Left scale factors (pre-allocated, size n)
@@ -4038,74 +3064,49 @@ ggbal_real :: proc(
 	return ilo, ihi, info, info == 0
 }
 
-// Balance matrix pair for generalized eigenvalue problem (complex wrapper)
-ggbal_complex :: proc(
-	A: ^Matrix($Cmplx), // First matrix (input/output)
-	B: ^Matrix(Cmplx), // Second matrix (input/output)
-	lscale: []$Real, // Left scale factors (pre-allocated, size n)
-	rscale: []Real, // Right scale factors (pre-allocated, size n)
-	work: []Real, // Workspace (pre-allocated, size 6*n)
-	job: Balance_Job = .Both,
-) -> (
-	ilo: Blas_Int,
-	ihi: Blas_Int,
-	info: Info,
-	ok: bool,
-) where (Cmplx == complex64 && Real == f32) || (Cmplx == complex128 && Real == f64) {
-	return ggbal_real(A, B, lscale, rscale, work, job)
-}
 
 // ===================================================================================
 // GGHRD - Reduce to generalized Hessenberg form
 // ===================================================================================
 
-// Note: Use gghrd_real or gghrd_complex procedure groups directly
-// gghrd :: proc {
-// 	gghrd_real,
-// 	gghrd_complex,
-// }
-
-// Query workspace size for generalized Hessenberg reduction (gghd3)
-query_workspace_gghd3 :: proc(n: Blas_Int, $T: typeid) -> (work_size: int) where is_float(T) || is_complex(T) {
+// Query workspace size for generalized Hessenberg reduction (blocked algorithm)
+query_workspace_reduce_to_hessenberg_generalized_blocked :: proc(A: ^Matrix($T)) -> (work_size: int) where is_float(T) || is_complex(T) {
+	n := A.rows
 	compq_c := cast(u8)Compz.Vectors
 	compz_c := cast(u8)Compz.Vectors
 	ilo: Blas_Int = 1
 	ihi := n
 	lwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	work_query: T
 
-	when T == f32 {
-		work_query: f32
-		info: Info
-		lapack.sgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
+	when is_float(T) {
+		when T == f32 {
+			lapack.sgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
+		} else when T == f64 {
+			lapack.dgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
+		}
 		work_size = int(work_query)
-	} else when T == f64 {
-		work_query: f64
-		info: Info
-		lapack.dgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
-		work_size = int(work_query)
-	} else when T == complex64 {
-		work_query: complex64
-		info: Info
-		lapack.cgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
-		work_size = int(real(work_query))
-	} else when T == complex128 {
-		work_query: complex128
-		info: Info
-		lapack.zgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
+	} else when is_complex(T) {
+		when T == complex64 {
+			lapack.cgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
+		} else when T == complex128 {
+			lapack.zgghd3_(&compq_c, &compz_c, &n, &ilo, &ihi, nil, &n, nil, &n, nil, &n, nil, &n, &work_query, &lwork, &info)
+		}
 		work_size = int(real(work_query))
 	}
 
-	return work_size
+	return
 }
 
 // Reduce matrix pair to generalized Hessenberg form (real, no workspace)
-gghrd_real :: proc {
-	gghrd_real_basic,
-	gghrd_real_blocked,
+reduce_to_hessenberg_generalized_basic :: proc {
+	reduce_to_hessenberg_generalized_real_basic,
+	reduce_to_hessenberg_generalized_complex_basic,
 }
 
 // Reduce matrix pair to generalized Hessenberg form - basic algorithm (real)
-gghrd_real_basic :: proc(
+reduce_to_hessenberg_generalized_real_basic :: proc(
 	A: ^Matrix($T), // First matrix (input/output)
 	B: ^Matrix(T), // Second matrix (input/output)
 	Q: ^Matrix(T), // Left orthogonal matrix (optional, input/output)
@@ -4160,7 +3161,7 @@ gghrd_real_basic :: proc(
 }
 
 // Reduce matrix pair to generalized Hessenberg form - blocked algorithm (real)
-gghrd_real_blocked :: proc(
+reduce_to_hessenberg_generalized_real_blocked :: proc(
 	A: ^Matrix($T), // First matrix (input/output)
 	B: ^Matrix(T), // Second matrix (input/output)
 	Q: ^Matrix(T), // Left orthogonal matrix (optional, input/output)
@@ -4219,13 +3220,13 @@ gghrd_real_blocked :: proc(
 }
 
 // Reduce matrix pair to generalized Hessenberg form (complex)
-gghrd_complex :: proc {
-	gghrd_complex_basic,
-	gghrd_complex_blocked,
+reduce_to_hessenberg_generalized_blocked :: proc {
+	reduce_to_hessenberg_generalized_real_blocked,
+	reduce_to_hessenberg_generalized_complex_blocked,
 }
 
 // Reduce matrix pair to generalized Hessenberg form - basic algorithm (complex)
-gghrd_complex_basic :: proc(
+reduce_to_hessenberg_generalized_complex_basic :: proc(
 	A: ^Matrix($Cmplx), // First matrix (input/output)
 	B: ^Matrix(Cmplx), // Second matrix (input/output)
 	Q: ^Matrix(Cmplx), // Left unitary matrix (optional, input/output)
@@ -4280,7 +3281,7 @@ gghrd_complex_basic :: proc(
 }
 
 // Reduce matrix pair to generalized Hessenberg form - blocked algorithm (complex)
-gghrd_complex_blocked :: proc(
+reduce_to_hessenberg_generalized_complex_blocked :: proc(
 	A: ^Matrix($Cmplx), // First matrix (input/output)
 	B: ^Matrix(Cmplx), // Second matrix (input/output)
 	Q: ^Matrix(Cmplx), // Left unitary matrix (optional, input/output)
@@ -4342,65 +3343,51 @@ gghrd_complex_blocked :: proc(
 // TGSYL - Solve generalized Sylvester equation
 // ===================================================================================
 
-tgsyl :: proc {
-	tgsyl_real,
-	tgsyl_complex,
+sylvester_generalized :: proc {
+	sylvester_generalized_real,
+	sylvester_generalized_complex,
 }
 
 // Query workspace size for generalized Sylvester equation
-query_workspace_tgsyl :: proc(m: Blas_Int, n: Blas_Int, $T: typeid) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+query_workspace_sylvester_generalized :: proc(A: ^Matrix($T), B: ^Matrix(T)) -> (work_size: int, iwork_size: int) where is_float(T) || is_complex(T) {
+	m := A.rows
+	n := B.rows
 	trans_c := cast(u8)Transpose.None
 	ijob: Blas_Int = 0
 	lwork: Blas_Int = QUERY_WORKSPACE
+	info: Info
+	work_query: T
+	iwork_query: Blas_Int
 
 	when is_float(T) {
-		liwork: Blas_Int = QUERY_WORKSPACE
+		dif: T
+		scale: T
 		when T == f32 {
-			work_query: f32
-			info: Info
-			dif: f32
-			scale: f32
-			iwork_query: Blas_Int
 			lapack.stgsyl_(&trans_c, &ijob, &m, &n, nil, &m, nil, &m, nil, &m, nil, &n, nil, &n, nil, &n, &dif, &scale, &work_query, &lwork, &iwork_query, &info)
-			work_size = int(work_query)
-			iwork_size = int(iwork_query)
 		} else when T == f64 {
-			work_query: f64
-			info: Info
-			dif: f64
-			scale: f64
-			iwork_query: Blas_Int
 			lapack.dtgsyl_(&trans_c, &ijob, &m, &n, nil, &m, nil, &m, nil, &m, nil, &n, nil, &n, nil, &n, &dif, &scale, &work_query, &lwork, &iwork_query, &info)
-			work_size = int(work_query)
-			iwork_size = int(iwork_query)
 		}
-	} else {
+		work_size = int(work_query)
+		iwork_size = int(iwork_query)
+	} else when is_complex(T) {
 		when T == complex64 {
-			work_query: complex64
-			info: Info
 			dif: f32
 			scale: f32
-			iwork_query: Blas_Int
 			lapack.ctgsyl_(&trans_c, &ijob, &m, &n, nil, &m, nil, &m, nil, &m, nil, &n, nil, &n, nil, &n, &dif, &scale, &work_query, &lwork, &iwork_query, &info)
-			work_size = int(real(work_query))
-			iwork_size = int(iwork_query)
 		} else when T == complex128 {
-			work_query: complex128
-			info: Info
 			dif: f64
 			scale: f64
-			iwork_query: Blas_Int
 			lapack.ztgsyl_(&trans_c, &ijob, &m, &n, nil, &m, nil, &m, nil, &m, nil, &n, nil, &n, nil, &n, &dif, &scale, &work_query, &lwork, &iwork_query, &info)
-			work_size = int(real(work_query))
-			iwork_size = int(iwork_query)
 		}
+		work_size = int(real(work_query))
+		iwork_size = int(iwork_query)
 	}
 
-	return work_size, iwork_size
+	return
 }
 
 // Solve generalized Sylvester equation (real)
-tgsyl_real :: proc(
+sylvester_generalized_real :: proc(
 	A: ^Matrix($T), // First matrix on left side (not modified)
 	B: ^Matrix(T), // Second matrix on left side (not modified)
 	C: ^Matrix(T), // First matrix in equation (input/output)
@@ -4448,7 +3435,7 @@ tgsyl_real :: proc(
 }
 
 // Solve generalized Sylvester equation (complex)
-tgsyl_complex :: proc(
+sylvester_generalized_complex :: proc(
 	A: ^Matrix($Cmplx), // First matrix on left side (not modified)
 	B: ^Matrix(Cmplx), // Second matrix on left side (not modified)
 	C: ^Matrix(Cmplx), // First matrix in equation (input/output)
