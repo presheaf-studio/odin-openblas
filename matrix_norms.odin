@@ -29,24 +29,6 @@ trid_norm :: proc {
 	trid_norm_f64_c128,
 }
 
-// Compute Hermitian banded matrix norm proc group
-band_herm_norm :: proc {
-	band_herm_norm_c64,
-	band_herm_norm_c128,
-}
-
-// Compute Hermitian matrix norm proc group
-dns_herm_norm :: proc {
-	dns_herm_norm_c64,
-	dns_herm_norm_c128,
-}
-
-// Compute Hermitian packed matrix norm proc group
-pack_herm_norm :: proc {
-	pack_herm_norm_c64,
-	pack_herm_norm_c128,
-}
-
 // Compute Hessenberg matrix norm proc group
 dns_hessenberg_norm :: proc {
 	dns_hessenberg_norm_f32_c64,
@@ -79,10 +61,8 @@ tri_norm :: proc {
 
 // Swap rows during factorization
 swap_rows :: proc {
-	swap_rows_f32,
-	swap_rows_f64,
-	swap_rows_c64,
-	swap_rows_c128,
+	swap_rows_f32_c64,
+	swap_rows_f64_c128,
 }
 
 // Euclidean norm proc group
@@ -112,7 +92,7 @@ band_norm_f32_c64 :: proc(
 		return lapack.slangb_(&norm_c, &n, &kl_int, &ku_int, raw_data(A.data), &lda, nil, 1)
 	} else {
 		work: [1]f32
-		return lapack.clangb_(&norm_c, &n, &kl_int, &ku_int, cast(^complex64)raw_data(A.data), &lda, raw_data(work), 1)
+		return lapack.clangb_(&norm_c, &n, &kl_int, &ku_int, raw_data(A.data), &lda, raw_data(work), 1)
 	}
 }
 
@@ -133,7 +113,7 @@ band_norm_f64_c128 :: proc(
 		return lapack.dlangb_(&norm_c, &n, &kl_int, &ku_int, raw_data(A.data), &lda, nil, 1)
 	} else {
 		work: [1]f64
-		return lapack.zlangb_(&norm_c, &n, &kl_int, &ku_int, cast(^complex128)raw_data(A.data), &lda, raw_data(work), 1)
+		return lapack.zlangb_(&norm_c, &n, &kl_int, &ku_int, raw_data(A.data), &lda, raw_data(work), 1)
 	}
 }
 
@@ -156,9 +136,9 @@ dns_norm_f32_c64 :: proc(
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clange_(&norm_c, &m, &n, cast(^complex64)raw_data(A.data), &lda, raw_data(work), 1)
+			return lapack.clange_(&norm_c, &m, &n, raw_data(A.data), &lda, raw_data(work), 1)
 		} else {
-			return lapack.clange_(&norm_c, &m, &n, cast(^complex64)raw_data(A.data), &lda, nil, 1)
+			return lapack.clange_(&norm_c, &m, &n, raw_data(A.data), &lda, nil, 1)
 		}
 	}
 }
@@ -178,9 +158,9 @@ dns_norm_f64_c128 :: proc(
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlange_(&norm_c, &m, &n, cast(^complex128)raw_data(A.data), &lda, raw_data(work), 1)
+			return lapack.zlange_(&norm_c, &m, &n, raw_data(A.data), &lda, raw_data(work), 1)
 		} else {
-			return lapack.zlange_(&norm_c, &m, &n, cast(^complex128)raw_data(A.data), &lda, nil, 1)
+			return lapack.zlange_(&norm_c, &m, &n, raw_data(A.data), &lda, nil, 1)
 		}
 	}
 }
@@ -190,34 +170,26 @@ dns_norm_f64_c128 :: proc(
 // ===================================================================================
 
 // Compute norm of tridiagonal matrix for f32/c64
-trid_norm_f32_c64 :: proc(
-	d: []$T, // Main diagonal
-	e: []T, // Off-diagonal
-	norm: MatrixNorm = .OneNorm,
-) -> f32 where T == f32 || T == complex64 {
-	n := len(d)
+trid_norm_f32_c64 :: proc(tm: ^Tridiagonal($T), norm: MatrixNorm = .OneNorm) -> f32 where T == f32 || T == complex64 {
+	n := tm.n
 	norm_c := cast(u8)norm
 
 	when T == f32 {
-		return lapack.slangt_(&norm_c, &n, raw_data(e), raw_data(d), raw_data(e[1:]), 1)
+		return lapack.slangt_(&norm_c, &n, raw_data(tm.dl), raw_data(tm.d), raw_data(tm.du), 1)
 	} else {
-		return lapack.clangt_(&norm_c, &n, cast(^complex64)raw_data(e), cast(^complex64)raw_data(d), cast(^complex64)raw_data(e[1:]), 1)
+		return lapack.clangt_(&norm_c, &n, raw_data(tm.dl), raw_data(tm.d), raw_data(tm.du), 1)
 	}
 }
 
 // Compute norm of tridiagonal matrix for f64/c128
-trid_norm_f64_c128 :: proc(
-	d: []$T, // Main diagonal
-	e: []T, // Off-diagonal
-	norm: MatrixNorm = .OneNorm,
-) -> f64 where T == f64 || T == complex128 {
-	n := len(d)
+trid_norm_f64_c128 :: proc(tm: ^Tridiagonal($T), norm: MatrixNorm = .OneNorm) -> f64 where T == f64 || T == complex128 {
+	n := tm.n
 	norm_c := cast(u8)norm
 
 	when T == f64 {
-		return lapack.dlangt_(&norm_c, &n, raw_data(e), raw_data(d), raw_data(e[1:]), 1)
+		return lapack.dlangt_(&norm_c, &n, raw_data(tm.dl), raw_data(tm.d), raw_data(tm.du), 1)
 	} else {
-		return lapack.zlangt_(&norm_c, &n, cast(^complex128)raw_data(e), cast(^complex128)raw_data(d), cast(^complex128)raw_data(e[1:]), 1)
+		return lapack.zlangt_(&norm_c, &n, raw_data(tm.dl), raw_data(tm.d), raw_data(tm.du), 1)
 	}
 }
 
@@ -225,122 +197,130 @@ trid_norm_f64_c128 :: proc(
 // HERMITIAN MATRIX NORM COMPUTATION
 // ===================================================================================
 
-// Compute norm of Hermitian banded matrix for c64
-band_herm_norm_c64 :: proc(
-	A: ^Matrix(complex64), // Hermitian banded matrix
-	k: int, // Number of super/subdiagonals
-	uplo: MatrixTriangle = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f32 {
-	n := A.cols
-	k := Blas_Int(k)
-	lda := A.ld
-	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-
-	if norm == .FrobeniusNorm {
-		work: [1]f32
-		return lapack.clanhb_(&norm_c, &uplo_c, &n, &k, cast(^complex64)raw_data(A.data), &lda, &work[0], 1, 1)
-	} else {
-		return lapack.clanhb_(&norm_c, &uplo_c, &n, &k, cast(^complex64)raw_data(A.data), &lda, nil, 1, 1)
+// Query workspace for Hermitian banded matrix norm (only needed for infinity norm)
+query_workspace_band_herm_norm :: proc(hb: ^HermBand($Cmplx), norm: MatrixNorm) -> int where is_complex(Cmplx) {
+	// Only infinity norm requires workspace
+	if norm == .InfinityNorm {
+		return int(hb.n)
 	}
+	return 0
 }
 
-// Compute norm of Hermitian banded matrix for c128
-band_herm_norm_c128 :: proc(
-	A: ^Matrix(complex128), // Hermitian banded matrix
-	k: int, // Number of super/subdiagonals
-	uplo: MatrixTriangle = .Upper,
+// Compute norm of Hermitian banded matrix (complex types)
+band_herm_norm :: proc(
+	hb: ^HermBand($Cmplx),
+	work: []$Real, // Workspace (only needed for infinity norm, size n)
 	norm: MatrixNorm = .OneNorm,
-) -> f64 {
-	n := A.cols
-	k := Blas_Int(k)
-	lda := A.ld
+) -> Real where is_complex(Cmplx) {
+	n := hb.n
+	kd := hb.kd
+	ldab := hb.ldab
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
+	uplo_c := cast(u8)hb.uplo
 
-	if norm == .FrobeniusNorm {
-		work: [1]f64
-		return lapack.zlanhb_(&norm_c, &uplo_c, &n, &k, cast(^complex128)raw_data(A.data), &lda, &work[0], 1, 1)
-	} else {
-		return lapack.zlanhb_(&norm_c, &uplo_c, &n, &k, cast(^complex128)raw_data(A.data), &lda, nil, 1, 1)
+	// Workspace only needed for infinity norm
+	if norm == .InfinityNorm {
+		assert(len(work) >= int(n), "Workspace too small for infinity norm")
 	}
+
+	when Cmplx == complex64 {
+		if norm == .InfinityNorm {
+			return lapack.clanhb_(&norm_c, &uplo_c, &n, &kd, raw_data(hb.data), &ldab, raw_data(work), 1, 1)
+		} else {
+			return lapack.clanhb_(&norm_c, &uplo_c, &n, &kd, raw_data(hb.data), &ldab, nil, 1, 1)
+		}
+	} else when Cmplx == complex128 {
+		if norm == .InfinityNorm {
+			return lapack.zlanhb_(&norm_c, &uplo_c, &n, &kd, raw_data(hb.data), &ldab, raw_data(work), 1, 1)
+		} else {
+			return lapack.zlanhb_(&norm_c, &uplo_c, &n, &kd, raw_data(hb.data), &ldab, nil, 1, 1)
+		}
+	}
+	return 0
 }
 
-// Compute norm of Hermitian matrix for c64
-dns_herm_norm_c64 :: proc(
-	A: ^Matrix(complex64), // Hermitian matrix
-	uplo: MatrixTriangle = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f32 {
-	n := A.cols
-	lda := A.ld
-	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-
-	if norm == .FrobeniusNorm {
-		work: [1]f32
-		return lapack.clanhe_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(A.data), &lda, &work[0], 1, 1)
-	} else {
-		return lapack.clanhe_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(A.data), &lda, nil, 1, 1)
+// Query workspace for Hermitian matrix norm (only needed for infinity norm with complex matrices)
+query_workspace_dns_herm_norm :: proc(A: ^Matrix($Cmplx), norm: MatrixNorm) -> int where is_complex(Cmplx) {
+	// Only infinity norm requires workspace for complex Hermitian matrices
+	if norm == .InfinityNorm {
+		return int(A.cols)
 	}
+	return 0
 }
 
-// Compute norm of Hermitian matrix for c128
-dns_herm_norm_c128 :: proc(
-	A: ^Matrix(complex128), // Hermitian matrix
+// Compute norm of Hermitian matrix (complex types)
+dns_herm_norm :: proc(
+	A: ^Matrix($Cmplx), // Hermitian matrix
+	work: []$Real, // Workspace (only needed for infinity norm, size n)
 	uplo: MatrixTriangle = .Upper,
 	norm: MatrixNorm = .OneNorm,
-) -> f64 {
+) -> Real where is_complex(Cmplx) {
 	n := A.cols
 	lda := A.ld
 	norm_c := cast(u8)norm
 	uplo_c := cast(u8)uplo
 
-	if norm == .FrobeniusNorm {
-		work: [1]f64
-		return lapack.zlanhe_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(A.data), &lda, &work[0], 1, 1)
-	} else {
-		return lapack.zlanhe_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(A.data), &lda, nil, 1, 1)
+	// Workspace only needed for infinity norm
+	if norm == .InfinityNorm {
+		assert(len(work) >= int(n), "Workspace too small for infinity norm")
 	}
+
+	when Cmplx == complex64 {
+		if norm == .InfinityNorm {
+			return lapack.clanhe_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, raw_data(work), 1, 1)
+		} else {
+			return lapack.clanhe_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, nil, 1, 1)
+		}
+	} else when Cmplx == complex128 {
+		if norm == .InfinityNorm {
+			return lapack.zlanhe_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, raw_data(work), 1, 1)
+		} else {
+			return lapack.zlanhe_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, nil, 1, 1)
+		}
+	}
+	return 0
 }
 
-// Compute norm of Hermitian packed matrix for c64
-pack_herm_norm_c64 :: proc(
-	AP: []complex64, // Hermitian packed matrix
+// Query workspace for Hermitian packed matrix norm (only needed for infinity norm)
+query_workspace_pack_herm_norm :: proc(n: int, norm: MatrixNorm) -> int {
+	// Only infinity norm requires workspace
+	if norm == .InfinityNorm {
+		return n
+	}
+	return 0
+}
+
+// Compute norm of Hermitian packed matrix (complex types)
+pack_herm_norm :: proc(
+	AP: []$Cmplx, // Hermitian packed matrix
+	work: []$Real, // Workspace (only needed for infinity norm, size n)
 	n: int,
 	uplo: MatrixTriangle = .Upper,
 	norm: MatrixNorm = .OneNorm,
-) -> f32 {
+) -> Real where is_complex(Cmplx) {
 	n := Blas_Int(n)
 	norm_c := cast(u8)norm
 	uplo_c := cast(u8)uplo
 
-	if norm == .FrobeniusNorm {
-		work: [1]f32
-		return lapack.clanhp_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(AP), &work[0], 1, 1)
-	} else {
-		return lapack.clanhp_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(AP), nil, 1, 1)
+	// Workspace only needed for infinity norm
+	if norm == .InfinityNorm {
+		assert(len(work) >= int(n), "Workspace too small for infinity norm")
 	}
-}
 
-// Compute norm of Hermitian packed matrix for c128
-pack_herm_norm_c128 :: proc(
-	AP: []complex128, // Hermitian packed matrix
-	n: int,
-	uplo: MatrixTriangle = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f64 {
-	n := Blas_Int(n)
-	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-
-	if norm == .FrobeniusNorm {
-		work: [1]f64
-		return lapack.zlanhp_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(AP), &work[0], 1, 1)
-	} else {
-		return lapack.zlanhp_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(AP), nil, 1, 1)
+	when Cmplx == complex64 {
+		if norm == .InfinityNorm {
+			return lapack.clanhp_(&norm_c, &uplo_c, &n, raw_data(AP), raw_data(work), 1, 1)
+		} else {
+			return lapack.clanhp_(&norm_c, &uplo_c, &n, raw_data(AP), nil, 1, 1)
+		}
+	} else when Cmplx == complex128 {
+		if norm == .InfinityNorm {
+			return lapack.zlanhp_(&norm_c, &uplo_c, &n, raw_data(AP), raw_data(work), 1, 1)
+		} else {
+			return lapack.zlanhp_(&norm_c, &uplo_c, &n, raw_data(AP), nil, 1, 1)
+		}
 	}
+	return 0
 }
 
 // ===================================================================================
@@ -361,9 +341,9 @@ dns_hessenberg_norm_f32_c64 :: proc(
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clanhs_(&norm_c, &n, cast(^complex64)raw_data(A.data), &lda, raw_data(work), 1)
+			return lapack.clanhs_(&norm_c, &n, raw_data(A.data), &lda, raw_data(work), 1)
 		} else {
-			return lapack.clanhs_(&norm_c, &n, cast(^complex64)raw_data(A.data), &lda, nil, 1)
+			return lapack.clanhs_(&norm_c, &n, raw_data(A.data), &lda, nil, 1)
 		}
 	}
 }
@@ -382,9 +362,9 @@ dns_hessenberg_norm_f64_c128 :: proc(
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlanhs_(&norm_c, &n, cast(^complex128)raw_data(A.data), &lda, raw_data(work), 1)
+			return lapack.zlanhs_(&norm_c, &n, raw_data(A.data), &lda, raw_data(work), 1)
 		} else {
-			return lapack.zlanhs_(&norm_c, &n, cast(^complex128)raw_data(A.data), &lda, nil, 1)
+			return lapack.zlanhs_(&norm_c, &n, raw_data(A.data), &lda, nil, 1)
 		}
 	}
 }
@@ -409,9 +389,9 @@ dns_sym_norm_f32_c64 :: proc(
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clansy_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(A.data), &lda, raw_data(work), 1, 1)
+			return lapack.clansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, raw_data(work), 1, 1)
 		} else {
-			return lapack.clansy_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(A.data), &lda, nil, 1, 1)
+			return lapack.clansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, nil, 1, 1)
 		}
 	}
 }
@@ -432,9 +412,9 @@ dns_sym_norm_f64_c128 :: proc(
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlansy_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(A.data), &lda, raw_data(work), 1, 1)
+			return lapack.zlansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, raw_data(work), 1, 1)
 		} else {
-			return lapack.zlansy_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(A.data), &lda, nil, 1, 1)
+			return lapack.zlansy_(&norm_c, &uplo_c, &n, raw_data(A.data), &lda, nil, 1, 1)
 		}
 	}
 }
@@ -445,154 +425,138 @@ dns_sym_norm_f64_c128 :: proc(
 
 // Compute norm of triangular banded matrix for f32/c64
 band_tri_norm_f32_c64 :: proc(
-	A: ^Matrix($T), // Triangular banded matrix
-	k: int, // Number of super/subdiagonals
-	uplo: MatrixTriangle = .Upper,
-	diag: MatrixDiagonal = .NonUnit,
+	tb: ^TriBand($T), // Triangular banded matrix
 	norm: MatrixNorm = .OneNorm,
 ) -> f32 where T == f32 || T == complex64 {
-	n := A.cols
-	k := Blas_Int(k)
-	lda := A.ld
+	n := tb.n
+	k := tb.k
+	ldab := tb.ldab
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-	diag_c := cast(u8)diag
+	uplo_c := cast(u8)tb.uplo
+	diag_c := cast(u8)tb.diag
 
 	when T == f32 {
-		return lapack.slantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(A.data), &lda, nil, 1, 1, 1)
+		return lapack.slantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(tb.data), &ldab, nil)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clantb_(&norm_c, &uplo_c, &diag_c, &n, &k, cast(^complex64)raw_data(A.data), &lda, raw_data(work), 1, 1, 1)
+			return lapack.clantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(tb.data), &ldab, raw_data(work))
 		} else {
-			return lapack.clantb_(&norm_c, &uplo_c, &diag_c, &n, &k, cast(^complex64)raw_data(A.data), &lda, nil, 1, 1, 1)
+			return lapack.clantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(tb.data), &ldab, nil)
 		}
 	}
 }
 
 // Compute norm of triangular banded matrix for f64/c128
 band_tri_norm_f64_c128 :: proc(
-	A: ^Matrix($T), // Triangular banded matrix
-	k: int, // Number of super/subdiagonals
-	uplo: MatrixTriangle = .Upper,
-	diag: MatrixDiagonal = .NonUnit,
+	tb: ^TriBand($T), // Triangular banded matrix
 	norm: MatrixNorm = .OneNorm,
 ) -> f64 where T == f64 || T == complex128 {
-	n := A.cols
-	k := Blas_Int(k)
-	lda := A.ld
+	n := tb.n
+	k := tb.k
+	ldab := tb.ldab
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-	diag_c := cast(u8)diag
+	uplo_c := cast(u8)tb.uplo
+	diag_c := cast(u8)tb.diag
 
 	when T == f64 {
-		return lapack.dlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(A.data), &lda, nil, 1, 1, 1)
+		return lapack.dlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(tb.data), &ldab, nil)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, cast(^complex128)raw_data(A.data), &lda, raw_data(work), 1, 1, 1)
+			return lapack.zlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(tb.data), &ldab, raw_data(work))
 		} else {
-			return lapack.zlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, cast(^complex128)raw_data(A.data), &lda, nil, 1, 1, 1)
+			return lapack.zlantb_(&norm_c, &uplo_c, &diag_c, &n, &k, raw_data(tb.data), &ldab, nil)
 		}
 	}
 }
 
 // Compute norm of triangular packed matrix for f32/c64
 pack_tri_norm_f32_c64 :: proc(
-	AP: []$T, // Triangular packed matrix
-	n: int,
-	uplo: MatrixTriangle = .Upper,
-	diag: MatrixDiagonal = .NonUnit,
+	pt: ^PackedTriangular($T), // Triangular packed matrix
 	norm: MatrixNorm = .OneNorm,
 ) -> f32 where T == f32 || T == complex64 {
-	n := Blas_Int(n)
+	n := Blas_Int(pt.n)
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-	diag_c := cast(u8)diag
+	uplo_c := cast(u8)pt.uplo
+	diag_c := cast(u8)pt.diag
 
 	when T == f32 {
-		return lapack.slantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(AP), nil, 1, 1, 1)
+		return lapack.slantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(pt.data), nil)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clantp_(&norm_c, &uplo_c, &diag_c, &n, cast(^complex64)raw_data(AP), raw_data(work), 1, 1, 1)
+			return lapack.clantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(pt.data), raw_data(work))
 		} else {
-			return lapack.clantp_(&norm_c, &uplo_c, &diag_c, &n, cast(^complex64)raw_data(AP), nil, 1, 1, 1)
+			return lapack.clantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(pt.data), nil)
 		}
 	}
 }
 
 // Compute norm of triangular packed matrix for f64/c128
 pack_tri_norm_f64_c128 :: proc(
-	AP: []$T, // Triangular packed matrix
-	n: int,
-	uplo: MatrixTriangle = .Upper,
-	diag: MatrixDiagonal = .NonUnit,
+	pt: ^PackedTriangular($T), // Triangular packed matrix
 	norm: MatrixNorm = .OneNorm,
 ) -> f64 where T == f64 || T == complex128 {
-	n := Blas_Int(n)
+	n := Blas_Int(pt.n)
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-	diag_c := cast(u8)diag
+	uplo_c := cast(u8)pt.uplo
+	diag_c := cast(u8)pt.diag
 
 	when T == f64 {
-		return lapack.dlantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(AP), nil, 1, 1, 1)
+		return lapack.dlantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(pt.data), nil)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlantp_(&norm_c, &uplo_c, &diag_c, &n, cast(^complex128)raw_data(AP), raw_data(work), 1, 1, 1)
+			return lapack.zlantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(pt.data), raw_data(work))
 		} else {
-			return lapack.zlantp_(&norm_c, &uplo_c, &diag_c, &n, cast(^complex128)raw_data(AP), nil, 1, 1, 1)
+			return lapack.dlantp_(&norm_c, &uplo_c, &diag_c, &n, raw_data(pt.data), nil)
 		}
 	}
 }
 
 // Compute norm of triangular matrix for f32/c64
 tri_norm_f32_c64 :: proc(
-	A: ^Matrix($T), // Triangular matrix
-	uplo: MatrixTriangle = .Upper,
-	diag: MatrixDiagonal = .NonUnit,
+	tri: ^Triangular($T), // Triangular matrix
 	norm: MatrixNorm = .OneNorm,
 ) -> f32 where T == f32 || T == complex64 {
-	n := A.cols
-	lda := A.ld
+	n := Blas_Int(tri.n)
+	lda := Blas_Int(tri.lda)
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-	diag_c := cast(u8)diag
+	uplo_c := cast(u8)tri.uplo
+	diag_c := cast(u8)tri.diag
 
 	when T == f32 {
-		return lapack.slantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(A.data), &lda, nil, 1, 1, 1)
+		return lapack.slantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(tri.data), &lda, nil)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clantr_(&norm_c, &uplo_c, &diag_c, &n, &n, cast(^complex64)raw_data(A.data), &lda, raw_data(work), 1, 1, 1)
+			return lapack.clantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(tri.data), &lda, raw_data(work))
 		} else {
-			return lapack.clantr_(&norm_c, &uplo_c, &diag_c, &n, &n, cast(^complex64)raw_data(A.data), &lda, nil, 1, 1, 1)
+			return lapack.clantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(tri.data), &lda, nil)
 		}
 	}
 }
 
 // Compute norm of triangular matrix for f64/c128
 tri_norm_f64_c128 :: proc(
-	A: ^Matrix($T), // Triangular matrix
-	uplo: MatrixTriangle = .Upper,
-	diag: MatrixDiagonal = .NonUnit,
+	tri: ^Triangular($T), // Triangular matrix
 	norm: MatrixNorm = .OneNorm,
 ) -> f64 where T == f64 || T == complex128 {
-	n := A.cols
-	lda := A.ld
+	n := Blas_Int(tri.n)
+	lda := Blas_Int(tri.lda)
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
-	diag_c := cast(u8)diag
+	uplo_c := cast(u8)tri.uplo
+	diag_c := cast(u8)tri.diag
 
 	when T == f64 {
-		return lapack.dlantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(A.data), &lda, nil, 1, 1, 1)
+		return lapack.dlantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(tri.data), &lda, nil)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlantr_(&norm_c, &uplo_c, &diag_c, &n, &n, cast(^complex128)raw_data(A.data), &lda, raw_data(work), 1, 1, 1)
+			return lapack.zlantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(tri.data), &lda, raw_data(work))
 		} else {
-			return lapack.zlantr_(&norm_c, &uplo_c, &diag_c, &n, &n, cast(^complex128)raw_data(A.data), &lda, nil, 1, 1, 1)
+			return lapack.zlantr_(&norm_c, &uplo_c, &diag_c, &n, &n, raw_data(tri.data), &lda, nil)
 		}
 	}
 }
@@ -603,48 +567,34 @@ tri_norm_f64_c128 :: proc(
 // Note: These are row-swapping functions (laswp) used during factorization
 // For general row/column permutation, use the functions in matrix_utilities.odin
 
-// Swap rows of matrix during factorization (f32)
-swap_rows_f32 :: proc(A: ^Matrix(f32), perm: []Blas_Int, k1: int = 0, k2: int = -1, incx: int = 1) {
+// Swap rows of matrix during factorization for f32/c64
+swap_rows_f32_c64 :: proc(A: ^Matrix($T), perm: []Blas_Int, k1: int = 0, k2: int = -1, incx: int = 1) where T == f32 || T == complex64 {
 	n := A.cols
 	lda := A.ld
 	k1_int := Blas_Int(k1)
 	k2_int := Blas_Int(k2 == -1 ? len(perm) - 1 : k2)
 	incx_int := Blas_Int(incx)
 
-	lapack.slaswp_(&n, raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
+	when T == f32 {
+		lapack.slaswp_(&n, raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
+	} else {
+		lapack.claswp_(&n, raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
+	}
 }
 
-// Swap rows of matrix during factorization (f64)
-swap_rows_f64 :: proc(A: ^Matrix(f64), perm: []Blas_Int, k1: int = 0, k2: int = -1, incx: int = 1) {
+// Swap rows of matrix during factorization for f64/c128
+swap_rows_f64_c128 :: proc(A: ^Matrix($T), perm: []Blas_Int, k1: int = 0, k2: int = -1, incx: int = 1) where T == f64 || T == complex128 {
 	n := A.cols
 	lda := A.ld
 	k1_int := Blas_Int(k1)
 	k2_int := Blas_Int(k2 == -1 ? len(perm) - 1 : k2)
 	incx_int := Blas_Int(incx)
 
-	lapack.dlaswp_(&n, raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
-}
-
-// Swap rows of matrix during factorization (c64)
-swap_rows_c64 :: proc(A: ^Matrix(complex64), perm: []Blas_Int, k1: int = 0, k2: int = -1, incx: int = 1) {
-	n := A.cols
-	lda := A.ld
-	k1_int := Blas_Int(k1)
-	k2_int := Blas_Int(k2 == -1 ? len(perm) - 1 : k2)
-	incx_int := Blas_Int(incx)
-
-	lapack.claswp_(&n, cast(^f32)raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
-}
-
-// Swap rows of matrix during factorization (c128)
-swap_rows_c128 :: proc(A: ^Matrix(complex128), perm: []Blas_Int, k1: int = 0, k2: int = -1, incx: int = 1) {
-	n := A.cols
-	lda := A.ld
-	k1_int := Blas_Int(k1)
-	k2_int := Blas_Int(k2 == -1 ? len(perm) - 1 : k2)
-	incx_int := Blas_Int(incx)
-
-	lapack.zlaswp_(&n, cast(^f64)raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
+	when T == f64 {
+		lapack.dlaswp_(&n, raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
+	} else {
+		lapack.zlaswp_(&n, raw_data(A.data), &lda, &k1_int, &k2_int, raw_data(perm), &incx_int)
+	}
 }
 
 // ===================================================================================
@@ -691,7 +641,7 @@ trid_herm_norm_c64 :: proc(
 	n := Blas_Int(len(D))
 	norm_c := cast(u8)norm
 
-	return lapack.clanht_(&norm_c, &n, raw_data(D), cast(^complex64)raw_data(E), 1)
+	return lapack.clanht_(&norm_c, &n, raw_data(D), raw_data(E), 1)
 }
 
 // Compute norm of Hermitian tridiagonal matrix for c128
@@ -704,41 +654,27 @@ trid_herm_norm_c128 :: proc(
 	n := Blas_Int(len(D))
 	norm_c := cast(u8)norm
 
-	return lapack.zlanht_(&norm_c, &n, raw_data(D), cast(^complex128)raw_data(E), 1)
+	return lapack.zlanht_(&norm_c, &n, raw_data(D), raw_data(E), 1)
 }
 
 // ===================================================================================
 // SYMMETRIC TRIDIAGONAL MATRIX NORM COMPUTATION
 // ===================================================================================
 
-// Compute norm of symmetric tridiagonal matrix proc group
-trid_sym_norm :: proc {
-	trid_sym_norm_f32,
-	trid_sym_norm_f64,
-}
+// Compute norm of symmetric tridiagonal matrix (real types only)
+// Note: For symmetric tridiagonal, dl == du, so we use d and du
+trid_sym_norm :: proc(tm: ^Tridiagonal($T), norm: MatrixNorm = .OneNorm) -> T where T == f32 || T == f64 {
+	assert(tm.symmetric, "trid_sym_norm requires symmetric tridiagonal matrix")
 
-// Compute norm of symmetric tridiagonal matrix for f32
-trid_sym_norm_f32 :: proc(
-	D: []f32, // Main diagonal
-	E: []f32, // Off-diagonal
-	norm: MatrixNorm = .OneNorm,
-) -> f32 {
-	n := Blas_Int(len(D))
+	n := tm.n
 	norm_c := cast(u8)norm
 
-	return lapack.slanst_(&norm_c, &n, raw_data(D), raw_data(E), 1)
-}
-
-// Compute norm of symmetric tridiagonal matrix for f64
-trid_sym_norm_f64 :: proc(
-	D: []f64, // Main diagonal
-	E: []f64, // Off-diagonal
-	norm: MatrixNorm = .OneNorm,
-) -> f64 {
-	n := Blas_Int(len(D))
-	norm_c := cast(u8)norm
-
-	return lapack.dlanst_(&norm_c, &n, raw_data(D), raw_data(E), 1)
+	when T == f32 {
+		return lapack.slanst_(&norm_c, &n, raw_data(tm.d), raw_data(tm.du), 1)
+	} else when T == f64 {
+		return lapack.dlanst_(&norm_c, &n, raw_data(tm.d), raw_data(tm.du), 1)
+	}
+	return 0
 }
 
 // ===================================================================================
@@ -752,51 +688,41 @@ band_sym_norm :: proc {
 }
 
 // Compute norm of symmetric banded matrix for f32/c64
-band_sym_norm_f32_c64 :: proc(
-	AB: ^Matrix($T), // Banded matrix storage
-	k: int, // Number of super/subdiagonals
-	uplo: MatrixRegion = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f32 where T == f32 || T == complex64 {
-	n := AB.cols
-	k := Blas_Int(k)
-	ldab := AB.ld
+band_sym_norm_f32_c64 :: proc(sb: ^SymBand($T), norm: MatrixNorm = .OneNorm) -> f32 where T == f32 || T == complex64 {
+	n := sb.n
+	kd := sb.kd
+	ldab := sb.ldab
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
+	uplo_c := cast(u8)sb.uplo
 
 	when T == f32 {
-		return lapack.slansb_(&norm_c, &uplo_c, &n, &k, raw_data(AB.data), &ldab, nil, 1, 1)
+		return lapack.slansb_(&norm_c, &uplo_c, &n, &kd, raw_data(sb.data), &ldab, nil, 1, 1)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clansb_(&norm_c, &uplo_c, &n, &k, cast(^complex64)raw_data(AB.data), &ldab, raw_data(work), 1, 1)
+			return lapack.clansb_(&norm_c, &uplo_c, &n, &kd, raw_data(sb.data), &ldab, raw_data(work), 1, 1)
 		} else {
-			return lapack.clansb_(&norm_c, &uplo_c, &n, &k, cast(^complex64)raw_data(AB.data), &ldab, nil, 1, 1)
+			return lapack.clansb_(&norm_c, &uplo_c, &n, &kd, raw_data(sb.data), &ldab, nil, 1, 1)
 		}
 	}
 }
 
 // Compute norm of symmetric banded matrix for f64/c128
-band_sym_norm_f64_c128 :: proc(
-	AB: ^Matrix($T), // Banded matrix storage
-	k: int, // Number of super/subdiagonals
-	uplo: MatrixRegion = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f64 where T == f64 || T == complex128 {
-	n := AB.cols
-	k := Blas_Int(k)
-	ldab := AB.ld
+band_sym_norm_f64_c128 :: proc(sb: ^SymBand($T), norm: MatrixNorm = .OneNorm) -> f64 where T == f64 || T == complex128 {
+	n := sb.n
+	kd := sb.kd
+	ldab := sb.ldab
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
+	uplo_c := cast(u8)sb.uplo
 
 	when T == f64 {
-		return lapack.dlansb_(&norm_c, &uplo_c, &n, &k, raw_data(AB.data), &ldab, nil, 1, 1)
+		return lapack.dlansb_(&norm_c, &uplo_c, &n, &kd, raw_data(sb.data), &ldab, nil, 1, 1)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlansb_(&norm_c, &uplo_c, &n, &k, cast(^complex128)raw_data(AB.data), &ldab, raw_data(work), 1, 1)
+			return lapack.zlansb_(&norm_c, &uplo_c, &n, &kd, raw_data(sb.data), &ldab, raw_data(work), 1, 1)
 		} else {
-			return lapack.zlansb_(&norm_c, &uplo_c, &n, &k, cast(^complex128)raw_data(AB.data), &ldab, nil, 1, 1)
+			return lapack.zlansb_(&norm_c, &uplo_c, &n, &kd, raw_data(sb.data), &ldab, nil, 1, 1)
 		}
 	}
 }
@@ -812,47 +738,37 @@ pack_sym_norm :: proc {
 }
 
 // Compute norm of symmetric packed matrix for f32/c64
-pack_sym_norm_f32_c64 :: proc(
-	AP: []$T, // Packed matrix
-	n: int,
-	uplo: MatrixRegion = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f32 where T == f32 || T == complex64 {
-	n := Blas_Int(n)
+pack_sym_norm_f32_c64 :: proc(ps: ^PackedSymmetric($T), norm: MatrixNorm = .OneNorm) -> f32 where T == f32 || T == complex64 {
+	n := Blas_Int(ps.n)
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
+	uplo_c := cast(u8)ps.uplo
 
 	when T == f32 {
-		return lapack.slansp_(&norm_c, &uplo_c, &n, raw_data(AP), nil, 1, 1)
+		return lapack.slansp_(&norm_c, &uplo_c, &n, raw_data(ps.data), nil, 1, 1)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f32
-			return lapack.clansp_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(AP), raw_data(work), 1, 1)
+			return lapack.clansp_(&norm_c, &uplo_c, &n, raw_data(ps.data), raw_data(work), 1, 1)
 		} else {
-			return lapack.clansp_(&norm_c, &uplo_c, &n, cast(^complex64)raw_data(AP), nil, 1, 1)
+			return lapack.clansp_(&norm_c, &uplo_c, &n, raw_data(ps.data), nil, 1, 1)
 		}
 	}
 }
 
 // Compute norm of symmetric packed matrix for f64/c128
-pack_sym_norm_f64_c128 :: proc(
-	AP: []$T, // Packed matrix
-	n: int,
-	uplo: MatrixRegion = .Upper,
-	norm: MatrixNorm = .OneNorm,
-) -> f64 where T == f64 || T == complex128 {
-	n := Blas_Int(n)
+pack_sym_norm_f64_c128 :: proc(ps: ^PackedSymmetric($T), norm: MatrixNorm = .OneNorm) -> f64 where T == f64 || T == complex128 {
+	n := Blas_Int(ps.n)
 	norm_c := cast(u8)norm
-	uplo_c := cast(u8)uplo
+	uplo_c := cast(u8)ps.uplo
 
 	when T == f64 {
-		return lapack.dlansp_(&norm_c, &uplo_c, &n, raw_data(AP), nil, 1, 1)
+		return lapack.dlansp_(&norm_c, &uplo_c, &n, raw_data(ps.data), nil, 1, 1)
 	} else {
 		when norm == .FrobeniusNorm {
 			work: [1]f64
-			return lapack.zlansp_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(AP), raw_data(work), 1, 1)
+			return lapack.zlansp_(&norm_c, &uplo_c, &n, raw_data(ps.data), raw_data(work), 1, 1)
 		} else {
-			return lapack.zlansp_(&norm_c, &uplo_c, &n, cast(^complex128)raw_data(AP), nil, 1, 1)
+			return lapack.zlansp_(&norm_c, &uplo_c, &n, raw_data(ps.data), nil, 1, 1)
 		}
 	}
 }

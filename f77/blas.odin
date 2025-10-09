@@ -381,8 +381,8 @@ foreign lib {
 	slaswp_ :: proc(n: ^blasint, A: [^]f32, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	dlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	qlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
-	claswp_ :: proc(n: ^blasint, A: [^]f32, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
-	zlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
+	claswp_ :: proc(n: ^blasint, A: [^]complex64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
+	zlaswp_ :: proc(n: ^blasint, A: [^]complex128, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	xlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	sgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
 	dgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---

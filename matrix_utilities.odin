@@ -16,11 +16,6 @@ initialize_matrix :: proc {
 	initialize_matrix_complex,
 }
 
-// Sort vector elements
-v_sort :: proc {
-	v_sort_real,
-}
-
 // Sum of squares computation
 v_sum_of_squares :: proc {
 	v_sum_of_squares_f32_c64,
@@ -83,7 +78,7 @@ initialize_matrix_complex :: proc(
 // ===================================================================================
 
 // Sort vector elements (real: f32/f64)
-v_sort_real :: proc(D: Vector($T), direction := SortDirection.Increasing) -> (success: bool, info: Info) where is_float(T) {
+v_sort :: proc(D: Vector($T), direction := SortDirection.Increasing) -> (success: bool, info: Info) where is_float(T) {
 	// Validate input
 	if len(D.data) == 0 {return true, 0}
 

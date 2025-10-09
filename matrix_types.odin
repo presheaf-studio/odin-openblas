@@ -51,7 +51,9 @@ TriBand :: struct($T: typeid) where is_float(T) || is_complex(T) {
 
 // Symmetric banded matrix (SB format for LAPACK)
 // Used for symmetric banded systems (e.g., sbgv, sbev)
-SymBand :: struct($T: typeid) where is_float(T) {
+// Note: For real types, symmetric means A = A^T
+//       For complex types, symmetric means A = A^T (NOT Hermitian A = A^H)
+SymBand :: struct($T: typeid) where is_float(T) || is_complex(T) {
 	data: []T,           // Band storage array [ldab × n]
 	n:    Blas_Int,      // Matrix dimension (n×n)
 	kd:   Blas_Int,      // Number of super/sub-diagonals
