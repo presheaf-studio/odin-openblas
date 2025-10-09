@@ -8,6 +8,9 @@ import "core:fmt"
 import "core:mem"
 import "core:slice"
 
+is_complex :: intrinsics.type_is_complex
+is_float :: intrinsics.type_is_float
+
 // Re-Decls:
 Info :: lapack.Info
 Blas_Int :: lapack.Blas_Int
@@ -105,8 +108,17 @@ vector_subvector :: proc(v: ^Vector($T), start, length: int) -> Vector(T) {
 }
 
 // Delete vector
-delete_vector :: proc(v: ^Vector($T)) {
-	builtin.delete(v.data)
+destroy_vector :: proc(v: ^Vector($T)) {
+	delete(v.data)
+	v.data = nil
+}
+
+zero_vector :: proc(v: ^Vector($T)) {
+	mem.zero(transmute(rawptr)&v.data[0], len(v.data) * size_of(T))
+}
+
+copy_vector :: proc(src: ^Vector($T), dst: Vector(T)) {
+	mem.copy(&dst.data[0], &src.data[0], len(src.data) * size_of(T))
 }
 
 // ===================================================================================
@@ -123,6 +135,10 @@ make_matrix :: proc($T: typeid, rows, cols: int, format := MatrixFormat.General,
 		ld     = Blas_Int(rows), // Column-major: leading dimension is number of rows
 		format = format,
 	}
+}
+
+zero_matrix :: proc(m: ^Matrix($T)) {
+	mem.zero(transmute(rawptr)&m.data[0], len(m.data) * size_of(T))
 }
 
 // Create a matrix filled with zeros
@@ -167,8 +183,9 @@ matrix_from_slice :: proc($T: typeid, slice: [][]T, allocator := context.allocat
 }
 
 // Delete matrix
-delete_matrix :: proc(m: ^Matrix($T)) {
-	builtin.delete(m.data)
+destroy_matrix :: proc(m: ^Matrix($T)) {
+	delete(m.data)
+	m.data = nil
 }
 
 // Get element at row, col (column-major storage)

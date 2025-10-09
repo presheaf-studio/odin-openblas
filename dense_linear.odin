@@ -1,7 +1,6 @@
 package openblas
 
 import lapack "./f77"
-
 // Job options for equilibration
 Equilibration_Job :: enum u8 {
 	None   = 'N', // No equilibration
@@ -65,6 +64,18 @@ dns_solve :: proc(
 	return info, info == 0
 }
 
+dns_solve_vector :: proc(A: ^Matrix($T), b: ^Vector(T), ipiv: []Blas_Int) -> (info: Info, ok: bool) {
+	// Create matrix view of vector (no copy)
+	B := Matrix(T) {
+		data   = b.data,
+		rows   = b.size,
+		cols   = 1,
+		ld     = b.size,
+		format = .General,
+	}
+
+	return dns_solve(A, &B, ipiv)
+}
 // ===================================================================================
 // EXPERT LINEAR SOLVERS (GESVX family)
 // ===================================================================================

@@ -281,20 +281,3 @@ MatrixScalingType :: enum u8 {
 // ===================================================================================
 // TYPE UTILITIES
 // ===================================================================================
-
-// Type checking helpers for generic constraints
-is_float :: proc($T: typeid) -> bool {
-	when is_float(T) {
-		return true
-	} else {
-		return false
-	}
-}
-
-is_complex :: proc($T: typeid) -> bool {
-	when is_complex(T) {
-		return true
-	} else {
-		return false
-	}
-}

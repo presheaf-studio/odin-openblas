@@ -137,25 +137,25 @@ m_add :: proc(A: ^Matrix($T), C: ^Matrix(T), alpha: T, beta: T) where is_float(T
 // Supported types: f32, f64, complex64, complex128
 m_mul :: proc(A: ^Matrix($T), B: ^Matrix(T), C: ^Matrix(T), alpha: T, beta: T, transA: blas.CBLAS_TRANSPOSE = .NoTrans, transB: blas.CBLAS_TRANSPOSE = .NoTrans) where is_float(T) || is_complex(T) {
 	// Get dimensions based on transpose operations
-	m := i64(C.rows) // Rows of C
-	n := i64(C.cols) // Columns of C
+	m := C.rows // Rows of C
+	n := C.cols // Columns of C
 
 	// K is the shared dimension between A and B
-	k: i64
+	k: Blas_Int
 	if transA == .NoTrans {
-		k = i64(A.cols)
-		assert(A.rows == int(m), "A rows must match C rows")
+		k = A.cols
+		assert(A.rows == m, "A rows must match C rows")
 	} else {
-		k = i64(A.rows)
-		assert(A.cols == int(m), "A columns must match C rows when transposed")
+		k = A.rows
+		assert(A.cols == m, "A columns must match C rows when transposed")
 	}
 
 	if transB == .NoTrans {
-		assert(B.rows == int(k), "B rows must match A columns")
-		assert(B.cols == int(n), "B columns must match C columns")
+		assert(B.rows == k, "B rows must match A columns")
+		assert(B.cols == n, "B columns must match C columns")
 	} else {
-		assert(B.cols == int(k), "B columns must match A columns when transposed")
-		assert(B.rows == int(n), "B rows must match C columns when transposed")
+		assert(B.cols == k, "B columns must match A columns when transposed")
+		assert(B.rows == n, "B rows must match C columns when transposed")
 	}
 
 	lda := i64(A.ld) // Leading dimension of A

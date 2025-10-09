@@ -20,7 +20,7 @@ openblas_threads_callback :: proc "c" (num_threads: c.int, job_func: openblas_do
 
 @(default_calling_convention = "c", link_prefix = "")
 foreign lib {
-	xerbla_ :: proc(srname: cstring, info: ^blasint, len: blasint) -> c.int ---
+	xerbla_ :: proc(srname: cstring, info: ^Info, len: blasint) -> c.int ---
 	openblas_set_num_threads_ :: proc(num_threads: ^c.int) ---
 	sdot_ :: proc(n: ^blasint, x: [^]f32, incx: ^blasint, y: [^]f32, incy: ^blasint) -> f32 ---
 	sdsdot_ :: proc(n: ^blasint, sb: ^f32, sx: [^]f32, incx: ^blasint, sy: [^]f32, incy: ^blasint) -> f32 ---
@@ -366,84 +366,84 @@ foreign lib {
 	xgemc_ :: proc(transa: cstring, transb: cstring, m: ^blasint, n: ^blasint, k: ^blasint, alpha: [^]f64, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, C: [^]f64, ldc: ^blasint, beta: [^]f64, D: [^]f64, ldd: ^blasint) -> c.int ---
 
 	/* Lapack routines */
-	sgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
+	sgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
 	dgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
-	qgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	cgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	zgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	xgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	sgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
+	qgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	cgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	zgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	xgetf2_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	sgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
 	dgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
-	qgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	cgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	zgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
-	xgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^blasint) -> c.int ---
+	qgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	cgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	zgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
+	xgetrf_ :: proc(m: ^blasint, n: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, info: ^Info) -> c.int ---
 	slaswp_ :: proc(n: ^blasint, A: [^]f32, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	dlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	qlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	claswp_ :: proc(n: ^blasint, A: [^]complex64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	zlaswp_ :: proc(n: ^blasint, A: [^]complex128, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
 	xlaswp_ :: proc(n: ^blasint, A: [^]f64, lda: ^blasint, k1: ^blasint, k2: ^blasint, ipiv: [^]blasint, incx: ^blasint) -> c.int ---
-	sgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
+	sgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^Info) -> c.int ---
 	dgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
-	qgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	cgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
-	zgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	xgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	sgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
-	dgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	qgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	cgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
-	zgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	xgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	spotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	cpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	zpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	spotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	cpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	zpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	spotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	cpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	zpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	spotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
-	dpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	qpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	cpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, info: ^blasint) -> c.int ---
-	zpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	xpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^blasint) -> c.int ---
-	slauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	clauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	zlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	slauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	clauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	zlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	strti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dtrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qtrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	ctrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	ztrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xtrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	strtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	dtrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	qtrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	ctrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^blasint) -> c.int ---
-	ztrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
-	xtrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^blasint) -> c.int ---
+	qgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	cgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^Info) -> c.int ---
+	zgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	xgetrs_ :: proc(trans: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	sgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^Info) -> c.int ---
+	dgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	qgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	cgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, ipiv: [^]blasint, B: [^]f32, ldb: ^blasint, info: ^Info) -> c.int ---
+	zgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	xgesv_ :: proc(n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, ipiv: [^]blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	spotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	cpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	zpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xpotf2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	spotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	cpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	zpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xpotrf_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	spotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	cpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	zpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xpotri_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	spotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, info: ^Info) -> c.int ---
+	dpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	qpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	cpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f32, lda: ^blasint, B: [^]f32, ldb: ^blasint, info: ^Info) -> c.int ---
+	zpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	xpotrs_ :: proc(uplo: cstring, n: ^blasint, nrhs: ^blasint, A: [^]f64, lda: ^blasint, B: [^]f64, ldb: ^blasint, info: ^Info) -> c.int ---
+	slauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	clauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	zlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xlauu2_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	slauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	clauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	zlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xlauum_ :: proc(uplo: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	strti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dtrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qtrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	ctrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	ztrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xtrti2_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	strtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	dtrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	qtrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	ctrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f32, lda: ^blasint, info: ^Info) -> c.int ---
+	ztrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
+	xtrtri_ :: proc(uplo: cstring, diag: cstring, n: ^blasint, A: [^]f64, lda: ^blasint, info: ^Info) -> c.int ---
 	slamch_ :: proc(cmach: cstring) -> f32 ---
 	dlamch_ :: proc(cmach: cstring) -> f64 ---
 	qlamch_ :: proc(cmach: cstring) -> f64 ---
