@@ -18,24 +18,24 @@ import "core:slice"
 // Compute eigenvalues only for symmetric tridiagonal matrix (no workspace needed)
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
 trid_eigen_only :: proc(
-	d: []$T, // Diagonal elements (modified to eigenvalues on output)
-	e: []T, // Off-diagonal elements (destroyed)
+    d: []$T, // Diagonal elements (modified to eigenvalues on output)
+    e: []T, // Off-diagonal elements (destroyed)
 ) -> (
-	info: Info,
-	ok: bool,
+    info: Info,
+    ok: bool,
 ) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	n_int := Blas_Int(n)
+    n_int := Blas_Int(n)
 
-	when T == f32 {
-		lapack.ssterf_(&n_int, raw_data(d), raw_data(e), &info)
-	} else when T == f64 {
-		lapack.dsterf_(&n_int, raw_data(d), raw_data(e), &info)
-	}
+    when T == f32 {
+        lapack.ssterf_(&n_int, raw_data(d), raw_data(e), &info)
+    } else when T == f64 {
+        lapack.dsterf_(&n_int, raw_data(d), raw_data(e), &info)
+    }
 
-	return info, info == 0
+    return info, info == 0
 }
 
 
@@ -45,55 +45,55 @@ trid_eigen_only :: proc(
 
 // Query workspace for simple eigenvalue/eigenvector computation
 query_workspace_tridiagonal_simple :: proc($T: typeid, n: int, compute_vectors: bool) -> (work_size: int) {
-	if compute_vectors {
-		return max(1, 2 * n - 2)
-	}
-	return 0
+    if compute_vectors {
+        return max(1, 2 * n - 2)
+    }
+    return 0
 }
 
 // Compute eigenvalues and optionally eigenvectors using simple driver
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
 trid_eigen_simple :: proc(
-	d: []$T, // Diagonal elements (modified to eigenvalues on output)
-	e: []T, // Off-diagonal elements (destroyed)
-	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
-	work: []T = nil, // Pre-allocated workspace (needed if computing vectors)
-	jobz := EigenJobOption.VALUES_ONLY,
+    d: []$T, // Diagonal elements (modified to eigenvalues on output)
+    e: []T, // Off-diagonal elements (destroyed)
+    Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
+    work: []T = nil, // Pre-allocated workspace (needed if computing vectors)
+    jobz := EigenJobOption.VALUES_ONLY,
 ) -> (
-	info: Info,
-	ok: bool,
+    info: Info,
+    ok: bool,
 ) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	if jobz == .VALUES_AND_VECTORS {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
-		assert(work != nil && len(work) >= max(1, 2 * n - 2), "Workspace required for eigenvectors")
-	}
+    if jobz == .VALUES_AND_VECTORS {
+        assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
+        assert(work != nil && len(work) >= max(1, 2 * n - 2), "Workspace required for eigenvectors")
+    }
 
-	jobz_c := cast(u8)jobz
-	n_int := Blas_Int(n)
+    jobz_c := cast(u8)jobz
+    n_int := Blas_Int(n)
 
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^T = nil
-	if Z != nil && jobz == .VALUES_AND_VECTORS {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
+    // Handle eigenvector matrix
+    ldz := Blas_Int(1)
+    z_ptr: ^T = nil
+    if Z != nil && jobz == .VALUES_AND_VECTORS {
+        ldz = Z.ld
+        z_ptr = raw_data(Z.data)
+    }
 
-	work_ptr: ^T = nil
-	if work != nil {
-		work_ptr = raw_data(work)
-	}
+    work_ptr: ^T = nil
+    if work != nil {
+        work_ptr = raw_data(work)
+    }
 
-	when T == f32 {
-		lapack.sstev_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, work_ptr, &info)
-	} else when T == f64 {
-		lapack.dstev_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, work_ptr, &info)
-	}
+    when T == f32 {
+        lapack.sstev_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, work_ptr, &info)
+    } else when T == f64 {
+        lapack.dstev_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, work_ptr, &info)
+    }
 
-	return info, info == 0
+    return info, info == 0
 }
 
 
@@ -102,69 +102,100 @@ trid_eigen_simple :: proc(
 // ===================================================================================
 
 // Query workspace for divide-and-conquer computation
-query_workspace_tridiagonal_dc :: proc($T: typeid, n: int, compute_vectors: bool) -> (work_size: int, iwork_size: int) {
-	n_blas := Blas_Int(n)
-	jobz_c := cast(u8)(compute_vectors ? EigenJobOption.VALUES_AND_VECTORS : EigenJobOption.VALUES_ONLY)
+query_workspace_tridiagonal_dc :: proc(
+    $T: typeid,
+    n: int,
+    compute_vectors: bool,
+) -> (
+    work_size: int,
+    iwork_size: int,
+) {
+    n_blas := Blas_Int(n)
+    jobz_c := cast(u8)(compute_vectors ? EigenJobOption.VALUES_AND_VECTORS : EigenJobOption.VALUES_ONLY)
 
-	// Query LAPACK for optimal sizes
-	work_query: T
-	iwork_query: Blas_Int
-	lwork := Blas_Int(-1)
-	liwork := Blas_Int(-1)
-	info: Info
-	ldz := Blas_Int(1)
+    // Query LAPACK for optimal sizes
+    work_query: T
+    iwork_query: Blas_Int
+    lwork := Blas_Int(-1)
+    liwork := Blas_Int(-1)
+    info: Info
+    ldz := Blas_Int(1)
 
-	when T == f32 {
-		lapack.sstevd_(&jobz_c, &n_blas, nil, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
-	} else when T == f64 {
-		lapack.dstevd_(&jobz_c, &n_blas, nil, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
-	}
+    when T == f32 {
+        lapack.sstevd_(&jobz_c, &n_blas, nil, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
+    } else when T == f64 {
+        lapack.dstevd_(&jobz_c, &n_blas, nil, nil, nil, &ldz, &work_query, &lwork, &iwork_query, &liwork, &info)
+    }
 
-	return int(work_query), int(iwork_query)
+    return int(work_query), int(iwork_query)
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
 trid_eigen_dc :: proc(
-	d: []$T, // Diagonal elements (modified to eigenvalues on output)
-	e: []T, // Off-diagonal elements (destroyed)
-	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	jobz := EigenJobOption.VALUES_ONLY,
+    d: []$T, // Diagonal elements (modified to eigenvalues on output)
+    e: []T, // Off-diagonal elements (destroyed)
+    Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
+    work: []T, // Pre-allocated workspace
+    iwork: []Blas_Int, // Pre-allocated integer workspace
+    jobz := EigenJobOption.VALUES_ONLY,
 ) -> (
-	info: Info,
-	ok: bool,
+    info: Info,
+    ok: bool,
 ) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(work) > 0, "Workspace required")
-	assert(len(iwork) > 0, "Integer workspace required")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    assert(len(work) > 0, "Workspace required")
+    assert(len(iwork) > 0, "Integer workspace required")
 
-	if jobz == .VALUES_AND_VECTORS {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
-	}
+    if jobz == .VALUES_AND_VECTORS {
+        assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
+    }
 
-	jobz_c := cast(u8)jobz
-	n_int := Blas_Int(n)
-	lwork := Blas_Int(len(work))
-	liwork := Blas_Int(len(iwork))
+    jobz_c := cast(u8)jobz
+    n_int := Blas_Int(n)
+    lwork := Blas_Int(len(work))
+    liwork := Blas_Int(len(iwork))
 
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^T = nil
-	if Z != nil && jobz == .VALUES_AND_VECTORS {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
+    // Handle eigenvector matrix
+    ldz := Blas_Int(1)
+    z_ptr: ^T = nil
+    if Z != nil && jobz == .VALUES_AND_VECTORS {
+        ldz = Z.ld
+        z_ptr = raw_data(Z.data)
+    }
 
-	when T == f32 {
-		lapack.sstevd_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	} else when T == f64 {
-		lapack.dstevd_(&jobz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	}
+    when T == f32 {
+        lapack.sstevd_(
+            &jobz_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            &lwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    } else when T == f64 {
+        lapack.dstevd_(
+            &jobz_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            &lwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    }
 
-	return info, info == 0
+    return info, info == 0
 }
 
 
@@ -173,101 +204,192 @@ trid_eigen_dc :: proc(
 // ===================================================================================
 
 // Query workspace for MRRR computation
-query_workspace_tridiagonal_mrrr :: proc($T: typeid, n: int, compute_vectors: bool) -> (work_size: int, iwork_size: int) {
-	n_blas := Blas_Int(n)
-	jobz_c := cast(u8)(compute_vectors ? EigenJobOption.VALUES_AND_VECTORS : EigenJobOption.VALUES_ONLY)
-	range_c := cast(u8)EigenRangeOption.ALL
+query_workspace_tridiagonal_mrrr :: proc(
+    $T: typeid,
+    n: int,
+    compute_vectors: bool,
+) -> (
+    work_size: int,
+    iwork_size: int,
+) {
+    n_blas := Blas_Int(n)
+    jobz_c := cast(u8)(compute_vectors ? EigenJobOption.VALUES_AND_VECTORS : EigenJobOption.VALUES_ONLY)
+    range_c := cast(u8)EigenRangeOption.ALL
 
-	// Query LAPACK for optimal sizes
-	work_query: T
-	iwork_query: Blas_Int
-	lwork := Blas_Int(-1)
-	liwork := Blas_Int(-1)
-	info: Info
-	ldz := Blas_Int(1)
-	m_dummy: Blas_Int
-	vl_dummy: T = 0
-	vu_dummy: T = 0
-	il_dummy := Blas_Int(1)
-	iu_dummy := Blas_Int(n)
-	abstol_dummy: T = 0
+    // Query LAPACK for optimal sizes
+    work_query: T
+    iwork_query: Blas_Int
+    lwork := Blas_Int(-1)
+    liwork := Blas_Int(-1)
+    info: Info
+    ldz := Blas_Int(1)
+    m_dummy: Blas_Int
+    vl_dummy: T = 0
+    vu_dummy: T = 0
+    il_dummy := Blas_Int(1)
+    iu_dummy := Blas_Int(n)
+    abstol_dummy: T = 0
 
-	when T == f32 {
-		lapack.sstevr_(&jobz_c, &range_c, &n_blas, nil, nil, &vl_dummy, &vu_dummy, &il_dummy, &iu_dummy, &abstol_dummy, &m_dummy, nil, nil, &ldz, nil, &work_query, &lwork, &iwork_query, &liwork, &info)
-	} else when T == f64 {
-		lapack.dstevr_(&jobz_c, &range_c, &n_blas, nil, nil, &vl_dummy, &vu_dummy, &il_dummy, &iu_dummy, &abstol_dummy, &m_dummy, nil, nil, &ldz, nil, &work_query, &lwork, &iwork_query, &liwork, &info)
-	}
+    when T == f32 {
+        lapack.sstevr_(
+            &jobz_c,
+            &range_c,
+            &n_blas,
+            nil,
+            nil,
+            &vl_dummy,
+            &vu_dummy,
+            &il_dummy,
+            &iu_dummy,
+            &abstol_dummy,
+            &m_dummy,
+            nil,
+            nil,
+            &ldz,
+            nil,
+            &work_query,
+            &lwork,
+            &iwork_query,
+            &liwork,
+            &info,
+        )
+    } else when T == f64 {
+        lapack.dstevr_(
+            &jobz_c,
+            &range_c,
+            &n_blas,
+            nil,
+            nil,
+            &vl_dummy,
+            &vu_dummy,
+            &il_dummy,
+            &iu_dummy,
+            &abstol_dummy,
+            &m_dummy,
+            nil,
+            nil,
+            &ldz,
+            nil,
+            &work_query,
+            &lwork,
+            &iwork_query,
+            &liwork,
+            &info,
+        )
+    }
 
-	return int(work_query), int(iwork_query)
+    return int(work_query), int(iwork_query)
 }
 
 // Compute eigenvalues/eigenvectors using MRRR
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
 trid_eigen_mrrr :: proc(
-	d: []$T, // Diagonal elements (modified)
-	e: []T, // Off-diagonal elements (modified)
-	w: []T, // Eigenvalues output (size n)
-	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
-	isuppz: []Blas_Int = nil, // Support indices (size 2*max(m))
-	work: []T, // Pre-allocated workspace
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	range := EigenRangeOption.ALL,
-	vl: T, // Lower bound (if range == VALUE)
-	vu: T, // Upper bound (if range == VALUE)
-	il: int = 1, // Lower index (if range == INDEX, 1-based)
-	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T, // Absolute tolerance
-	jobz := EigenJobOption.VALUES_ONLY,
+    d: []$T, // Diagonal elements (modified)
+    e: []T, // Off-diagonal elements (modified)
+    w: []T, // Eigenvalues output (size n)
+    Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
+    isuppz: []Blas_Int = nil, // Support indices (size 2*max(m))
+    work: []T, // Pre-allocated workspace
+    iwork: []Blas_Int, // Pre-allocated integer workspace
+    range := EigenRangeOption.ALL,
+    vl: T, // Lower bound (if range == VALUE)
+    vu: T, // Upper bound (if range == VALUE)
+    il: int = 1, // Lower index (if range == INDEX, 1-based)
+    iu: int = 0, // Upper index (if range == INDEX, 1-based)
+    abstol: T, // Absolute tolerance
+    jobz := EigenJobOption.VALUES_ONLY,
 ) -> (
-	num_found: int,
-	info: Info,
-	ok: bool,
+    num_found: int,
+    info: Info,
+    ok: bool,
 ) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) > 0, "Workspace required")
-	assert(len(iwork) > 0, "Integer workspace required")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    assert(len(w) >= n, "Eigenvalue array too small")
+    assert(len(work) > 0, "Workspace required")
+    assert(len(iwork) > 0, "Integer workspace required")
 
-	if jobz == .VALUES_AND_VECTORS {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
-		max_m := n // Conservative estimate
-		assert(isuppz != nil && len(isuppz) >= 2 * max_m, "Support array required for eigenvectors")
-	}
+    if jobz == .VALUES_AND_VECTORS {
+        assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
+        max_m := n // Conservative estimate
+        assert(isuppz != nil && len(isuppz) >= 2 * max_m, "Support array required for eigenvectors")
+    }
 
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)range
-	n_int := Blas_Int(n)
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m: Blas_Int
-	lwork := Blas_Int(len(work))
-	liwork := Blas_Int(len(iwork))
+    jobz_c := cast(u8)jobz
+    range_c := cast(u8)range
+    n_int := Blas_Int(n)
+    vl_val := vl
+    vu_val := vu
+    il_int := Blas_Int(il)
+    iu_int := Blas_Int(iu)
+    abstol_val := abstol
+    m: Blas_Int
+    lwork := Blas_Int(len(work))
+    liwork := Blas_Int(len(iwork))
 
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^T = nil
-	if Z != nil && jobz == .VALUES_AND_VECTORS {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
+    // Handle eigenvector matrix
+    ldz := Blas_Int(1)
+    z_ptr: ^T = nil
+    if Z != nil && jobz == .VALUES_AND_VECTORS {
+        ldz = Z.ld
+        z_ptr = raw_data(Z.data)
+    }
 
-	isuppz_ptr: ^Blas_Int = nil
-	if isuppz != nil {
-		isuppz_ptr = raw_data(isuppz)
-	}
+    isuppz_ptr: ^Blas_Int = nil
+    if isuppz != nil {
+        isuppz_ptr = raw_data(isuppz)
+    }
 
-	when T == f32 {
-		lapack.sstevr_(&jobz_c, &range_c, &n_int, raw_data(d), raw_data(e), &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, &m, raw_data(w), z_ptr, &ldz, isuppz_ptr, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	} else when T == f64 {
-		lapack.dstevr_(&jobz_c, &range_c, &n_int, raw_data(d), raw_data(e), &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, &m, raw_data(w), z_ptr, &ldz, isuppz_ptr, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	}
+    when T == f32 {
+        lapack.sstevr_(
+            &jobz_c,
+            &range_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            &vl_val,
+            &vu_val,
+            &il_int,
+            &iu_int,
+            &abstol_val,
+            &m,
+            raw_data(w),
+            z_ptr,
+            &ldz,
+            isuppz_ptr,
+            raw_data(work),
+            &lwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    } else when T == f64 {
+        lapack.dstevr_(
+            &jobz_c,
+            &range_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            &vl_val,
+            &vu_val,
+            &il_int,
+            &iu_int,
+            &abstol_val,
+            &m,
+            raw_data(w),
+            z_ptr,
+            &ldz,
+            isuppz_ptr,
+            raw_data(work),
+            &lwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    }
 
-	num_found = int(m)
-	return num_found, info, info == 0
+    num_found = int(m)
+    return num_found, info, info == 0
 }
 
 
@@ -277,69 +399,107 @@ trid_eigen_mrrr :: proc(
 
 // Query workspace for bisection and inverse iteration
 query_workspace_tridiagonal_bisection :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) {
-	// STEVX workspace requirements
-	return 5 * n, 5 * n
+    // STEVX workspace requirements
+    return 5 * n, 5 * n
 }
 
 // Compute eigenvalues/eigenvectors using bisection and inverse iteration
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
 trid_eigen_bisection :: proc(
-	d: []$T, // Diagonal elements (preserved)
-	e: []T, // Off-diagonal elements (preserved)
-	w: []T, // Eigenvalues output (size n)
-	Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
-	work: []T, // Pre-allocated workspace (size 5*n)
-	iwork: []Blas_Int, // Pre-allocated integer workspace (size 5*n)
-	ifail: []Blas_Int, // Failure indices (size n)
-	range := EigenRangeOption.ALL,
-	vl: T, // Lower bound (if range == VALUE)
-	vu: T, // Upper bound (if range == VALUE)
-	il: int = 1, // Lower index (if range == INDEX, 1-based)
-	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T, // Absolute tolerance
-	jobz := EigenJobOption.VALUES_ONLY,
+    d: []$T, // Diagonal elements (preserved)
+    e: []T, // Off-diagonal elements (preserved)
+    w: []T, // Eigenvalues output (size n)
+    Z: ^Matrix(T) = nil, // Eigenvector matrix (optional output)
+    work: []T, // Pre-allocated workspace (size 5*n)
+    iwork: []Blas_Int, // Pre-allocated integer workspace (size 5*n)
+    ifail: []Blas_Int, // Failure indices (size n)
+    range := EigenRangeOption.ALL,
+    vl: T, // Lower bound (if range == VALUE)
+    vu: T, // Upper bound (if range == VALUE)
+    il: int = 1, // Lower index (if range == INDEX, 1-based)
+    iu: int = 0, // Upper index (if range == INDEX, 1-based)
+    abstol: T, // Absolute tolerance
+    jobz := EigenJobOption.VALUES_ONLY,
 ) -> (
-	num_found: int,
-	info: Info,
-	ok: bool,
+    num_found: int,
+    info: Info,
+    ok: bool,
 ) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(work) >= 5 * n, "Insufficient workspace")
-	assert(len(iwork) >= 5 * n, "Insufficient integer workspace")
-	assert(len(ifail) >= n, "Failure array too small")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    assert(len(w) >= n, "Eigenvalue array too small")
+    assert(len(work) >= 5 * n, "Insufficient workspace")
+    assert(len(iwork) >= 5 * n, "Insufficient integer workspace")
+    assert(len(ifail) >= n, "Failure array too small")
 
-	if jobz == .VALUES_AND_VECTORS {
-		assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
-	}
+    if jobz == .VALUES_AND_VECTORS {
+        assert(Z != nil && Z.rows >= Blas_Int(n) && Z.cols >= Blas_Int(n), "Eigenvector matrix required")
+    }
 
-	jobz_c := cast(u8)jobz
-	range_c := cast(u8)range
-	n_int := Blas_Int(n)
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m: Blas_Int
+    jobz_c := cast(u8)jobz
+    range_c := cast(u8)range
+    n_int := Blas_Int(n)
+    vl_val := vl
+    vu_val := vu
+    il_int := Blas_Int(il)
+    iu_int := Blas_Int(iu)
+    abstol_val := abstol
+    m: Blas_Int
 
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: ^T = nil
-	if Z != nil && jobz == .VALUES_AND_VECTORS {
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
+    // Handle eigenvector matrix
+    ldz := Blas_Int(1)
+    z_ptr: ^T = nil
+    if Z != nil && jobz == .VALUES_AND_VECTORS {
+        ldz = Z.ld
+        z_ptr = raw_data(Z.data)
+    }
 
-	when T == f32 {
-		lapack.sstevx_(&jobz_c, &range_c, &n_int, raw_data(d), raw_data(e), &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, &m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
-	} else when T == f64 {
-		lapack.dstevx_(&jobz_c, &range_c, &n_int, raw_data(d), raw_data(e), &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, &m, raw_data(w), z_ptr, &ldz, raw_data(work), raw_data(iwork), raw_data(ifail), &info)
-	}
+    when T == f32 {
+        lapack.sstevx_(
+            &jobz_c,
+            &range_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            &vl_val,
+            &vu_val,
+            &il_int,
+            &iu_int,
+            &abstol_val,
+            &m,
+            raw_data(w),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            raw_data(iwork),
+            raw_data(ifail),
+            &info,
+        )
+    } else when T == f64 {
+        lapack.dstevx_(
+            &jobz_c,
+            &range_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            &vl_val,
+            &vu_val,
+            &il_int,
+            &iu_int,
+            &abstol_val,
+            &m,
+            raw_data(w),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            raw_data(iwork),
+            raw_data(ifail),
+            &info,
+        )
+    }
 
-	num_found = int(m)
-	return num_found, info, info == 0
+    num_found = int(m)
+    return num_found, info, info == 0
 }
 
 
@@ -348,36 +508,43 @@ trid_eigen_bisection :: proc(
 // ===================================================================================
 
 // Helper to analyze eigenvalues after computation
-trid_eigen_analyze :: proc(eigenvalues: []$T) -> (min_val: f64, max_val: f64, condition_number: f64, all_positive: bool) {
-	if len(eigenvalues) == 0 {
-		return 0, 0, 1, false
-	}
+trid_eigen_analyze :: proc(
+    eigenvalues: []$T,
+) -> (
+    min_val: f64,
+    max_val: f64,
+    condition_number: f64,
+    all_positive: bool,
+) {
+    if len(eigenvalues) == 0 {
+        return 0, 0, 1, false
+    }
 
-	// Eigenvalues are sorted by LAPACK
-	min_val = f64(eigenvalues[0])
-	max_val = f64(eigenvalues[len(eigenvalues) - 1])
+    // Eigenvalues are sorted by LAPACK
+    min_val = f64(eigenvalues[0])
+    max_val = f64(eigenvalues[len(eigenvalues) - 1])
 
-	all_positive = eigenvalues[0] > 0
+    all_positive = eigenvalues[0] > 0
 
-	// Compute condition number
-	if abs(eigenvalues[0]) > machine_epsilon(T) {
-		condition_number = f64(abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0]))
-	} else {
-		condition_number = math.INF_F64
-	}
+    // Compute condition number
+    if abs(eigenvalues[0]) > machine_epsilon(T) {
+        condition_number = f64(abs(eigenvalues[len(eigenvalues) - 1] / eigenvalues[0]))
+    } else {
+        condition_number = math.INF_F64
+    }
 
-	return min_val, max_val, condition_number, all_positive
+    return min_val, max_val, condition_number, all_positive
 }
 
 // Helper to get machine epsilon
 machine_epsilon :: proc($T: typeid) -> T {
-	when T == f32 {
-		return math.F32_EPSILON
-	} else when T == f64 {
-		return math.F64_EPSILON
-	} else {
-		#panic("Unsupported type for machine epsilon")
-	}
+    when T == f32 {
+        return math.F32_EPSILON
+    } else when T == f64 {
+        return math.F64_EPSILON
+    } else {
+        #panic("Unsupported type for machine epsilon")
+    }
 }
 
 // ===================================================================================
@@ -385,153 +552,213 @@ machine_epsilon :: proc($T: typeid) -> T {
 // ===================================================================================
 
 // Query workspace for complex divide-and-conquer computation
-query_workspace_tridiagonal_stedc :: proc($T: typeid, n: int, compz: CompzOption) -> (work_size: int, rwork_size: int, iwork_size: int) {
-	n_int := Blas_Int(n)
-	compz_c := cast(u8)compz
-	work_query: T
-	iwork_query: Blas_Int
-	lwork := Blas_Int(-1)
-	liwork := Blas_Int(-1)
-	info: Info
+query_workspace_tridiagonal_stedc :: proc(
+    $T: typeid,
+    n: int,
+    compz: CompzOption,
+) -> (
+    work_size: int,
+    rwork_size: int,
+    iwork_size: int,
+) {
+    n_int := Blas_Int(n)
+    compz_c := cast(u8)compz
+    work_query: T
+    iwork_query: Blas_Int
+    lwork := Blas_Int(-1)
+    liwork := Blas_Int(-1)
+    info: Info
 
-	when is_float(T) {
-		lapack.sstedc_ when T == f32 else lapack.dstedc_(
-			&compz_c,
-			&n_int,
-			nil, // d
-			nil, // e
-			nil, // z
-			&n_int, // ldz
-			&work_query,
-			&lwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
+    when is_float(T) {
+        lapack.sstedc_ when T == f32 else lapack.dstedc_(
+            &compz_c,
+            &n_int,
+            nil, // d
+            nil, // e
+            nil, // z
+            &n_int, // ldz
+            &work_query,
+            &lwork,
+            &iwork_query,
+            &liwork,
+            &info,
+        )
 
-		return int(work_query), 0, int(iwork_query)
-	} else when is_complex(T) {
-		Real :: f32 when T == complex64 else f64
-		rwork_query: Real
-		lrwork := Blas_Int(-1)
+        return int(work_query), 0, int(iwork_query)
+    } else when is_complex(T) {
+        Real :: f32 when T == complex64 else f64
+        rwork_query: Real
+        lrwork := Blas_Int(-1)
 
-		lapack.cstedc_ when T == complex64 else lapack.zstedc_(
-			&compz_c,
-			&n_int,
-			nil, // d
-			nil, // e
-			nil, // z
-			&n_int, // ldz
-			&work_query,
-			&lwork,
-			&rwork_query,
-			&lrwork,
-			&iwork_query,
-			&liwork,
-			&info,
-		)
+        lapack.cstedc_ when T == complex64 else lapack.zstedc_(
+            &compz_c,
+            &n_int,
+            nil, // d
+            nil, // e
+            nil, // z
+            &n_int, // ldz
+            &work_query,
+            &lwork,
+            &rwork_query,
+            &lrwork,
+            &iwork_query,
+            &liwork,
+            &info,
+        )
 
-		return int(real(work_query)), int(rwork_query), int(iwork_query)
-	}
+        return int(real(work_query)), int(rwork_query), int(iwork_query)
+    }
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for all types
 trid_eigen_stedc :: proc {
-	trid_eigen_stedc_real,
-	trid_eigen_stedc_complex,
+    trid_eigen_stedc_real,
+    trid_eigen_stedc_complex,
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for f32/f64
 trid_eigen_stedc_real :: proc(
-	d: []$R, // Diagonal (modified to eigenvalues on output, always real)
-	e: []R, // Off-diagonal (destroyed, always real)
-	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
-	work: []T, // Pre-allocated workspace
-	rwork: []R = nil, // Pre-allocated real workspace (complex only)
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	compz := CompzOption.None,
+    d: []$R, // Diagonal (modified to eigenvalues on output, always real)
+    e: []R, // Off-diagonal (destroyed, always real)
+    Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
+    work: []T, // Pre-allocated workspace
+    rwork: []R = nil, // Pre-allocated real workspace (complex only)
+    iwork: []Blas_Int, // Pre-allocated integer workspace
+    compz := CompzOption.None,
 ) -> (
-	info: Info,
-	ok: bool,
+    info: Info,
+    ok: bool,
 ) where (T == f32 && R == f32) || (T == f64 && R == f64) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	compz_c := cast(u8)compz
-	n_int := Blas_Int(n)
-	lwork := Blas_Int(len(work))
-	liwork := Blas_Int(len(iwork))
+    compz_c := cast(u8)compz
+    n_int := Blas_Int(n)
+    lwork := Blas_Int(len(work))
+    liwork := Blas_Int(len(iwork))
 
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: rawptr = nil
-	if compz != .None && Z != nil {
-		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
+    // Handle eigenvector matrix
+    ldz := Blas_Int(1)
+    z_ptr: rawptr = nil
+    if compz != .None && Z != nil {
+        assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
+        ldz = Z.ld
+        z_ptr = raw_data(Z.data)
+    }
 
-	when T == f32 {
-		assert(len(work) > 0, "Workspace required")
-		assert(len(iwork) > 0, "Integer workspace required")
+    when T == f32 {
+        assert(len(work) > 0, "Workspace required")
+        assert(len(iwork) > 0, "Integer workspace required")
 
-		lapack.sstedc_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	} else when T == f64 {
-		assert(len(work) > 0, "Workspace required")
-		assert(len(iwork) > 0, "Integer workspace required")
+        lapack.sstedc_(
+            &compz_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            &lwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    } else when T == f64 {
+        assert(len(work) > 0, "Workspace required")
+        assert(len(iwork) > 0, "Integer workspace required")
 
-		lapack.dstedc_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(iwork), &liwork, &info)
-	}
+        lapack.dstedc_(
+            &compz_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            &lwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    }
 
-	return info, info == 0
+    return info, info == 0
 }
 
 // Compute eigenvalues/eigenvectors using divide-and-conquer for c64/c128
 trid_eigen_stedc_complex :: proc(
-	d: []$R, // Diagonal (modified to eigenvalues on output, always real)
-	e: []R, // Off-diagonal (destroyed, always real)
-	Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
-	work: []T, // Pre-allocated workspace
-	rwork: []R, // Pre-allocated real workspace (required for complex)
-	iwork: []Blas_Int, // Pre-allocated integer workspace
-	compz := CompzOption.None,
+    d: []$R, // Diagonal (modified to eigenvalues on output, always real)
+    e: []R, // Off-diagonal (destroyed, always real)
+    Z: ^Matrix($T) = nil, // Eigenvector matrix (optional)
+    work: []T, // Pre-allocated workspace
+    rwork: []R, // Pre-allocated real workspace (required for complex)
+    iwork: []Blas_Int, // Pre-allocated integer workspace
+    compz := CompzOption.None,
 ) -> (
-	info: Info,
-	ok: bool,
+    info: Info,
+    ok: bool,
 ) where (T == complex64 && R == f32) || (T == complex128 && R == f64) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
 
-	compz_c := cast(u8)compz
-	n_int := Blas_Int(n)
-	lwork := Blas_Int(len(work))
-	lrwork := Blas_Int(len(rwork))
-	liwork := Blas_Int(len(iwork))
+    compz_c := cast(u8)compz
+    n_int := Blas_Int(n)
+    lwork := Blas_Int(len(work))
+    lrwork := Blas_Int(len(rwork))
+    liwork := Blas_Int(len(iwork))
 
-	// Handle eigenvector matrix
-	ldz := Blas_Int(1)
-	z_ptr: rawptr = nil
-	if compz != .None && Z != nil {
-		assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
-		ldz = Z.ld
-		z_ptr = raw_data(Z.data)
-	}
+    // Handle eigenvector matrix
+    ldz := Blas_Int(1)
+    z_ptr: rawptr = nil
+    if compz != .None && Z != nil {
+        assert(Z.rows >= n && Z.cols >= n, "Eigenvector matrix too small")
+        ldz = Z.ld
+        z_ptr = raw_data(Z.data)
+    }
 
-	when T == complex64 {
-		assert(len(work) > 0, "Workspace required")
-		assert(len(rwork) > 0, "Real workspace required")
-		assert(len(iwork) > 0, "Integer workspace required")
+    when T == complex64 {
+        assert(len(work) > 0, "Workspace required")
+        assert(len(rwork) > 0, "Real workspace required")
+        assert(len(iwork) > 0, "Integer workspace required")
 
-		lapack.cstedc_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
-	} else when T == complex128 {
-		assert(len(work) > 0, "Workspace required")
-		assert(len(rwork) > 0, "Real workspace required")
-		assert(len(iwork) > 0, "Integer workspace required")
+        lapack.cstedc_(
+            &compz_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            &lwork,
+            raw_data(rwork),
+            &lrwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    } else when T == complex128 {
+        assert(len(work) > 0, "Workspace required")
+        assert(len(rwork) > 0, "Real workspace required")
+        assert(len(iwork) > 0, "Integer workspace required")
 
-		lapack.zstedc_(&compz_c, &n_int, raw_data(d), raw_data(e), z_ptr, &ldz, raw_data(work), &lwork, raw_data(rwork), &lrwork, raw_data(iwork), &liwork, &info)
-	}
+        lapack.zstedc_(
+            &compz_c,
+            &n_int,
+            raw_data(d),
+            raw_data(e),
+            z_ptr,
+            &ldz,
+            raw_data(work),
+            &lwork,
+            raw_data(rwork),
+            &lrwork,
+            raw_data(iwork),
+            &liwork,
+            &info,
+        )
+    }
 
-	return info, info == 0
+    return info, info == 0
 }
 
 // ===================================================================================
@@ -540,64 +767,102 @@ trid_eigen_stedc_complex :: proc(
 
 // Eigenvalue ordering option
 EigenvalueOrder :: enum u8 {
-	BLOCKS = 'B', // Order eigenvalues by blocks
-	ENTIRE = 'E', // Order eigenvalues for entire matrix
+    BLOCKS = 'B', // Order eigenvalues by blocks
+    ENTIRE = 'E', // Order eigenvalues for entire matrix
 }
 
 // Query workspace for eigenvalue bisection
 query_workspace_eigenvalue_bisection :: proc($T: typeid, n: int) -> (work_size: int, iwork_size: int) {
-	return 4 * n, 3 * n
+    return 4 * n, 3 * n
 }
 
 // Compute selected eigenvalues using bisection
 // Note: Symmetric tridiagonal eigenvalues are always real, so this only supports f32/f64
 eigenvalue_bisection :: proc(
-	d: []$T, // Diagonal elements
-	e: []T, // Off-diagonal elements
-	w: []T, // Eigenvalues output
-	iblock: []Blas_Int, // Block indices output
-	isplit: []Blas_Int, // Split points output
-	work: []T, // Pre-allocated workspace (size 4*n)
-	iwork: []Blas_Int, // Pre-allocated integer workspace (size 3*n)
-	range := EigenRangeOption.ALL,
-	order := EigenvalueOrder.ENTIRE,
-	vl: T, // Lower bound (if range == VALUE)
-	vu: T, // Upper bound (if range == VALUE)
-	il: int = 1, // Lower index (if range == INDEX, 1-based)
-	iu: int = 0, // Upper index (if range == INDEX, 1-based)
-	abstol: T, // Absolute tolerance
+    d: []$T, // Diagonal elements
+    e: []T, // Off-diagonal elements
+    w: []T, // Eigenvalues output
+    iblock: []Blas_Int, // Block indices output
+    isplit: []Blas_Int, // Split points output
+    work: []T, // Pre-allocated workspace (size 4*n)
+    iwork: []Blas_Int, // Pre-allocated integer workspace (size 3*n)
+    range := EigenRangeOption.ALL,
+    order := EigenvalueOrder.ENTIRE,
+    vl: T, // Lower bound (if range == VALUE)
+    vu: T, // Upper bound (if range == VALUE)
+    il: int = 1, // Lower index (if range == INDEX, 1-based)
+    iu: int = 0, // Upper index (if range == INDEX, 1-based)
+    abstol: T, // Absolute tolerance
 ) -> (
-	num_found: int,
-	num_splits: int,
-	info: Info,
-	ok: bool,
+    num_found: int,
+    num_splits: int,
+    info: Info,
+    ok: bool,
 ) where is_float(T) {
-	n := len(d)
-	assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
-	assert(len(w) >= n, "Eigenvalue array too small")
-	assert(len(iblock) >= n, "Block array too small")
-	assert(len(isplit) >= n, "Split array too small")
-	assert(len(work) >= 4 * n, "Insufficient workspace")
-	assert(len(iwork) >= 3 * n, "Insufficient integer workspace")
+    n := len(d)
+    assert(len(e) >= n - 1 || n <= 1, "Off-diagonal array too small")
+    assert(len(w) >= n, "Eigenvalue array too small")
+    assert(len(iblock) >= n, "Block array too small")
+    assert(len(isplit) >= n, "Split array too small")
+    assert(len(work) >= 4 * n, "Insufficient workspace")
+    assert(len(iwork) >= 3 * n, "Insufficient integer workspace")
 
-	range_c := cast(u8)range
-	order_c := cast(u8)order
-	n_int := Blas_Int(n)
-	vl_val := vl
-	vu_val := vu
-	il_int := Blas_Int(il)
-	iu_int := Blas_Int(iu)
-	abstol_val := abstol
-	m: Blas_Int
-	nsplit: Blas_Int
+    range_c := cast(u8)range
+    order_c := cast(u8)order
+    n_int := Blas_Int(n)
+    vl_val := vl
+    vu_val := vu
+    il_int := Blas_Int(il)
+    iu_int := Blas_Int(iu)
+    abstol_val := abstol
+    m: Blas_Int
+    nsplit: Blas_Int
 
-	when T == f32 {
-		lapack.sstebz_(&range_c, &order_c, &n_int, &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, raw_data(d), raw_data(e), &m, &nsplit, raw_data(w), raw_data(iblock), raw_data(isplit), raw_data(work), raw_data(iwork), &info)
-	} else when T == f64 {
-		lapack.dstebz_(&range_c, &order_c, &n_int, &vl_val, &vu_val, &il_int, &iu_int, &abstol_val, raw_data(d), raw_data(e), &m, &nsplit, raw_data(w), raw_data(iblock), raw_data(isplit), raw_data(work), raw_data(iwork), &info)
-	}
+    when T == f32 {
+        lapack.sstebz_(
+            &range_c,
+            &order_c,
+            &n_int,
+            &vl_val,
+            &vu_val,
+            &il_int,
+            &iu_int,
+            &abstol_val,
+            raw_data(d),
+            raw_data(e),
+            &m,
+            &nsplit,
+            raw_data(w),
+            raw_data(iblock),
+            raw_data(isplit),
+            raw_data(work),
+            raw_data(iwork),
+            &info,
+        )
+    } else when T == f64 {
+        lapack.dstebz_(
+            &range_c,
+            &order_c,
+            &n_int,
+            &vl_val,
+            &vu_val,
+            &il_int,
+            &iu_int,
+            &abstol_val,
+            raw_data(d),
+            raw_data(e),
+            &m,
+            &nsplit,
+            raw_data(w),
+            raw_data(iblock),
+            raw_data(isplit),
+            raw_data(work),
+            raw_data(iwork),
+            &info,
+        )
+    }
 
-	num_found = int(m)
-	num_splits = int(nsplit)
-	return num_found, num_splits, info, info == 0
+    num_found = int(m)
+    num_splits = int(nsplit)
+    return num_found, num_splits, info, info == 0
 }
