@@ -11,27 +11,27 @@ import "core:slice"
 
 // Triangle specification
 UpLo :: enum u8 {
-	Upper = 'U', // Upper triangle
-	Lower = 'L', // Lower triangle
+    Upper = 'U', // Upper triangle
+    Lower = 'L', // Lower triangle
 }
 
 // Diagonal type for triangular matrices
 Diag :: enum u8 {
-	NonUnit = 'N', // Diagonal elements are stored
-	Unit    = 'U', // Diagonal elements are assumed to be 1
+    NonUnit = 'N', // Diagonal elements are stored
+    Unit    = 'U', // Diagonal elements are assumed to be 1
 }
 
 // Side for operations like triangular solve
 Side :: enum u8 {
-	Left  = 'L', // Operation on the left
-	Right = 'R', // Operation on the right
+    Left  = 'L', // Operation on the left
+    Right = 'R', // Operation on the right
 }
 
 // Transpose operations
 TransposeState :: enum u8 {
-	NoTrans   = 'N', // No transpose
-	Trans     = 'T', // Transpose
-	ConjTrans = 'C', // Conjugate transpose (Hermitian transpose)
+    NoTrans   = 'N', // No transpose
+    Trans     = 'T', // Transpose
+    ConjTrans = 'C', // Conjugate transpose (Hermitian transpose)
 }
 
 // ===================================================================================
@@ -41,12 +41,12 @@ TransposeState :: enum u8 {
 // Triangular banded matrix (TB format for LAPACK)
 // Used for triangular banded systems (e.g., tbtrs, tbcon)
 TriBand :: struct($T: typeid) where is_float(T) || is_complex(T) {
-	data: []T, // Band storage array [ldab × n]
-	n:    Blas_Int, // Matrix dimension (n×n)
-	k:    Blas_Int, // Number of super/sub-diagonals
-	ldab: Blas_Int, // Leading dimension (>= k+1)
-	uplo: UpLo, // Upper or lower triangular
-	diag: Diag, // Unit or non-unit diagonal
+    data: []T, // Band storage array [ldab × n]
+    n:    Blas_Int, // Matrix dimension (n×n)
+    k:    Blas_Int, // Number of super/sub-diagonals
+    ldab: Blas_Int, // Leading dimension (>= k+1)
+    uplo: UpLo, // Upper or lower triangular
+    diag: Diag, // Unit or non-unit diagonal
 }
 
 // Symmetric banded matrix (SB format for LAPACK)
@@ -54,19 +54,19 @@ TriBand :: struct($T: typeid) where is_float(T) || is_complex(T) {
 // Note: For real types, symmetric means A = A^T
 //       For complex types, symmetric means A = A^T (NOT Hermitian A = A^H)
 SymBand :: struct($T: typeid) where is_float(T) || is_complex(T) {
-	data: []T, // Band storage array [ldab × n]
-	n:    Blas_Int, // Matrix dimension (n×n)
-	kd:   Blas_Int, // Number of super/sub-diagonals
-	ldab: Blas_Int, // Leading dimension (>= kd+1)
-	uplo: UpLo, // Upper or lower triangle stored
+    data: []T, // Band storage array [ldab × n]
+    n:    Blas_Int, // Matrix dimension (n×n)
+    kd:   Blas_Int, // Number of super/sub-diagonals
+    ldab: Blas_Int, // Leading dimension (>= kd+1)
+    uplo: UpLo, // Upper or lower triangle stored
 }
 
 // Hermitian banded matrix (HB format for LAPACK)
 // Used for Hermitian banded systems (e.g., hbgv, hbev)
 HermBand :: struct($T: typeid) where is_complex(T) {
-	data: []T, // Band storage array [ldab × n]
-	n:    Blas_Int, // Matrix dimension (n×n)
-	kd:   Blas_Int, // Number of super/sub-diagonals
-	ldab: Blas_Int, // Leading dimension (>= kd+1)
-	uplo: UpLo, // Upper or lower triangle stored
+    data: []T, // Band storage array [ldab × n]
+    n:    Blas_Int, // Matrix dimension (n×n)
+    kd:   Blas_Int, // Number of super/sub-diagonals
+    ldab: Blas_Int, // Leading dimension (>= kd+1)
+    uplo: UpLo, // Upper or lower triangle stored
 }
